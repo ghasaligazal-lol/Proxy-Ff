@@ -1,0 +1,32 @@
+<div style="padding: 8px 16px;">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px; padding-bottom:12px; border-bottom:1px solid #30363d;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        <span style="font-weight:600; font-size:18px;">Proxy Menu</span>
+    </div>
+    <ul style="list-style:none;">
+        <li style="margin-bottom:8px;">
+            <a href="#" onclick="document.getElementById('mainContent').scrollIntoView(); closeSidebar();" style="display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:8px; text-decoration:none; color:inherit; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21" y1="3" x2="15" y2="9"/><line x1="3" y1="21" x2="9" y2="15"/></svg>
+                <span>Dashboard</span>
+            </a>
+        </li>
+        <li style="margin-bottom:8px;">
+            <a href="#" onclick="document.querySelector('.card').scrollIntoView(); closeSidebar();" style="display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:8px; text-decoration:none; color:inherit; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v16h16"/><path d="M8 12l4-4 4 4"/><line x1="12" y1="8" x2="12" y2="16"/></svg>
+                <span>Hitbox</span>
+            </a>
+        </li>
+        <li style="margin-bottom:8px;">
+            <a href="#" onclick="document.querySelector('.slider-container').scrollIntoView(); closeSidebar();" style="display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:8px; text-decoration:none; color:inherit; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                <span>Speed</span>
+            </a>
+        </li>
+        <li style="margin-bottom:8px;">
+            <a href="#" onclick="document.querySelector('.card:last-of-type').scrollIntoView(); closeSidebar();" style="display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:8px; text-decoration:none; color:inherit; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                <span>Other</span>
+            </a>
+        </li>
+    </ul>
+</div>

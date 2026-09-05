@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>...</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --bg:        #05080F;
+    --surface:   rgba(8, 12, 26, 0.92);
+    --red:       #E8294A;
+    --red-dim:   rgba(232, 41, 74, 0.18);
+    --red-glow:  rgba(232, 41, 74, 0.28);
+    --blue:      #1A3A6E;
+    --blue-mid:  #2756A8;
+    --blue-line: rgba(39, 86, 168, 0.22);
+    --text:      #D8E0F0;
+    --muted:     #5A6A8A;
+    --border:    rgba(39, 86, 168, 0.2);
+    --bdr-red:   rgba(232, 41, 74, 0.25);
+}
+
+body {
+    min-height: 100vh;
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+}
+
+/* ── CANVAS ── */
+canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+}
+
+/* ── BLOBS ── */
+.blob {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(90px);
+    pointer-events: none;
+    z-index: 0;
+    animation: drift 9s ease-in-out infinite alternate;
+}
+.blob-blue {
+    width: 500px; height: 500px;
+    background: rgba(27, 58, 110, 0.2);
+    top: -140px; left: -140px;
+}
+.blob-red {
+    width: 360px; height: 360px;
+    background: rgba(232, 41, 74, 0.12);
+    bottom: -100px; right: -80px;
+    animation-delay: -4.5s;
+}
+@keyframes drift {
+    from { transform: translate(0,0) scale(1); }
+    to   { transform: translate(28px,18px) scale(1.07); }
+}
+
+/* ── GRID ── */
+.grid-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background-image:
+        linear-gradient(rgba(39,86,168,.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(39,86,168,.05) 1px, transparent 1px);
+    background-size: 44px 44px;
+    pointer-events: none;
+}
+
+/* ── CARD ── */
+.container {
+    position: relative;
+    z-index: 10;
+    width: min(93%, 480px);
+    padding: 34px 30px;
+    border-radius: 18px;
+    background: var(--surface);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    border: 1px solid var(--border);
+    box-shadow:
+        0 0 0 1px rgba(232,41,74,.06),
+        0 28px 70px rgba(0,0,0,.7),
+        0 0 60px rgba(27,58,110,.25),
+        0 0 100px rgba(232,41,74,.06);
+    animation: cardIn .65s cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes cardIn {
+    from { opacity:0; transform:translateY(28px) scale(.97); }
+    to   { opacity:1; transform:translateY(0) scale(1); }
+}
+
+/* ── BADGE ── */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 12px;
+    border-radius: 99px;
+    background: rgba(39,86,168,.12);
+    border: 1px solid rgba(39,86,168,.28);
+    font-size: 11px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    color: #6A9FE0;
+    letter-spacing: .04em;
+    margin-bottom: 20px;
+    animation: cardIn .65s .1s cubic-bezier(.22,1,.36,1) both;
+    text-transform: uppercase;
+}
+.status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #4ade80;
+    box-shadow: 0 0 7px #4ade80;
+    animation: pulse 2.2s ease-in-out infinite;
+}
+@keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50%      { opacity:.5; transform:scale(.75); }
+}
+
+/* ── HEADING ── */
+.heading-wrap {
+    margin-bottom: 24px;
+    animation: cardIn .65s .15s cubic-bezier(.22,1,.36,1) both;
+}
+h1 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: clamp(26px, 6vw, 34px);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: .02em;
+    margin-bottom: 9px;
+    text-transform: uppercase;
+}
+h1 .accent-red  { color: var(--red); }
+h1 .accent-blue { color: #5B8FD4; }
+.subtitle {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+/* ── DIVIDER ── */
+.divider {
+    height: 1px;
+    margin-bottom: 22px;
+    background: linear-gradient(90deg,
+        transparent,
+        rgba(232,41,74,.3) 30%,
+        rgba(39,86,168,.35) 70%,
+        transparent);
+}
+
+/* ── BUTTONS ── */
+.options {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    animation: cardIn .65s .2s cubic-bezier(.22,1,.36,1) both;
+}
+
+.option-btn {
+    position: relative;
+    width: 100%;
+    padding: 13px 18px;
+    border-radius: 11px;
+    background: rgba(255,255,255,.025);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: background .22s, border-color .22s, transform .18s, box-shadow .22s;
+    overflow: hidden;
+    letter-spacing: .01em;
+}
+.option-btn::after {
+    content: '';
+    position: absolute;
+    left: 0; top: 0;
+    width: 3px; height: 100%;
+    background: linear-gradient(180deg, var(--red), var(--blue-mid));
+    opacity: 0;
+    border-radius: 11px 0 0 11px;
+    transition: opacity .22s;
+}
+.option-btn:hover {
+    background: rgba(232,41,74,.06);
+    border-color: var(--bdr-red);
+    transform: translateX(5px);
+    box-shadow: 0 0 20px rgba(232,41,74,.08);
+}
+.option-btn:hover::after { opacity: 1; }
+.option-btn:active { transform: translateX(3px) scale(.99); }
+
+.btn-icon {
+    flex-shrink: 0;
+    width: 34px; height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 9px;
+    background: linear-gradient(135deg, rgba(232,41,74,.12), rgba(39,86,168,.12));
+    border: 1px solid rgba(232,41,74,.15);
+}
+.btn-icon svg { width: 17px; height: 17px; fill: #C06070; }
+
+.btn-text { flex: 1; }
+.btn-label {
+    display: block;
+    font-size: 13.5px;
+    font-weight: 600;
+    margin-bottom: 2px;
+    color: var(--text);
+}
+.btn-desc {
+    display: block;
+    font-size: 11.5px;
+    color: var(--muted);
+    font-weight: 400;
+}
+
+.btn-arrow {
+    color: var(--muted);
+    font-size: 17px;
+    transition: transform .2s, color .2s;
+    line-height: 1;
+}
+.option-btn:hover .btn-arrow {
+    transform: translateX(3px);
+    color: var(--red);
+}
+
+.answer {
+    display: none;
+    margin-top: 18px;
+    border-radius: 13px;
+    border: 1px solid var(--bdr-red);
+    background: rgba(232,41,74,.04);
+    overflow: hidden;
+}
+.answer.show {
+    display: block;
+    animation: answerIn .3s cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes answerIn {
+    from { opacity:0; transform:translateY(7px); }
+    to   { opacity:1; transform:translateY(0); }
+}
+
+.answer-header {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 11px 16px;
+    background: rgba(232,41,74,.07);
+    border-bottom: 1px solid var(--bdr-red);
+}
+.answer-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--red);
+    box-shadow: 0 0 8px var(--red);
+    animation: pulse 1.8s ease-in-out infinite;
+}
+.answer-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #C06070;
+}
+
+.answer-body {
+    padding: 16px;
+    font-size: 13.5px;
+    line-height: 1.72;
+    color: var(--text);
+    min-height: 48px;
+}
+.answer-body b  { color: #E87090; font-weight: 600; }
+.answer-body a  {
+    color: #5B8FD4;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(91,143,212,.3);
+    transition: border-color .2s, color .2s;
+    word-break: break-all;
+}
+.answer-body a:hover { color: #89BBF0; border-color: #89BBF0; }
+.answer-body .note {
+    display: block;
+    margin-top: 10px;
+    font-size: 11.5px;
+    color: var(--muted);
+}
+
+.cursor {
+    display: inline-block;
+    width: 2px;
+    height: 13px;
+    background: var(--red);
+    border-radius: 1px;
+    animation: blink .65s step-end infinite;
+    vertical-align: middle;
+    margin-left: 2px;
+    box-shadow: 0 0 6px var(--red);
+}
+@keyframes blink { 50% { opacity:0; } }
+
+.back-btn {
+    display: none;
+    margin-top: 10px;
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Inter', sans-serif;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .2s, color .2s, border-color .2s;
+}
+.back-btn.show { display: block; }
+.back-btn:hover {
+    background: rgba(255,255,255,.04);
+    color: var(--text);
+    border-color: rgba(255,255,255,.14);
+}
+
+/* ── FOOTER ── */
+.footer {
+    margin-top: 22px;
+    padding-top: 14px;
+    border-top: 1px solid var(--blue-line);
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    animation: cardIn .65s .3s cubic-bezier(.22,1,.36,1) both;
+    letter-spacing: .02em;
+}
+.footer b { color: rgba(255,255,255,.22); }
+
+@media (max-width: 390px) {
+    .container { padding: 22px 16px; }
+    h1 { font-size: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    *, .blob { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="particles"></canvas>
+<div class="blob blob-blue"></div>
+<div class="blob blob-red"></div>
+<div class="grid-bg"></div>
+
+<div class="container">
+
+    <div class="status-badge">
+        <span class="status-dot"></span>
+        Server Online
+    </div>
+
+    <div class="heading-wrap">
+        <h1><span class="accent-red">Nyari</span> apa<br><span class="accent-blue">Bro?</span></h1>
+        <p class="subtitle">Pilih salah satu buat dapet info yang lu butuhin.</p>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="options" id="options">
+
+        <button class="option-btn" onclick="jawab('pemilik')">
+            <span class="btn-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
+            </span>
+            <span class="btn-text">
+                <span class="btn-label">Pemilik Proxy</span>
+                <span class="btn-desc">Siapa yang buat &amp; ngurus ini</span>
+            </span>
+            <span class="btn-arrow">›</span>
+        </button>
+
+        <button class="option-btn" onclick="jawab('channel')">
+            <span class="btn-icon">
+                <svg viewBox="0 0 24 24"><path d="M20 2H4C2.9 2 2 2.9 2 4v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 10H6v-2h12v2zm0-4H6V6h12v2z"/></svg>
+            </span>
+            <span class="btn-text">
+                <span class="btn-label">Saluran / Channel</span>
+                <span class="btn-desc">Link resmi dari pemilik</span>
+            </span>
+            <span class="btn-arrow">›</span>
+        </button>
+
+        <button class="option-btn" onclick="kepoRedirect()">
+            <span class="btn-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
+            </span>
+            <span class="btn-text">
+                <span class="btn-label">Kepo Doang</span>
+                <span class="btn-desc">Penasaran Sama Isinya Doang</span>
+            </span>
+            <span class="btn-arrow">›</span>
+        </button>
+
+    </div>
+
+    <div class="answer" id="answer">
+        <div class="answer-header">
+            <span class="answer-dot"></span>
+            <span class="answer-title">Info</span>
+        </div>
+        <div class="answer-body">
+            <span id="typeTarget"></span><span class="cursor" id="cursor"></span>
+        </div>
+    </div>
+
+    <button class="back-btn" id="back" onclick="kembali()">&#8592; Kembali Ke Pertanyaan Lain</button>
+
+    <div class="footer">
+        Proxy <b>Reza</b> &nbsp;&middot;&nbsp; Jangan disalahgunakan
+    </div>
+
+</div>
+
+<script>
+const canvas = document.getElementById('particles');
+const ctx    = canvas.getContext('2d');
+let particles = [], W, H;
+
+function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', () => { resize(); initParticles(); });
+
+function Particle() {
+    this.x   = Math.random() * W;
+    this.y   = Math.random() * H;
+    this.vx  = (Math.random() - .5) * .28;
+    this.vy  = (Math.random() - .5) * .28;
+    this.r   = Math.random() * 1.4 + .3;
+    this.a   = Math.random() * .45 + .1;
+    this.red = Math.random() < .35;
+}
+
+function initParticles() {
+    const count = Math.min(90, Math.floor(W * H / 11000));
+    particles = Array.from({ length: count }, () => new Particle());
+}
+initParticles();
+
+function drawParticles() {
+    ctx.clearRect(0, 0, W, H);
+
+    for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+            const dx = particles[i].x - particles[j].x;
+            const dy = particles[i].y - particles[j].y;
+            const d  = Math.sqrt(dx*dx + dy*dy);
+            if (d < 110) {
+                const t = 1 - d / 110;
+                // warna garis campuran kedua partikel
+                const r = (particles[i].red || particles[j].red);
+                ctx.beginPath();
+                ctx.strokeStyle = r
+                    ? `rgba(200,40,70,${.1 * t})`
+                    : `rgba(39,86,168,${.12 * t})`;
+                ctx.lineWidth = .55;
+                ctx.moveTo(particles[i].x, particles[i].y);
+                ctx.lineTo(particles[j].x, particles[j].y);
+                ctx.stroke();
+            }
+        }
+    }
+
+    for (const p of particles) {
+        p.x += p.vx; p.y += p.vy;
+        if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
+        if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = p.red
+            ? `rgba(220,50,80,${p.a})`
+            : `rgba(60,110,220,${p.a})`;
+        ctx.fill();
+    }
+
+    requestAnimationFrame(drawParticles);
+}
+drawParticles();
+
+let typingTimer = null;
+
+function typeHTML(rawHTML, targetId, speed, onDone) {
+    const el     = document.getElementById(targetId);
+    const cursor = document.getElementById('cursor');
+    el.innerHTML = '';
+    cursor.style.display = 'inline-block';
+    let i = 0;
+    clearInterval(typingTimer);
+    typingTimer = setInterval(() => {
+        if (i <= rawHTML.length) {
+            el.innerHTML = rawHTML.substring(0, i);
+            i++;
+        } else {
+            clearInterval(typingTimer);
+            cursor.style.display = 'none';
+            if (onDone) onDone();
+        }
+    }, speed);
+}
+
+const answers = {
+    pemilik:
+        `Pemilik proxy ini adalah <b>Reza</b> bro.\n\nKalau lu nyari siapa yang bikin atau ngurus proxy ini — ya itu orangnya.`
+        .replace(/\n/g, '<br>'),
+
+    channel:
+        `Saluran resmi dari pemilik proxy ini ada di sini:<br><br>` +
+        `<b>Saluran Reza:</b><br>` +
+        `<a href="https://whatsapp.com/channel/0029Vb8eX0Z1NCrYCXEXuu0K" target="_blank" rel="noopener">` +
+        `whatsapp.com/channel/0029Vb8eX0Z1NCrYCXEXuu0K` +
+        `</a>` +
+        `<span class="note">Klik link di atas buat masuk ke saluran WhatsApp Reza.</span>`
+};
+
+function showAnswer() {
+    const answerEl = document.getElementById('answer');
+    answerEl.classList.remove('show');
+    void answerEl.offsetWidth;
+    answerEl.classList.add('show');
+    document.getElementById('back').classList.add('show');
+}
+
+function jawab(type) {
+    document.getElementById('options').style.display = 'none';
+    showAnswer();
+    typeHTML(answers[type], 'typeTarget', 13);
+}
+
+function kepoRedirect() {
+    document.getElementById('options').style.display = 'none';
+    showAnswer();
+
+    const msg = `Gausah Kepo,<br>Isinya <b>Ytta</b> Daripada Lu Kepo, Mending Ke Sini.`;
+    typeHTML(msg, 'typeTarget', 22, () => {
+        setTimeout(() => {
+            window.location.href = 'https://chat.whatsapp.com/BTA9WjmjtO43DDMmqRMKVJ?s=cl&p=a&mlu=4';
+        }, 1200);
+    });
+}
+
+function kembali() {
+    clearInterval(typingTimer);
+
+    const answerEl = document.getElementById('answer');
+    const backEl   = document.getElementById('back');
+    const opts     = document.getElementById('options');
+
+    answerEl.classList.remove('show');
+    backEl.classList.remove('show');
+
+    document.getElementById('typeTarget').innerHTML = '';
+    document.getElementById('cursor').style.display = 'inline-block';
+
+    opts.style.display = 'flex';
+    opts.style.animation = 'none';
+    void opts.offsetWidth;
+    opts.style.animation = 'cardIn .4s cubic-bezier(.22,1,.36,1) both';
+}
+</script>
+</body>
+</html>
