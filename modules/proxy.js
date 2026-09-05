@@ -88,23 +88,6 @@ function patchGinUrl(jsonObj) {
     return jsonObj;
 }
 
-// ===== GIN SERVER ADDRESS PATCH =====
-// Field LJAPOJNBOFE berisi IP/domain server GIN yang dikoneksi langsung via TCP
-// (ff.sdk.grtc.garenanow.com;ff.dr.grtc.garenanow.com;124.158.134.7,124.158.135.168)
-// Koneksi ini bypass HTTP proxy sepenuhnya → Garena bisa detect "Protection Bypass"
-// karena data tetap nyampe ke server mereka walau GGP flag sudah dimatiin.
-// Fix: kosongkan field ini supaya game tidak punya target TCP untuk connect.
-const GIN_SERVER_ADDR_KEY = 'LJAPOJNBOFE';
-
-function patchGinServerAddr(jsonObj) {
-    if (jsonObj && typeof jsonObj[GIN_SERVER_ADDR_KEY] === 'string') {
-        const original = jsonObj[GIN_SERVER_ADDR_KEY];
-        jsonObj[GIN_SERVER_ADDR_KEY] = '';
-        console.log(`[GIN-PATCH] ${GIN_SERVER_ADDR_KEY} patched: "${original}" → ""`);
-    }
-    return jsonObj;
-}
-
 // ===== LOGIN REWARD PATCH =====
 // Intercept GetCharacterRewardData & GetLoginReward response
 // Tambahin diamonds + login reward supaya user dapet hadiah setiap login
@@ -349,7 +332,6 @@ function createClientProxyWithBanPatch() {
                     if (parsed && typeof parsed === 'object') {
                         patchBanInfo(parsed);
                         patchGinUrl(parsed);
-                        patchGinServerAddr(parsed);
                         patchMailList(parsed, req.url || '');
                         if (isLoginRewardEndpoint(req.url || '')) {
                             patchLoginReward(parsed, req.url || '');

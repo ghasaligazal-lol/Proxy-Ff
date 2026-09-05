@@ -123,7 +123,7 @@ const gamevarLines = [
 
 const ALLOWED_IPS = ["117.18.20.142"];
 const isGlobalMaintenance = false;
-const MY_IP = "https://proxy-reza-kontolodon-memek-luu.up.railway.app/";
+const MY_IP = "https://proxy-reza-kontolodon-memek-lu.up.railway.app/";
 const REDIRECT_URL = "https://whatsapp.com/channel/0029Vb8eX0Z1NCrYCXEXuu0K";
 
 function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
