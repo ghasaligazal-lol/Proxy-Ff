@@ -58,7 +58,7 @@ const gamevarLines = [
   "EnableGGPOnLowMemory,EnableGGPOnLowMemory,bool,true,,",
   "GGPUpdateFlag,GGPUpdateFlag,int,0,,",
 
-  // === SENSITIVITY ===
+  // === SENSITIVITY — comment = var_name (format Jun) ===
   "SensitivityMaxSetting,SensitivityMaxSetting,float,999.99,,",
   "Sensitivity1PMaxSetting,Sensitivity1PMaxSetting,float,999.99,,",
   "X1ScopeMaxSetting,X1ScopeMaxSetting,float,999.99,,",
@@ -71,7 +71,7 @@ const gamevarLines = [
   "FreeMoveAngularSpeedCrouch,FreeMoveAngularSpeedCrouch,float,9999.0,,",
   "FreeMoveAngularSpeedCreep,FreeMoveAngularSpeedCreep,float,9999.0,,",
 
-  // === SPEED ===
+  // === SPEED — comment KOSONG (ikutin Jun persis) ===
   "EnableAccelerationOnFalling,EnableAccelerationOnFalling,bool,false,,",
   "CanJumpFallingRunFast,CanJumpFallingRunFast,bool,true,,",
   "CanCreepRunFast,CanCreepRunFast,bool,true,,",
@@ -92,7 +92,7 @@ const gamevarLines = [
   "UseMedkitTime,UseMedkitTime,float,0,,",
   "UseArmortoolsTime,UseArmortoolsTime,float,0,,",
 
-  // === AIM ASSIST ===
+  // === AIM ASSIST — ikutin Jun ===
   "AimAssistMode,AimAssistMode,int,2,,",
   "AimAssistThreshold,AimAssistThreshold,float,10.0,,",
   "AimAssistSpeed,AimAssistSpeed,float,10.0,,",
@@ -126,54 +126,30 @@ const isGlobalMaintenance = false;
 const MY_IP = "https://proxy-reza-kontolodon-memek-lu.up.railway.app/";
 const REDIRECT_URL = "https://whatsapp.com/channel/0029Vb8eX0Z1NCrYCXEXuu0K";
 
-// CDN Garena langsung — untuk optional & backup (ikutin SX2)
-const GARENA_CDN = "https://dl-tata.freefireind.in/live/ABHotUpdates/";
-
-function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP, isMax = false) {
+function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
   const isAllowedUser = ALLOWED_IPS.includes(clientIp);
   const serverOpenStatus = isGlobalMaintenance ? isAllowedUser : true;
   const CDN_BASE = myDomain + "cdn/";
 
-  // ── [SX2 Bypass] FF MAX (channel=android_max) ────────────────────────────
-  // Ikutin SX2: cdn_url & backup → Garena langsung (optional pakai ini)
-  //             abhotupdate_cdn_url → proxy Reza (hanya untuk ABHotUpdates compulsory)
-  //             remote_version → 2.131.22 (bukan 1.126.22!)
-  //             abhotupdate_check → include path cache_res MAX
-  // ─────────────────────────────────────────────────────────────────────────
-  const cdnUrl              = isMax ? GARENA_CDN : CDN_BASE + "live/ABHotUpdates/";
-  const backupCdnUrl        = isMax ? GARENA_CDN : CDN_BASE + "live/ABHotUpdates/";
-  const abhotupdateCdnUrl   = CDN_BASE + "live/ABHotUpdates/";  // selalu proxy Reza
-  const remoteVersion       = isMax ? "2.131.22" : "1.126.22";
-  const abhotupdateCheck    = isMax
-    ? "cache_res;gameassetbundles/cache_res.UOT0J6aDCaQjwD02QTKoB6TYVuU~3D"
-    : "cache_res;assetindexer;SH-Gpp";
-
-  // remote_option_version_astc untuk MAX (dari SX2 log)
-  const remoteOptionVersionAstcMax = "optionallocres:50|optionalavatarres:711|optionalclothres:1150|optionalfootballres:38|optionalfullscreencgres:318|optionalhuntinggroundres:178|optionalinfection:116|optionalingameres:438|optionallobbyres:593|optionallonewolfres:139|optionallonewolfstrikeoutres:96|optionalludores:144|optionalmap1res:385|optionalmap2res:159|optionalmap4res:144|optionalmaphippores:92|optionalmapres:374|optionalnewblast:138|optionalpetres:848|optionalrushb:227|optionalrushingpetsres:192|optionalsnowduelres:59|optionaltrainingres:79|optionalugcres:507|optionalvoiceres:388|optionalwerewolves:277|optionalmapponyres:200|optionalsocialres:106|optionalwerunres:74|optionalugcoldparadiseres:32|optionalmultiregionres:26";
-  const remoteOptionVersionMax     = "optionallocres:50|optionalavatarres:708|optionalclothres:1150|optionalfootballres:47|optionalfullscreencgres:334|optionalhuntinggroundres:178|optionalinfection:121|optionalingameres:469|optionallobbyres:610|optionallonewolfres:77|optionallonewolfstrikeoutres:23|optionalludores:40|optionalmap1res:385|optionalmap2res:125|optionalmap4res:110|optionalmaphippores:90|optionalmapres:340|optionalnewblast:138|optionalpetres:848|optionalrushb:123|optionalrushingpetsres:88|optionalsnowduelres:59|optionaltrainingres:83|optionalugcres:537|optionalvoiceres:355|optionalwerewolves:173|optionalmapponyres:200|optionalsocialres:111|optionalwerunres:83|optionalugcoldparadiseres:32|optionalmultiregionres:25";
-
-  // regular (android) versions — tidak berubah
-  const remoteOptionVersionAstc = "optionallocres:50|optionalavatarres:753|optionalclothres:1228|optionalfootballres:29|optionalfullscreencgres:306|optionalhuntinggroundres:216|optionalinfection:124|optionalingameres:461|optionallobbyres:640|optionallonewolfres:206|optionallonewolfstrikeoutres:155|optionalludores:175|optionalmap1res:385|optionalmap2res:192|optionalmap4res:175|optionalmaphippores:120|optionalmapres:391|optionalnewblast:162|optionalpetres:910|optionalrushb:241|optionalrushingpetsres:217|optionalsnowduelres:65|optionalsocialres:215|optionaltrainingres:267|optionalugcres:786|optionalvoiceres:379|optionalwerewolves:286|optionalwerunres:81|optionalmapponyres:204|optionalugcoldparadiseres:33|optionalmultiregionres:27";
-  const remoteOptionVersion     = "optionallocres:50|optionalavatarres:791|optionalclothres:1228|optionalfootballres:27|optionalfullscreencgres:319|optionalhuntinggroundres:246|optionalinfection:125|optionalingameres:503|optionallobbyres:640|optionallonewolfres:86|optionallonewolfstrikeoutres:59|optionalludores:42|optionalmap1res:385|optionalmap2res:156|optionalmap4res:139|optionalmaphippores:118|optionalmapres:357|optionalnewblast:163|optionalpetres:910|optionalrushb:108|optionalrushingpetsres:84|optionalsnowduelres:65|optionalsocialres:223|optionaltrainingres:297|optionalugcres:844|optionalvoiceres:344|optionalwerewolves:153|optionalwerunres:92|optionalmapponyres:204|optionalugcoldparadiseres:34|optionalmultiregionres:29";
-
   return {
-    "abhotupdate_cdn_url":               abhotupdateCdnUrl,
-    "abhotupdate_check":                 abhotupdateCheck,
+    "abhotupdate_cdn_url":               CDN_BASE + "live/ABHotUpdates/",
+    "abhotupdate_check":                 "cache_res;assetindexer;SH-Gpp",
     "anti_hack_open":                    false,
     "appstore_url":                      REDIRECT_URL,
     "backup_appstore_url":               "",
-    "backup_cdn_url":                    backupCdnUrl,
+    "backup_cdn_url":                    CDN_BASE + "live/ABHotUpdates/",
     "billboard_bg_url":                  myDomain + "cdn/common/OB23/version/Patch_Bg.png",
     "billboard_cdn_url":                 REDIRECT_URL,
     "billboard_msg":                     "",
     "cdn_active":                        myDomain,
     "cdn_ip_list":                       [],
     "cdn_port":                          6072,
-    "cdn_url":                           cdnUrl,
+    "cdn_url":                           CDN_BASE + "live/ABHotUpdates/",
     "client_ip":                         clientIp,
     "code":                              0,
     "core_ip_list":                      ["0.0.0.0","50.109.27.134","129.226.2.163","129.226.1.13","129.226.1.16"],
     "core_url":                          "csoversea.castle.freefiremobile.com",
+    // KUNCI: country_code KOSONG — ikutin Jun, tidak trigger LBS mismatch
     "country_code":                      "",
     "device_whitelist_sp_version":       "1.0.0",
     "device_whitelist_version":          "",
@@ -220,6 +196,7 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP, isMax = fals
     "max_video":                         "",
     "max_web":                           "",
     "min_hint_size":                     1,
+    // KUNCI: multi_region KOSONG — ikutin Jun
     "multi_region":                      "",
     "need_check_ip_list":                ["202.81.108.9"],
     "need_track_hotupdate":              true,
@@ -228,9 +205,9 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP, isMax = fals
     "patchnote_url":                     "https://whatsapp.com/channel/0029VbBnIVuCMY0POm5gqO1P",
     "quality_level":                     5,
     "graphic_level":                     5,
-    "remote_option_version":             isMax ? remoteOptionVersionMax     : remoteOptionVersion,
-    "remote_option_version_astc":        isMax ? remoteOptionVersionAstcMax : remoteOptionVersionAstc,
-    "remote_version":                    remoteVersion,
+    "remote_option_version":             "optionallocres:50|optionalavatarres:791|optionalclothres:1228|optionalfootballres:27|optionalfullscreencgres:319|optionalhuntinggroundres:246|optionalinfection:125|optionalingameres:503|optionallobbyres:640|optionallonewolfres:86|optionallonewolfstrikeoutres:59|optionalludores:42|optionalmap1res:385|optionalmap2res:156|optionalmap4res:139|optionalmaphippores:118|optionalmapres:357|optionalnewblast:163|optionalpetres:910|optionalrushb:108|optionalrushingpetsres:84|optionalsnowduelres:65|optionalsocialres:223|optionaltrainingres:297|optionalugcres:844|optionalvoiceres:344|optionalwerewolves:153|optionalwerunres:92|optionalmapponyres:204|optionalugcoldparadiseres:34|optionalmultiregionres:29",
+    "remote_option_version_astc":        "optionallocres:50|optionalavatarres:753|optionalclothres:1228|optionalfootballres:29|optionalfullscreencgres:306|optionalhuntinggroundres:216|optionalinfection:124|optionalingameres:461|optionallobbyres:640|optionallonewolfres:206|optionallonewolfstrikeoutres:155|optionalludores:175|optionalmap1res:385|optionalmap2res:192|optionalmap4res:175|optionalmaphippores:120|optionalmapres:391|optionalnewblast:162|optionalpetres:910|optionalrushb:241|optionalrushingpetsres:217|optionalsnowduelres:65|optionalsocialres:215|optionaltrainingres:267|optionalugcres:786|optionalvoiceres:379|optionalwerewolves:286|optionalwerunres:81|optionalmapponyres:204|optionalugcoldparadiseres:33|optionalmultiregionres:27",
+    "remote_version":                    "1.126.22",
     "res_url":                           CDN_BASE,
     "server_url":                        "https://loginbp.ggpolarbear.com/",
     "should_check_ab_exist":             true,
