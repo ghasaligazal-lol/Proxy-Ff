@@ -14,8 +14,13 @@ function sendConfig(req, res) {
 
     const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || "";
     const clientIp = rawIp.split(',')[0].trim().replace('::ffff:', '');
-    console.log(`[GAMEVAR] Sending config to ${clientIp}`);
-    res.json(getVerConfig(clientIp));
+
+    // Detect channel dari query param (android vs android_max)
+    const channel = (req.query.channel || '').toLowerCase();
+    const isMax = channel === 'android_max';
+
+    console.log(`[GAMEVAR] Sending config to ${clientIp} | channel=${channel || 'unknown'} | isMax=${isMax}`);
+    res.json(getVerConfig(clientIp, undefined, isMax));
 }
 
 function serveLocalConfig(req, res) {
