@@ -13,8 +13,8 @@ const https = require('https');
 
 const BASE_DIR = path.resolve(__dirname, '..', 'public', 'cdn');
 
-const VERSION            = '2.130.22';
-const LOCAL_VERSIONS_MAX = ['2.130.22', '1.126.3'];
+const VERSION            = '2.131.22';
+const LOCAL_VERSIONS_MAX = ['2.131.22', '2.130.22', '1.126.3'];
 
 // ─── Cache_res in-memory cache ─────────────────────────────────────────────
 let _cacheResCache = null;
@@ -26,6 +26,9 @@ function getCacheResBuffer() {
         path.join(BASE_DIR, 'cache_res'),
         path.join(BASE_DIR, 'android_max_astc', VERSION, 'gameassetbundles', 'cache_res'),
         path.join(BASE_DIR, 'live', 'ABHotUpdates', 'cache_res'),
+        path.join(__dirname, '..', 'public', 'api', 'live', 'ABHotUpdates', 'cache_res'),
+        path.join(__dirname, '..', 'public', 'api', 'live', 'cache_res'),
+        path.join(__dirname, '..', 'public', 'api', 'cache_res'),
     ];
     for (const filePath of candidates) {
         if (!fs.existsSync(filePath)) continue;
@@ -336,6 +339,52 @@ function init(app) {
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.setHeader('Cache-Control', 'public, max-age=60');
         return fs.createReadStream(filePath).pipe(res);
+    });
+
+    // ─── Versioned gameassetbundles cache_res (SX2 format) ─────────────────────
+    // Game request: /live/ABHotUpdates/android_max_astc/<ver>/gameassetbundles/cache_res.<hash>~3D
+    // Serve file gz dari public/api/live/ABHotUpdates/
+    app.get(/^\/live\/ABHotUpdates\/android_max_astc\/[^/]+\/gameassetbundles\/(cache_res\.\S+)$/, (req, res) => {
+        const filename = req.params[0];
+        const apiDir   = path.join(__dirname, '..', 'public', 'api', 'live', 'ABHotUpdates');
+
+        // Decode: ~2F→/, ~2B→+, ~3D→=
+        const decoded = filename.replace(/~2F/g, '/').replace(/~2B/g, '+').replace(/~3D/g, '=');
+        // Coba nama asli (dengan ~) dulu, fallback ke decoded
+        const candidates = [
+            path.join(apiDir, filename),
+            path.join(apiDir, decoded),
+        ];
+        for (const fp of candidates) {
+            if (fs.existsSync(fp)) {
+                console.log(`[CDN] versioned cache_res → ${fp} (${fs.statSync(fp).size}B)`);
+                res.setHeader('Content-Type', 'application/octet-stream');
+                res.setHeader('Cache-Control', 'public, max-age=3600');
+                res.setHeader('Accept-Ranges', 'bytes');
+                return fs.createReadStream(fp).pipe(res);
+            }
+        }
+        console.log(`[CDN] versioned cache_res MISS: ${filename}`);
+        return res.status(404).send('Not found');
+    });
+
+    // fileinfo versioned path (SX2 format)
+    // Game request: /live/ABHotUpdates/android_max_astc/<ver>/fileinfo
+    app.get(/^\/live\/ABHotUpdates\/android_max_astc\/[^/]+\/fileinfo$/, (req, res) => {
+        const candidates = [
+            path.join(__dirname, '..', 'public', 'api', 'live', 'ABHotUpdates', 'fileinfo'),
+            path.join(__dirname, '..', 'public', 'api', 'live', 'fileinfo'),
+            path.join(BASE_DIR, 'live', 'ABHotUpdates', 'fileinfo'),
+        ];
+        for (const fp of candidates) {
+            if (fs.existsSync(fp)) {
+                console.log(`[CDN] versioned fileinfo → ${fp}`);
+                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.setHeader('Cache-Control', 'public, max-age=60');
+                return fs.createReadStream(fp).pipe(res);
+            }
+        }
+        return res.status(404).send('fileinfo not found');
     });
 
     // Main CDN handler — /cdn/* catch-all
