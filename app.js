@@ -83,11 +83,47 @@ app.all('*', (req, res, next) => {
     next();
 });
 
-// ============ PROXY /GetLoginData ============
+// ============ PROXY /GetLoginData (dengan GIN + BAN PATCH) ============
 app.post('/GetLoginData', (req, res) => {
-    const rawIp    = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-    const clientIp = rawIp.split(',')[0].trim().replace('::ffff:', '');
-    const body     = req.body;
+    const body = req.body;
+    const zlib = require('zlib');
+    const { MY_IP } = require('./gamevar');
+
+    const GARENA_IMG_DOMAINS = [
+        'https://dl.bs.freefiremobile.com',
+        'https://dl.dir.freefiremobile.com',
+        'https://dl.cdn.freefiremobile.com',
+        'https://dl.ak.freefiremobile.com',
+        'https://dl.gmc.freefiremobile.com',
+        'https://core-bs.freefiremobile.com',
+        'https://core-gmc.freefiremobile.com',
+    ];
+    const proxyBase = MY_IP.replace(/\/$/, '');
+
+    function patchGetLoginData(jsonObj) {
+        // === Patch CECNLHCONMI - matiin GGP/Gin ===
+        if (jsonObj && typeof jsonObj['CECNLHCONMI'] === 'object' && jsonObj['CECNLHCONMI'] !== null) {
+            const g = jsonObj['CECNLHCONMI'];
+            const orig = g.ggp_url;
+            g.is_report_to_ggp   = false;
+            g.is_transfer_report = false;
+            g.is_enable_ggp      = false;
+            g.is_get_feature     = false;
+            g.is_get_flag        = false;
+            g.is_enable_tcp      = false;
+            g.ggp_url            = proxyBase.replace(/^https?:\/\//, '').replace(/\/$/, '');
+            console.log(`[GetLoginData-PATCH] GIN disabled: ggp_url ${orig} → ${g.ggp_url}`);
+        }
+        // === Patch AEBBNFBNIDB - clear ban ===
+        if (jsonObj && typeof jsonObj['AEBBNFBNIDB'] === 'object' && jsonObj['AEBBNFBNIDB'] !== null) {
+            const b = jsonObj['AEBBNFBNIDB'];
+            b.ban_mode   = 0;
+            b.unban_time = 0;
+            b.hint_string = '';
+            console.log('[GetLoginData-PATCH] ban_mode → 0');
+        }
+        return jsonObj;
+    }
 
     const options = {
         hostname: 'loginbp.ggblueshark.com',
@@ -101,17 +137,50 @@ app.post('/GetLoginData', (req, res) => {
     };
 
     const proxyReq = https.request(options, (proxyRes) => {
+        const encoding = proxyRes.headers['content-encoding'];
         const chunks = [];
-        proxyRes.on('data', c => chunks.push(c));
-        proxyRes.on('end', () => {
-            const buffer = Buffer.concat(chunks);
-            res.writeHead(proxyRes.statusCode, proxyRes.headers);
-            res.end(buffer);
+        let stream = proxyRes;
+        if (encoding === 'gzip')    stream = proxyRes.pipe(zlib.createGunzip());
+        else if (encoding === 'deflate') stream = proxyRes.pipe(zlib.createInflate());
+        else if (encoding === 'br') stream = proxyRes.pipe(zlib.createBrotliDecompress());
+
+        stream.on('data', c => chunks.push(c));
+        stream.on('end', () => {
+            const rawBody = Buffer.concat(chunks);
+            const ct = proxyRes.headers['content-type'] || '';
+            const headers = Object.assign({}, proxyRes.headers);
+            delete headers['content-encoding'];
+            delete headers['content-length'];
+            delete headers['transfer-encoding'];
+
+            if (ct.includes('application/json')) {
+                let parsed;
+                try { parsed = JSON.parse(rawBody.toString('utf8')); } catch(_) { parsed = null; }
+                if (parsed && typeof parsed === 'object') {
+                    patchGetLoginData(parsed);
+                    // Patch image URLs
+                    let jsonStr = JSON.stringify(parsed);
+                    for (const domain of GARENA_IMG_DOMAINS) {
+                        jsonStr = jsonStr.split(domain).join(proxyBase + '/cdn');
+                    }
+                    const patched = Buffer.from(jsonStr, 'utf8');
+                    headers['content-length'] = String(patched.length);
+                    res.writeHead(proxyRes.statusCode, headers);
+                    return res.end(patched);
+                }
+            }
+            headers['content-length'] = String(rawBody.length);
+            res.writeHead(proxyRes.statusCode, headers);
+            res.end(rawBody);
+        });
+        stream.on('error', () => {
+            if (!res.headersSent) res.writeHead(502);
+            res.end();
         });
     });
 
     proxyReq.on('error', (err) => {
-        console.log(`[LOGIN] Proxy error: ${err.message}`);
+        console.log(`[GetLoginData] Proxy error: ${err.message}`);
         if (!res.headersSent) res.status(502).send('Proxy Error');
     });
 

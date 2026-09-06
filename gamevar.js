@@ -120,7 +120,7 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
   const CDN_BASE = myDomain + "cdn/";
 
   return {
-    "abhotupdate_cdn_url":               CDN_BASE + "android_max_astc/2.130.22/",
+    "abhotupdate_cdn_url":               CDN_BASE + "android_max_astc/2.131.22/",
     "abhotupdate_check":                 "cache_res",
     "anti_hack_open":                    false,
     "appstore_url":                      REDIRECT_URL,
@@ -193,7 +193,7 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
     "graphic_level":                     0,
     "remote_option_version":             "optionallocres:50|optionalavatarres:791|optionalclothres:1228|optionalfootballres:27|optionalfullscreencgres:319|optionalhuntinggroundres:246|optionalinfection:125|optionalingameres:503|optionallobbyres:640|optionallonewolfres:86|optionallonewolfstrikeoutres:59|optionalludores:42|optionalmap1res:385|optionalmap2res:156|optionalmap4res:139|optionalmaphippores:118|optionalmapres:357|optionalnewblast:163|optionalpetres:910|optionalrushb:108|optionalrushingpetsres:84|optionalsnowduelres:65|optionalsocialres:223|optionaltrainingres:297|optionalugcres:844|optionalvoiceres:344|optionalwerewolves:153|optionalwerunres:92|optionalmapponyres:204|optionalugcoldparadiseres:34|optionalmultiregionres:29",
     "remote_option_version_astc":        "optionallocres:50|optionalavatarres:753|optionalclothres:1228|optionalfootballres:29|optionalfullscreencgres:306|optionalhuntinggroundres:216|optionalinfection:124|optionalingameres:461|optionallobbyres:640|optionallonewolfres:206|optionallonewolfstrikeoutres:155|optionalludores:175|optionalmap1res:385|optionalmap2res:192|optionalmap4res:175|optionalmaphippores:120|optionalmapres:391|optionalnewblast:162|optionalpetres:910|optionalrushb:241|optionalrushingpetsres:217|optionalsnowduelres:65|optionalsocialres:215|optionaltrainingres:267|optionalugcres:786|optionalvoiceres:379|optionalwerewolves:286|optionalwerunres:81|optionalmapponyres:204|optionalugcoldparadiseres:33|optionalmultiregionres:27",
-    "remote_version":                    "2.130.22",
+    "remote_version":                    "2.131.22",
     "res_url":                           CDN_BASE,
     "server_url":                        "https://loginbp.ggpolarbear.com/",
     "should_check_ab_exist":             true,

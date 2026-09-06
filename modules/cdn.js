@@ -231,10 +231,19 @@ function upstreamTarget(reqPath) {
     let p = reqPath;
     if (!p.startsWith('/')) p = '/' + p;
 
-    if (p.startsWith('/android_max_astc/')) return `https://dl.cdn.freefiremobile.com${p}`;
-    if (p.startsWith('/IconCDN/'))          return `https://dl.cdn.freefiremobile.com${p}`;
-    if (/^\/OB\d+\//.test(p))              return `https://dl.cdn.freefiremobile.com/common${p}`;
-    if (p.startsWith('/common/'))           return `https://dl.cdn.freefiremobile.com${p}`;
+    // IconCDN langsung ke CDN root
+    if (p.startsWith('/IconCDN/')) return `https://dl.cdn.freefiremobile.com${p}`;
+
+    // OB<num> path → /common/
+    if (/^\/OB\d+\//.test(p)) return `https://dl.cdn.freefiremobile.com/common${p}`;
+    if (p.startsWith('/common/')) return `https://dl.cdn.freefiremobile.com${p}`;
+
+    // android_max_astc/ dan android_astc/ → perlu /live/ABHotUpdates/ prefix
+    // Contoh: /android_max_astc/optional/optionalclothres/1228/fileinfo
+    //       → /live/ABHotUpdates/android_max_astc/optional/optionalclothres/1228/fileinfo
+    if (p.startsWith('/android_max_astc/') || p.startsWith('/android_astc/')) {
+        return `https://dl.cdn.freefiremobile.com/live/ABHotUpdates${p}`;
+    }
 
     if (!p.includes('/live/ABHotUpdates/')) p = `/live/ABHotUpdates${p}`;
     p = p.replace(/\/OB54\//g, `/${VERSION}/`);
