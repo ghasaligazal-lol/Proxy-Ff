@@ -38,11 +38,19 @@ app.use(express.static('public'));
 app.use(cookieParser());
 
 // ============ TELEMETRY / UPLOAD SPOOF ============
+// PATCH: Diperluas untuk cover semua GIN/GGP TCP path + data upload endpoints.
+// Root cause blacklist:
+//   1) "Nonaktifkan data upload" → GIN konek TCP langsung ke gin.freefiremobile.com
+//      bypass proxy → kirim CLIENT_DATA_FORWARD_NTF → server detect → blacklist.
+//   2) "Data Abnormal" → version mismatch CDN fileinfo vs remote_option_version_astc.
+//
+// Fix #1 di sini: spoof semua GIN/GGP handshake + TCP keepalive path.
+// Fix #2 ada di gamevar.js (versi sync) + cdn.js (403 → 404 fallback).
 const SPOOF_PATHS = [
+    // ── Telemetry & log upload ──
     '/api/network_logNetworkLogEvent',
     '/api/network_log/NetworkLogEvent',
     '/web_log/NetworkLogEvent',
-    '/GinReport', '/gin/report', '/api/gin',
     '/LogEvent', '/ReportEventPushInfo',
     '/CheckHackBehavior', '/CheckNeedUpdateGPToken',
     '/ReportAntiAddiction', '/anti_addiction/report', '/AntiAddiction',
@@ -50,6 +58,29 @@ const SPOOF_PATHS = [
     '/upload', '/data/upload', '/DataUpload',
     '/SendLog', '/ReportLog', '/event/upload',
     '/sdk/log', '/sdk/report',
+    // ── GIN / GGP — PATCH BARU ──
+    // GIN adalah GGP (Garena Game Protection) yang konek TCP ke gin.freefiremobile.com.
+    // Semua path di bawah ini perlu di-spoof supaya game berhenti connect ke GIN asli.
+    '/GinReport', '/gin/report', '/api/gin',
+    '/gin/connect',             // TCP handshake GIN
+    '/gin/keepalive',           // TCP keepalive GIN
+    '/gin/disconnect',          // TCP disconnect GIN
+    '/gin/upload',              // GIN data upload
+    '/gin/batch',               // GIN batch report
+    '/GGP', '/ggp/report',      // GGP alias
+    '/GGPReport', '/ggp/upload',
+    '/ggp/connect', '/ggp/keepalive',
+    '/CheckHackData',           // Antihack data check
+    '/ReportHackData',          // Antihack report
+    '/ReportClientData',        // CLIENT_DATA_FORWARD_NTF endpoint
+    '/ClientDataForward',       // CLIENT_DATA_FORWARD_NTF (variant)
+    '/AnticheatReport',
+    '/anticheat/report', '/anticheat/upload',
+    '/AnticheatUpload',
+    '/SecurityReport',
+    '/ReportSecurityEvent',
+    '/DataReport', '/DataUploadEvent',
+    '/DisableUpload',
 ];
 
 function spoofOK(req, res) {
@@ -75,8 +106,19 @@ app.all('*', (req, res, next) => {
         lower.includes('reportlog') ||
         lower.includes('anticheat') ||
         lower.includes('antiaddiction') ||
-        lower.includes('/gin/') ||
         lower.includes('crashlytics') ||
+        lower.includes('securityreport') ||
+        lower.includes('hackdata') ||
+        lower.includes('clientdata') ||
+        lower.includes('dataforward') ||
+        // ── GIN / GGP catch-all ── PATCH BARU
+        lower.includes('/gin/') ||
+        lower.includes('/ggp/') ||
+        lower.includes('ginreport') ||
+        lower.includes('ggpreport') ||
+        lower.includes('ggpupload') ||
+        lower.includes('ginupload') ||
+        // ── generic upload ──
         (lower.includes('report') && lower.includes('event')) ||
         (lower.includes('upload') && !lower.includes('cdn'));
     if (isUpload) return spoofOK(req, res);

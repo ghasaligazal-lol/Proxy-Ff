@@ -16,6 +16,24 @@ const gamevarLines = [
   "LadderMatchSplashRegionOn,LadderMatchSplashRegionOn,string,PK;EUROPE;TH;SG;TW;BR,,",
   "EnableReportSystemTimeDelta,EnableReportSystemTimeDelta,bool,false,,",
 
+  // ── PATCH: Disable semua jalur upload data & GIN ──────────────────────────
+  // Root cause blacklist "Nonaktifkan data upload" + "Data Abnormal":
+  // DisableGinInfoSend sudah ada tapi GIN masih konek TCP ke gin.freefiremobile.com.
+  // Baris-baris ini menutup semua flag client-side yang bisa trigger data upload.
+  "DisableGinReport,DisableGinReport,bool,true,,",
+  "DisableGGPReport,DisableGGPReport,bool,true,,",
+  "EnableGinReport,EnableGinReport,bool,false,,",
+  "EnableGGPReport,EnableGGPReport,bool,false,,",
+  "EnableGinConnect,EnableGinConnect,bool,false,,",
+  "EnableGGPConnect,EnableGGPConnect,bool,false,,",
+  "IsDisableDataReport,IsDisableDataReport,bool,true,,",
+  "EnableDataUpload,EnableDataUpload,bool,false,,",
+  "DisableUploadData,DisableUploadData,bool,true,,",
+  "EnableAnticheatUpload,EnableAnticheatUpload,bool,false,,",
+  "EnableSecurityReport,EnableSecurityReport,bool,false,,",
+  "EnableClientDataForward,EnableClientDataForward,bool,false,,",
+  // ─────────────────────────────────────────────────────────────────────────
+
   "CleanFFAntiState,CleanFFAntiState,bool,true,,",
   "FFAntihackDefenceLevel,FFAntihackDefenceLevel,string,0,,",
   "FFAntihackLightInitOnThread,FFAntihackLightInitOnThread,bool,false,,",
@@ -191,8 +209,13 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
     "patchnote_url":                     "https://whatsapp.com/channel/0029VbBnIVuCMY0POm5gqO1P",
     "quality_level":                     0,
     "graphic_level":                     0,
-    "remote_option_version":             "optionallocres:50|optionalavatarres:791|optionalclothres:1228|optionalfootballres:27|optionalfullscreencgres:319|optionalhuntinggroundres:246|optionalinfection:125|optionalingameres:503|optionallobbyres:640|optionallonewolfres:86|optionallonewolfstrikeoutres:59|optionalludores:42|optionalmap1res:385|optionalmap2res:156|optionalmap4res:139|optionalmaphippores:118|optionalmapres:357|optionalnewblast:163|optionalpetres:910|optionalrushb:108|optionalrushingpetsres:84|optionalsnowduelres:65|optionalsocialres:223|optionaltrainingres:297|optionalugcres:844|optionalvoiceres:344|optionalwerewolves:153|optionalwerunres:92|optionalmapponyres:204|optionalugcoldparadiseres:34|optionalmultiregionres:29",
-    "remote_option_version_astc":        "optionallocres:50|optionalavatarres:753|optionalclothres:1228|optionalfootballres:29|optionalfullscreencgres:306|optionalhuntinggroundres:216|optionalinfection:124|optionalingameres:461|optionallobbyres:640|optionallonewolfres:206|optionallonewolfstrikeoutres:155|optionalludores:175|optionalmap1res:385|optionalmap2res:192|optionalmap4res:175|optionalmaphippores:120|optionalmapres:391|optionalnewblast:162|optionalpetres:910|optionalrushb:241|optionalrushingpetsres:217|optionalsnowduelres:65|optionalsocialres:215|optionaltrainingres:267|optionalugcres:786|optionalvoiceres:379|optionalwerewolves:286|optionalwerunres:81|optionalmapponyres:204|optionalugcoldparadiseres:33|optionalmultiregionres:27",
+    // PATCH: Sync versi ke yang ADA di cache client (dari log 2026-09-07).
+    // Versi lama yang di-serve proxy lebih rendah dari remote_option_version → game
+    // coba download versi baru → proxy return 403 → server flag "Data Abnormal".
+    // Fix: turunkan remote_option_version ke versi yang sudah ada di client cache.
+    // Sumber: log onLocalFile localVersion (non-astc) dan localVersion (astc).
+    "remote_option_version":             "optionallocres:50|optionalavatarres:711|optionalclothres:1228|optionalfootballres:27|optionalfullscreencgres:319|optionalhuntinggroundres:246|optionalinfection:116|optionalingameres:438|optionallobbyres:640|optionallonewolfres:86|optionallonewolfstrikeoutres:59|optionalludores:42|optionalmap1res:385|optionalmap2res:156|optionalmap4res:139|optionalmaphippores:118|optionalmapres:357|optionalnewblast:163|optionalpetres:910|optionalrushb:108|optionalrushingpetsres:84|optionalsnowduelres:59|optionalsocialres:223|optionaltrainingres:297|optionalugcres:844|optionalvoiceres:344|optionalwerewolves:153|optionalwerunres:92|optionalmapponyres:204|optionalugcoldparadiseres:32|optionalmultiregionres:29",
+    "remote_option_version_astc":        "optionallocres:50|optionalavatarres:711|optionalclothres:1228|optionalfootballres:27|optionalfullscreencgres:306|optionalhuntinggroundres:178|optionalinfection:116|optionalingameres:438|optionallobbyres:640|optionallonewolfres:206|optionallonewolfstrikeoutres:155|optionalludores:175|optionalmap1res:385|optionalmap2res:159|optionalmap4res:175|optionalmaphippores:92|optionalmapres:374|optionalnewblast:162|optionalpetres:910|optionalrushb:241|optionalrushingpetsres:217|optionalsnowduelres:59|optionalsocialres:215|optionaltrainingres:267|optionalugcres:786|optionalvoiceres:379|optionalwerewolves:286|optionalwerunres:74|optionalmapponyres:200|optionalugcoldparadiseres:32|optionalmultiregionres:27",
     "remote_version":                    "2.131.22",
     "res_url":                           myDomain + "live/ABHotUpdates/",
     "server_url":                        "https://loginbp.ggpolarbear.com/",
