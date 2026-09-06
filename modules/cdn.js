@@ -99,6 +99,33 @@ function safeLocalPath(urlPath) {
         }
     }
 
+    // /live/ABHotUpdates/android_max_astc/<any-ver>/fileinfo → android_max_astc/<local-ver>/fileinfo
+    const abVerFileinfo = /^\/live\/ABHotUpdates\/android_max_astc\/[^/]+\/fileinfo$/.exec(p);
+    if (abVerFileinfo) {
+        for (const ver of LOCAL_VERSIONS_MAX) {
+            candidates.push(path.join(BASE_DIR, 'android_max_astc', ver, 'fileinfo'));
+        }
+        candidates.push(path.join(BASE_DIR, 'live', 'ABHotUpdates', 'fileinfo'));
+    }
+
+    // /live/ABHotUpdates/android_max_astc/<any-ver>/gameassetbundles/* → android_max_astc/<local-ver>/gameassetbundles/*
+    const abVerAsset = /^\/live\/ABHotUpdates\/android_max_astc\/[^/]+\/(gameassetbundles\/.+)$/.exec(p);
+    if (abVerAsset) {
+        for (const ver of LOCAL_VERSIONS_MAX) {
+            candidates.push(path.join(BASE_DIR, 'android_max_astc', ver, abVerAsset[1]));
+        }
+        candidates.push(path.join(BASE_DIR, 'live', 'ABHotUpdates', abVerAsset[1]));
+    }
+
+    // /live/ABHotUpdates/android_max_astc/<any-ver>/optional/<type>/<num>/fileinfo
+    const abVerOptional = /^\/live\/ABHotUpdates\/android_max_astc\/[^/]+\/(optional\/.+)$/.exec(p);
+    if (abVerOptional) {
+        for (const ver of LOCAL_VERSIONS_MAX) {
+            candidates.push(path.join(BASE_DIR, 'android_max_astc', ver, abVerOptional[1]));
+        }
+        candidates.push(path.join(BASE_DIR, 'android_max_astc', 'optional', ...abVerOptional[1].split('/').slice(1)));
+    }
+
     // /android_max_astc/<any-ver>/gameassetbundles/* → versi lokal yang ada
     const maxMatch = /^\/android_max_astc\/[^/]+\/(gameassetbundles\/.+)$/.exec(p);
     if (maxMatch) {
@@ -272,6 +299,25 @@ function init(app) {
         res.setHeader('Cache-Control', 'public, max-age=60');
         res.setHeader('Accept-Ranges', 'bytes');
         return res.status(200).end(buf);
+    });
+
+    // /cdn/live/ABHotUpdates/android_max_astc/:ver/fileinfo — path format lama
+    app.get('/cdn/live/ABHotUpdates/android_max_astc/:ver/fileinfo', (req, res) => {
+        const ver = req.params.ver.replace(/[^0-9.]/g, '');
+        // Cari fileinfo lokal: versi exact dulu, fallback ke versi lain, fallback ke ABHotUpdates
+        const candidates = [
+            ...LOCAL_VERSIONS_MAX.map(v => path.join(BASE_DIR, 'android_max_astc', v, 'fileinfo')),
+            path.join(BASE_DIR, 'live', 'ABHotUpdates', 'fileinfo'),
+        ];
+        for (const fp of candidates) {
+            if (fs.existsSync(fp)) {
+                console.log(`[CDN] fileinfo (ABHotUpdates/ver) → ${fp}`);
+                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.setHeader('Cache-Control', 'public, max-age=60');
+                return fs.createReadStream(fp).pipe(res);
+            }
+        }
+        return res.status(404).send('fileinfo not found');
     });
 
     // /cdn/android_max_astc/:ver/fileinfo
