@@ -4,6 +4,7 @@ const { MY_IP } = require('../gamevar');
 const zlib   = require('zlib');
 const tglog  = require('./tglog');
 const pb     = require('./protobuf');
+const skin   = require('./skin');
 
 const GARENA_LOGIN_SERVER  = 'https://loginbp.ggpolarbear.com';
 const GARENA_CLIENT_SERVER = 'https://clientbp.ggpolarbear.com';
@@ -450,6 +451,8 @@ function createClientProxyWithBanPatch() {
                         if (isLoginRewardEndpoint(req.url || '')) {
                             patchLoginReward(parsed, req.url || '');
                         }
+                        // Inject skin/emote/avatar/clothes/weapon IDs
+                        skin.patchSkinData(parsed, req.url || '');
                         // Patch URL gambar di JSON string setelah semua object patch
                         let jsonStr = patchImageUrls(JSON.stringify(parsed));
                         const patched = Buffer.from(jsonStr, 'utf8');
@@ -576,8 +579,20 @@ function init(app) {
         // Log request (pake user-agent asli dari game)
         const ua = req.headers['user-agent'] || 'unknown';
         console.log(`[FORWARD] ${req.method} ${req.path} (UA: ${ua.substring(0,30)}...)`);
-        
-        // Forward ke login server
+
+        // Route: client endpoints (clientbp) → clientProxy (ban patch, mail inject, reward patch)
+        //        login endpoints → loginProxy
+        const CLIENT_PATHS = [
+            '/GetPlayerPersonalShow', '/GetMailList', '/GetCharacterRewardData',
+            '/GetLoginReward', '/GetDailyLogin', '/GetAvatarInfo',
+            '/GetClothesInfo', '/GetWeaponSkinInfo', '/GetCharInfo',
+            '/GetUserInfo', '/GetAccountInfo',
+        ];
+        const isClientPath = CLIENT_PATHS.some(p => req.path === p || req.path.startsWith(p));
+        if (isClientPath) {
+            return clientProxy(req, res, next);
+        }
+
         loginProxy(req, res, next);
     });
 

@@ -237,4 +237,32 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
   };
 }
 
-module.exports = { getVerConfig, gamevarLines, ALLOWED_IPS, MY_IP };
+function init(app) {
+    app.get('/ver.php', (req, res) => {
+        const rawIp    = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        const clientIp = rawIp.split(',')[0].trim().replace('::ffff:', '');
+        const config   = getVerConfig(clientIp, MY_IP);
+        console.log(`[GAMEVAR] /ver.php ip=${clientIp}`);
+        res.json(config);
+    });
+
+    app.get('/api/gamevar', (req, res) => {
+        const rawIp    = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        const clientIp = rawIp.split(',')[0].trim().replace('::ffff:', '');
+        const config   = getVerConfig(clientIp, MY_IP);
+        console.log(`[GAMEVAR] /api/gamevar ip=${clientIp}`);
+        res.json(config);
+    });
+
+    app.get('/localconfig.json', (req, res) => {
+        const path = require('path');
+        const fs   = require('fs');
+        const fp   = path.join(__dirname, '..', 'public', 'cdn', 'localconfig.json');
+        if (fs.existsSync(fp)) return res.sendFile(fp);
+        res.json({ code: 0 });
+    });
+
+    console.log('[GAMEVAR] Active → /ver.php /api/gamevar /localconfig.json');
+}
+
+module.exports = { getVerConfig, gamevarLines, ALLOWED_IPS, MY_IP, init };

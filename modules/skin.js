@@ -1,4 +1,11 @@
+'use strict';
 // modules/skin.js
+// Inject emote/avatar/clothes/weapon IDs ke response clientbp.
+// NOTE: skin.js daftarin middleware SEBELUM proxy.js di-init.
+// proxy.js clientProxy pakai selfHandleResponse → res.send override tidak jalan.
+// Solusi: inject via onProxyRes di proxy.js dengan memanggil patchSkinData().
+// File ini expose patchSkinData() yang dipanggil dari proxy.js.
+
 const my_emotes = {
     "1": "909052002", "2": "909052011", "3": "909052012", "4": "909052004",
     "5": "909052007", "6": "909052009", "7": "909052003", "8": "909051001",
@@ -27,107 +34,68 @@ const my_emotes = {
     "97": "909052012", "98": "909040004", "99": "909040005", "100": "909052002"
 };
 
-function init(app) {
-    app.post('/GetPlayerPersonalShow', (req, res, next) => {
-        const originalSend = res.send;
-        res.send = function(data) {
-            try {
-                const json = JSON.parse(data.toString());
-                
-                if (!json.emotes) json.emotes = {};
-                if (!json.emotes.list) json.emotes.list = [];
-                
-                const emoteIds = Object.values(my_emotes);
-                for (const id of emoteIds) {
-                    if (!json.emotes.list.includes(id)) {
-                        json.emotes.list.push(id);
-                    }
-                }
-                
-                const modified = Buffer.from(JSON.stringify(json));
-                res.setHeader('Content-Length', modified.length);
-                originalSend.call(this, modified);
-            } catch(e) {
-                originalSend.call(this, data);
-            }
-        };
-        next();
-    });
+const emoteIds  = Object.values(my_emotes);
+const avatarIds = emoteIds.slice(0, 20);
+const clothIds  = emoteIds.slice(0, 30);
+const weaponIds = emoteIds.slice(0, 25);
 
-    app.post('/GetAvatarInfo', (req, res, next) => {
-        const originalSend = res.send;
-        res.send = function(data) {
-            try {
-                const json = JSON.parse(data.toString());
-                
-                if (!json.avatars) json.avatars = [];
-                
-                const avatarIds = Object.values(my_emotes).slice(0, 20);
-                for (const id of avatarIds) {
-                    if (!json.avatars.includes(id)) {
-                        json.avatars.push(id);
-                    }
-                }
-                
-                const modified = Buffer.from(JSON.stringify(json));
-                res.setHeader('Content-Length', modified.length);
-                originalSend.call(this, modified);
-            } catch(e) {
-                originalSend.call(this, data);
-            }
-        };
-        next();
-    });
+/**
+ * Patch JSON object in-place berdasarkan endpoint path.
+ * Dipanggil dari proxy.js onProxyRes setelah ban/gin patch.
+ * Return true kalau ada perubahan.
+ */
+function patchSkinData(jsonObj, urlPath) {
+    if (!jsonObj || typeof jsonObj !== 'object') return false;
+    let patched = false;
 
-    app.post('/GetClothesInfo', (req, res, next) => {
-        const originalSend = res.send;
-        res.send = function(data) {
-            try {
-                const json = JSON.parse(data.toString());
-                
-                if (!json.clothes) json.clothes = [];
-                
-                const clothesIds = Object.values(my_emotes).slice(0, 30);
-                for (const id of clothesIds) {
-                    if (!json.clothes.includes(id)) {
-                        json.clothes.push(id);
-                    }
-                }
-                
-                const modified = Buffer.from(JSON.stringify(json));
-                res.setHeader('Content-Length', modified.length);
-                originalSend.call(this, modified);
-            } catch(e) {
-                originalSend.call(this, data);
+    if (urlPath.includes('GetPlayerPersonalShow')) {
+        if (!jsonObj.emotes) jsonObj.emotes = {};
+        if (!Array.isArray(jsonObj.emotes.list)) jsonObj.emotes.list = [];
+        for (const id of emoteIds) {
+            if (!jsonObj.emotes.list.includes(id)) {
+                jsonObj.emotes.list.push(id);
+                patched = true;
             }
-        };
-        next();
-    });
+        }
+    }
 
-    app.post('/GetWeaponSkinInfo', (req, res, next) => {
-        const originalSend = res.send;
-        res.send = function(data) {
-            try {
-                const json = JSON.parse(data.toString());
-                
-                if (!json.weapons) json.weapons = [];
-                
-                const weaponIds = Object.values(my_emotes).slice(0, 25);
-                for (const id of weaponIds) {
-                    if (!json.weapons.includes(id)) {
-                        json.weapons.push(id);
-                    }
-                }
-                
-                const modified = Buffer.from(JSON.stringify(json));
-                res.setHeader('Content-Length', modified.length);
-                originalSend.call(this, modified);
-            } catch(e) {
-                originalSend.call(this, data);
+    if (urlPath.includes('GetAvatarInfo')) {
+        if (!Array.isArray(jsonObj.avatars)) jsonObj.avatars = [];
+        for (const id of avatarIds) {
+            if (!jsonObj.avatars.includes(id)) {
+                jsonObj.avatars.push(id);
+                patched = true;
             }
-        };
-        next();
-    });
+        }
+    }
+
+    if (urlPath.includes('GetClothesInfo')) {
+        if (!Array.isArray(jsonObj.clothes)) jsonObj.clothes = [];
+        for (const id of clothIds) {
+            if (!jsonObj.clothes.includes(id)) {
+                jsonObj.clothes.push(id);
+                patched = true;
+            }
+        }
+    }
+
+    if (urlPath.includes('GetWeaponSkinInfo')) {
+        if (!Array.isArray(jsonObj.weapons)) jsonObj.weapons = [];
+        for (const id of weaponIds) {
+            if (!jsonObj.weapons.includes(id)) {
+                jsonObj.weapons.push(id);
+                patched = true;
+            }
+        }
+    }
+
+    if (patched) console.log(`[SKIN-PATCH] Injected skin data for ${urlPath}`);
+    return patched;
 }
 
-module.exports = { init, my_emotes };
+function init(app) {
+    // Tidak daftarkan route langsung — patchSkinData() dipanggil dari proxy.js
+    console.log('[SKIN] Ready — patch via proxy.js onProxyRes');
+}
+
+module.exports = { init, patchSkinData, my_emotes };
