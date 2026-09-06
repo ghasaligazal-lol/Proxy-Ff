@@ -9,16 +9,19 @@ const app  = express();
 const PORT = process.env.PORT || 3030;
 
 // ============ MODULES LOADER ============
+// auth.js & keys.js DIHAPUS — tidak ada validasi key
+const SKIP_MODULES = new Set(['auth', 'keys', 'getkey', 'telegram']);
+
 function loadModules() {
     const modulesPath = path.join(__dirname, 'modules');
     if (!fs.existsSync(modulesPath)) return {};
     const loaded = {};
     const files = fs.readdirSync(modulesPath).filter(f => f.endsWith('.js'));
     for (const file of files) {
-        if (file === 'getkey.js' || file === 'telegram.js') continue;
+        const name = path.basename(file, '.js');
+        if (SKIP_MODULES.has(name)) continue;
         try {
-            const mod  = require(path.join(modulesPath, file));
-            const name = path.basename(file, '.js');
+            const mod = require(path.join(modulesPath, file));
             loaded[name] = mod;
         } catch (err) {
             console.log(`[MODULES] ERROR load ${file}: ${err.message}`);
@@ -30,47 +33,23 @@ function loadModules() {
 const modules = loadModules();
 
 // ============ MIDDLEWARE ============
-// BUG FIX: express.raw() dipasang global → semua body jadi Buffer.
-// Middleware JSON di bawahnya dead code karena req.body sudah terisi.
-// Fix: pisah — endpoint binary (MajorLogin, CDN) pakai raw,
-// endpoint JSON pakai json() / urlencoded() via flag di route.
-// Solusi pragmatis: tetap pakai raw global tapi setiap endpoint
-// yang butuh JSON cukup JSON.parse(body.toString()) — sudah dihandle
-// di auth.js parseBody(). app.js sendiri tidak ada route yang
-// expect req.body sebagai plain object, jadi tidak perlu ubah order.
-// Tapi kita perbaiki middleware agar express.json() TIDAK dipasang
-// setelah raw (dead code dihapus — tidak merusak behavior, hanya bersih).
 app.use(express.raw({ type: '*/*', limit: '10mb' }));
 app.use(express.static('public'));
 app.use(cookieParser());
-// (tidak ada express.json() di sini — sudah dead code, dihapus)
 
 // ============ TELEMETRY / UPLOAD SPOOF ============
 const SPOOF_PATHS = [
     '/api/network_logNetworkLogEvent',
     '/api/network_log/NetworkLogEvent',
     '/web_log/NetworkLogEvent',
-    '/GinReport',
-    '/gin/report',
-    '/api/gin',
-    '/LogEvent',
-    '/ReportEventPushInfo',
-    '/CheckHackBehavior',
-    '/CheckNeedUpdateGPToken',
-    '/ReportAntiAddiction',
-    '/anti_addiction/report',
-    '/AntiAddiction',
-    '/firebase/log',
-    '/crashlytics/report',
-    '/sentry',
-    '/upload',
-    '/data/upload',
-    '/DataUpload',
-    '/SendLog',
-    '/ReportLog',
-    '/event/upload',
-    '/sdk/log',
-    '/sdk/report',
+    '/GinReport', '/gin/report', '/api/gin',
+    '/LogEvent', '/ReportEventPushInfo',
+    '/CheckHackBehavior', '/CheckNeedUpdateGPToken',
+    '/ReportAntiAddiction', '/anti_addiction/report', '/AntiAddiction',
+    '/firebase/log', '/crashlytics/report', '/sentry',
+    '/upload', '/data/upload', '/DataUpload',
+    '/SendLog', '/ReportLog', '/event/upload',
+    '/sdk/log', '/sdk/report',
 ];
 
 function spoofOK(req, res) {
@@ -150,9 +129,9 @@ app.get('/Assembly-CSharp-patch.bytes', (req, res) => {
 });
 
 // ============ MODULES INIT ============
+// Urutan penting: tglog → protobuf → cdn → game handlers → proxy (catch-all terakhir)
 if (modules.tglog)      modules.tglog.init(app);
 if (modules.protobuf)   modules.protobuf.init(app);
-if (modules.auth)       modules.auth.init(app);
 if (modules.cdn)        modules.cdn.init(app);
 if (modules.guest)      modules.guest.init(app);
 if (modules.ping)       modules.ping.init(app);
@@ -160,9 +139,9 @@ if (modules.newbie)     app.post('/ChooseNewbieChoice', modules.newbie.handle);
 if (modules.gamevar)    modules.gamevar.init(app);
 if (modules.routes)     modules.routes.init(app);
 if (modules.skin)       modules.skin.init(app);
-if (modules['404'])     modules['404'].init(app);
 if (modules.majorlogin) modules.majorlogin.init(app);
-if (modules.proxy)      modules.proxy.init(app);
+if (modules['404'])     modules['404'].init(app);
+if (modules.proxy)      modules.proxy.init(app);  // catch-all — HARUS PALING AKHIR
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`[SERVER] Running on port ${PORT}`);

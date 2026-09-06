@@ -75,7 +75,6 @@ const gamevarLines = [
   "TurnSpeed,Combat,float,9999.0,,",
   "ActionSpeedScale,Combat,float,3.0,,",
   "HighFallActionSpeed,Combat,float,9999.0,,",
-  
 
   "SensitivityMaxSetting,SensitivityMaxSetting,float,9.5,,",
   "Sensitivity1PMaxSetting,Sensitivity1PMaxSetting,float,9.5,,",
@@ -87,13 +86,6 @@ const gamevarLines = [
   "FreeMoveAngularSpeed,FreeMoveAngularSpeed,float,9999.0,,",
   "FreeMoveAngularSpeedStand,FreeMoveAngularSpeedStand,float,9999.0,,",
   "FreeMoveAngularSpeedCrouch,FreeMoveAngularSpeedCrouch,float,9999.0,,",
-  "FreeMoveAngularSpe"EnableAccelerationOnFalling,EnableAccelerationOnFalling,bool,false,,",
-  "CanJumpFallingRunFast,CanJumpFallingRunFast,bool,true,,",
-  "CanCreepRunFast,CanCreepRunFast,bool,true,,",
-  "CanCrouchingRunFast,CanCrouchingRunFast,bool,true,,",
-  "StropFallingResetSpeed,StropFallingResetSpeed,bool,false,,",
-  "RunSpeed,,float,4.1,,",
-  "DashSpeedScale,,float,19,,",
   "FreeMoveAngularSpeedCreep,FreeMoveAngularSpeedCreep,float,9999.0,,",
   "ResetRotationSpeed,ResetRotationSpeed,float,9999.0,,",
   "RotateSensitivity,Sensi,float,9999.0,,",
