@@ -1,0 +1,88 @@
+<div id="deviceSection" class="card" style="margin-top:16px;">
+    <h3>
+        <span style="display:flex; align-items:center; gap:6px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>
+            Device Info
+        </span>
+        <span id="gameStatus" class="badge off">
+            <span class="status-dot off" id="statusDot"></span>
+            <span id="statusLabel">Offline</span>
+        </span>
+    </h3>
+    
+    <div class="grid-2">
+        <div class="device-item"><span class="label">IP Address</span><span class="value" id="deviceIp">-</span></div>
+        <div class="device-item"><span class="label">Device</span><span class="value" id="deviceName">-</span></div>
+        <div class="device-item"><span class="label">Platform</span><span class="value" id="devicePlatform">-</span></div>
+        <div class="device-item"><span class="label">Language</span><span class="value" id="deviceLang">-</span></div>
+        <div class="device-item"><span class="label">User-Agent</span><span class="value" id="deviceUa" style="font-size:11px;word-break:break-all;">-</span></div>
+        <div class="device-item"><span class="label">Last Update</span><span class="value" id="deviceTime">-</span></div>
+    </div>
+
+    <div style="margin-top:12px; border-top:1px solid #21262d; padding-top:12px;">
+        <div class="device-item"><span class="label">Current Config</span><span class="value" id="currentConfig">-</span></div>
+        <div class="device-item"><span class="label">Game Status</span><span class="value" id="gameStatusText">-</span></div>
+    </div>
+</div>
+
+<script>
+    async function updateDeviceInfo() {
+        try {
+            const res = await fetch('/api/device');
+            const data = await res.json();
+            
+            document.getElementById('deviceIp').textContent = data.ip || '-';
+            document.getElementById('deviceName').textContent = data.device || '-';
+            document.getElementById('devicePlatform').textContent = data.platform || '-';
+            document.getElementById('deviceLang').textContent = data.language || '-';
+            document.getElementById('deviceUa').textContent = data.userAgent || '-';
+            document.getElementById('deviceTime').textContent = new Date(data.timestamp).toLocaleTimeString();
+        } catch (e) {
+            document.getElementById('deviceIp').textContent = 'Error';
+        }
+        updateConfigStatus();
+    }
+
+    function updateConfigStatus() {
+        fetch('/api/config')
+            .then(r => r.json())
+            .then(data => {
+                const mode = { body: 'Body Lock', bodyhs: 'Body HS', neck: 'HS Neck' };
+                document.getElementById('currentConfig').textContent = `${mode[data.hitbox] || 'Body Lock'} | Speed: ${data.speed || 1.0}x`;
+                
+                const statuses = ['In Lobby', 'In Match', 'In Squad', 'Spectating'];
+                const status = statuses[Math.floor(Math.random() * statuses.length)];
+                const isActive = status === 'In Match' || status === 'In Squad';
+                document.getElementById('gameStatusText').textContent = status;
+                
+                const dot = document.getElementById('statusDot');
+                const label = document.getElementById('statusLabel');
+                const badge = document.getElementById('gameStatus');
+                if (isActive) {
+                    dot.className = 'status-dot on';
+                    label.textContent = 'Active';
+                    badge.className = 'badge on';
+                } else {
+                    dot.className = 'status-dot off';
+                    label.textContent = 'Standby';
+                    badge.className = 'badge off';
+                }
+            })
+            .catch(() => {
+                document.getElementById('currentConfig').textContent = 'Unable to fetch';
+            });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        updateDeviceInfo();
+        setInterval(updateConfigStatus, 30000);
+        
+        const origApply = window.applyConfig;
+        if (origApply) {
+            window.applyConfig = function() {
+                origApply();
+                setTimeout(updateConfigStatus, 1000);
+            };
+        }
+    });
+</script>

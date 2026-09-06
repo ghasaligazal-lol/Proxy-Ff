@@ -1,0 +1,231 @@
+<div>
+    <!-- Hitbox -->
+    <div class="card">
+        <h3>
+            <span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:6px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                Hitbox Mode
+            </span>
+            <span id="hitboxStatus" class="badge off">OFF</span>
+        </h3>
+        <div class="radio-group" id="hitboxGroup">
+            <label class="active">
+                <input type="radio" name="hitbox" value="body" checked> Body Lock (50%)
+            </label>
+            <label>
+                <input type="radio" name="hitbox" value="bodyhs"> Body HS (79%)
+            </label>
+            <label>
+                <input type="radio" name="hitbox" value="neck"> HS Neck (20%)
+            </label>
+        </div>
+        <div class="desc">Body Lock = tembak badan doang (HS nonaktif) | Body HS = badan jadi headshot</div>
+    </div>
+
+    <!-- Speed -->
+    <div class="card">
+        <h3>
+            <span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:6px;"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                Speed Hack
+            </span>
+            <span id="speedStatus" class="badge off">OFF</span>
+        </h3>
+        <div class="slider-container">
+            <div class="value" id="speedValue">1.0</div>
+            <input type="range" id="speedSlider" min="1.0" max="3.5" step="0.1" value="1.0">
+            <div class="labels">
+                <span>1.0</span>
+                <span>2.0</span>
+                <span>3.0</span>
+                <span>3.5</span>
+            </div>
+        </div>
+        <div class="desc" style="margin-top:6px;">Geser ke kanan untuk lari lebih cepat (1.0 = normal)</div>
+    </div>
+
+    <!-- Other Features -->
+    <div class="card">
+        <h3>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:6px;"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+            Other Features
+        </h3>
+        
+        <div class="row" style="padding:8px 0;border-bottom:1px solid #21262d;">
+            <div class="row-left">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                <span>High Sensi</span>
+                <span id="highSensiStatus" class="badge off">OFF</span>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="highSensi">
+                <span class="slider"></span>
+            </label>
+        </div>
+
+        <div class="row" style="padding:8px 0;border-bottom:1px solid #21262d;">
+            <div class="row-left">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                <span>Back Jump</span>
+                <span id="backJumpStatus" class="badge off">OFF</span>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="backJump">
+                <span class="slider"></span>
+            </label>
+        </div>
+
+        <div class="row" style="padding:8px 0;border-bottom:1px solid #21262d;">
+            <div class="row-left">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 6 12 14 20 6"/><path d="M4 18h16"/></svg>
+                <span>PC Analog / Zigzag</span>
+                <span id="pcAnalogStatus" class="badge off">OFF</span>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="pcAnalog">
+                <span class="slider"></span>
+            </label>
+        </div>
+
+        <div class="row" style="padding:8px 0;">
+            <div class="row-left">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-4z"/><path d="M3 2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H3z"/><path d="M12 9v6"/><path d="M12 11h2"/><path d="M12 15h-2"/></svg>
+                <span>Fast Swap</span>
+                <span id="fastSwapStatus" class="badge off">OFF</span>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="fastSwap">
+                <span class="slider"></span>
+            </label>
+        </div>
+    </div>
+
+    <!-- Apply Button -->
+    <button class="btn-apply" onclick="applyConfig()">Apply Config (Langsung!)</button>
+    <div id="statusMsg" class="status-msg"></div>
+</div>
+
+<script>
+    // All the JavaScript functions from the original index.html are moved here.
+    // They are global so they can be called from onclick.
+
+    function updateBadge(id, checked) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.textContent = checked ? 'ON' : 'OFF';
+            el.className = 'badge ' + (checked ? 'on' : 'off');
+        }
+    }
+
+    function updateHitboxStatus() {
+        const selected = document.querySelector('input[name="hitbox"]:checked');
+        const label = selected ? selected.value : 'body';
+        const names = { body: 'Body Lock', bodyhs: 'Body HS', neck: 'HS Neck' };
+        const el = document.getElementById('hitboxStatus');
+        el.textContent = names[label] || 'OFF';
+        el.className = 'badge on';
+    }
+
+    async function loadConfig() {
+        try {
+            const res = await fetch('/api/config');
+            const data = await res.json();
+            
+            if (data.hitbox) {
+                document.querySelector(`input[name="hitbox"][value="${data.hitbox}"]`).checked = true;
+            }
+            updateHitboxStatus();
+
+            document.getElementById('speedSlider').value = data.speed || 1.0;
+            document.getElementById('speedValue').textContent = (data.speed || 1.0).toFixed(1);
+            const speedOn = (data.speed || 1.0) > 1.0;
+            updateBadge('speedStatus', speedOn);
+
+            document.getElementById('highSensi').checked = data.highSensi || false;
+            updateBadge('highSensiStatus', data.highSensi || false);
+
+            document.getElementById('backJump').checked = data.backJump || false;
+            updateBadge('backJumpStatus', data.backJump || false);
+
+            document.getElementById('pcAnalog').checked = data.pcAnalog || false;
+            updateBadge('pcAnalogStatus', data.pcAnalog || false);
+
+            document.getElementById('fastSwap').checked = data.fastSwap || false;
+            updateBadge('fastSwapStatus', data.fastSwap || false);
+
+        } catch(e) {
+            console.log('Load config error:', e);
+        }
+    }
+
+    async function applyConfig() {
+        const hitbox = document.querySelector('input[name="hitbox"]:checked').value;
+        const speed = parseFloat(document.getElementById('speedSlider').value);
+        const highSensi = document.getElementById('highSensi').checked;
+        const backJump = document.getElementById('backJump').checked;
+        const pcAnalog = document.getElementById('pcAnalog').checked;
+        const fastSwap = document.getElementById('fastSwap').checked;
+
+        const config = { hitbox, speed, highSensi, backJump, pcAnalog, fastSwap };
+
+        const msg = document.getElementById('statusMsg');
+        msg.className = 'status-msg';
+        msg.textContent = '⏳ Applying...';
+        msg.style.display = 'block';
+
+        try {
+            const res = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                msg.className = 'status-msg success';
+                msg.textContent = '✅ Config applied! Perubahan akan terasa dalam beberapa detik.';
+                updateHitboxStatus();
+                updateBadge('speedStatus', speed > 1.0);
+                updateBadge('highSensiStatus', highSensi);
+                updateBadge('backJumpStatus', backJump);
+                updateBadge('pcAnalogStatus', pcAnalog);
+                updateBadge('fastSwapStatus', fastSwap);
+                document.getElementById('speedValue').textContent = speed.toFixed(1);
+            } else {
+                msg.className = 'status-msg error';
+                msg.textContent = '❌ Failed: ' + (data.error || 'Unknown error');
+            }
+        } catch(e) {
+            msg.className = 'status-msg error';
+            msg.textContent = '❌ Connection error: ' + e.message;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // Speed slider
+        document.getElementById('speedSlider').addEventListener('input', function() {
+            document.getElementById('speedValue').textContent = parseFloat(this.value).toFixed(1);
+            updateBadge('speedStatus', parseFloat(this.value) > 1.0);
+        });
+
+        // Checkboxes
+        document.querySelectorAll('input[type="checkbox"]').forEach(el => {
+            el.addEventListener('change', function() {
+                const id = this.id;
+                const map = {
+                    highSensi: 'highSensiStatus',
+                    backJump: 'backJumpStatus',
+                    pcAnalog: 'pcAnalogStatus',
+                    fastSwap: 'fastSwapStatus'
+                };
+                if (map[id]) updateBadge(map[id], this.checked);
+            });
+        });
+
+        document.querySelectorAll('input[name="hitbox"]').forEach(el => {
+            el.addEventListener('change', updateHitboxStatus);
+        });
+
+        loadConfig();
+    });
+</script>
