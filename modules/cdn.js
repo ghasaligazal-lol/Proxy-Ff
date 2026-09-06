@@ -377,6 +377,24 @@ function init(app) {
         return res.status(404).send('Not found');
     });
 
+    // /live/ABHotUpdates/android_max_astc/optional/<type>/<ver>/fileinfo
+    // → proxy ke Garena CDN
+    app.get(/^\/live\/ABHotUpdates\/android_max_astc\/optional\//, (req, res) => {
+        const fullPath = req.path; // sudah include /live/ABHotUpdates/...
+        const target = `https://dl.cdn.freefiremobile.com${fullPath}`;
+        console.log(`[CDN] optional → upstream ${target}`);
+        return proxyUpstream(req, res, target);
+    });
+
+    // /live/ABHotUpdates/android_max_astc/<ver>/gameassetbundles/<file> (selain cache_res)
+    // → proxy ke Garena CDN
+    app.get(/^\/live\/ABHotUpdates\/android_max_astc\/[^/]+\/gameassetbundles\/(?!cache_res)/, (req, res) => {
+        const fullPath = req.path;
+        const target = `https://dl.cdn.freefiremobile.com${fullPath}`;
+        console.log(`[CDN] gameassetbundles → upstream ${target}`);
+        return proxyUpstream(req, res, target);
+    });
+
     // fileinfo versioned path (SX2 format)
     // Game request: /live/ABHotUpdates/android_max_astc/<ver>/fileinfo
     app.get(/^\/live\/ABHotUpdates\/android_max_astc\/[^/]+\/fileinfo$/, (req, res) => {
