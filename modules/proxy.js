@@ -10,14 +10,22 @@ const GARENA_CLIENT_SERVER = 'https://clientbp.ggpolarbear.com';
 
 // Path yang tidak boleh di-forward ke upstream — harus di-spoof di sini
 // (endpoint ini kadang datang lewat catch-all proxy bukan route spesifik)
+// PATCH: Ditambahkan semua GIN/GGP TCP endpoints + anticheat data paths.
 const TELEMETRY_PATHS = [
     '/LogEvent',
     '/ReportEventPushInfo',
     '/CheckHackBehavior',
     '/CheckNeedUpdateGPToken',
-    '/GinReport',
-    '/AntiAddiction',
-    '/ReportAntiAddiction',
+    '/GinReport', '/gin/report', '/gin/connect', '/gin/keepalive',
+    '/gin/disconnect', '/gin/upload', '/gin/batch',
+    '/GGP', '/GGPReport', '/ggp/report', '/ggp/connect',
+    '/ggp/keepalive', '/ggp/upload',
+    '/AntiAddiction', '/ReportAntiAddiction',
+    '/AnticheatReport', '/anticheat/report', '/anticheat/upload',
+    '/AnticheatUpload', '/CheckHackData', '/ReportHackData',
+    '/ReportClientData', '/ClientDataForward',
+    '/SecurityReport', '/ReportSecurityEvent',
+    '/DataReport', '/DataUploadEvent',
 ];
 
 function isTelemetryPath(path) {
@@ -28,8 +36,18 @@ function isTelemetryPath(path) {
         lower.includes('networklog') ||
         lower.includes('reportevent') ||
         lower.includes('antiaddiction') ||
-        (lower.includes('report') && lower.includes('event')) ||
-        lower.includes('ginreport')
+        lower.includes('anticheat') ||
+        lower.includes('hackdata') ||
+        lower.includes('clientdata') ||
+        lower.includes('dataforward') ||
+        lower.includes('securityreport') ||
+        lower.includes('ginreport') ||
+        lower.includes('ggpreport') ||
+        lower.includes('ginupload') ||
+        lower.includes('ggpupload') ||
+        lower.includes('/gin/') ||
+        lower.includes('/ggp/') ||
+        (lower.includes('report') && lower.includes('event'))
     );
 }
 
@@ -69,23 +87,37 @@ function patchBanInfo(jsonObj) {
 const GIN_CONFIG_KEY = 'CECNLHCONMI';
 
 function patchGinUrl(jsonObj) {
+    // PATCH: Deep-matikan semua flag GIN/GGP. Versi lama hanya matiin 6 flag,
+    // tapi masih ada is_enable_gin_tcp, is_report_gin, ggp_port yang bisa jadi
+    // jalur bypass. Semua dimatiin sekarang.
     if (jsonObj && typeof jsonObj[GIN_CONFIG_KEY] === 'object' && jsonObj[GIN_CONFIG_KEY] !== null) {
         const ginConf = jsonObj[GIN_CONFIG_KEY];
         const originalGgpUrl = ginConf.ggp_url;
 
-        // Matiin semua flag report ke GGP/Gin
+        // Matiin semua flag report/connect ke GGP/Gin
         ginConf.is_report_to_ggp     = false;
         ginConf.is_transfer_report   = false;
         ginConf.is_enable_ggp        = false;
         ginConf.is_get_feature       = false;
         ginConf.is_get_flag          = false;
         ginConf.is_enable_tcp        = false;
+        // Flag tambahan yang ada di beberapa versi client
+        ginConf.is_enable_gin_tcp    = false;
+        ginConf.is_report_gin        = false;
+        ginConf.is_gin_active        = false;
+        ginConf.is_ggp_active        = false;
+        ginConf.enable_gin           = false;
+        ginConf.enable_ggp           = false;
+        // Set port ke 0 supaya kalau game coba connect ke ggp_url, port invalid
+        if (ginConf.ggp_port !== undefined) ginConf.ggp_port = 0;
+        if (ginConf.gin_port !== undefined) ginConf.gin_port = 0;
 
         // Redirect ggp_url ke proxy kita (supaya kalau game tetap connect, lewat sini)
         const proxyHost = MY_IP.replace(/^https?:\/\//, '').replace(/\/$/, '');
         ginConf.ggp_url = proxyHost;
+        if (ginConf.gin_url !== undefined) ginConf.gin_url = proxyHost;
 
-        console.log(`[GIN-PATCH] CECNLHCONMI patched: ggp_url ${originalGgpUrl} → ${proxyHost}, semua flag GGP dimatiin`);
+        console.log(`[GIN-PATCH] CECNLHCONMI patched: ggp_url ${originalGgpUrl} → ${proxyHost}, semua flag GIN/GGP dimatiin`);
     }
     return jsonObj;
 }

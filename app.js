@@ -9,7 +9,6 @@ const app  = express();
 const PORT = process.env.PORT || 3030;
 
 // ============ MODULES LOADER ============
-// auth.js & keys.js DIHAPUS — tidak ada validasi key
 const SKIP_MODULES = new Set(['auth', 'keys', 'getkey', 'telegram']);
 
 function loadModules() {
@@ -38,47 +37,48 @@ app.use(express.static('public'));
 app.use(cookieParser());
 
 // ============ TELEMETRY / UPLOAD SPOOF ============
-// PATCH: Diperluas untuk cover semua GIN/GGP TCP path + data upload endpoints.
-// Root cause blacklist:
-//   1) "Nonaktifkan data upload" → GIN konek TCP langsung ke gin.freefiremobile.com
-//      bypass proxy → kirim CLIENT_DATA_FORWARD_NTF → server detect → blacklist.
-//   2) "Data Abnormal" → version mismatch CDN fileinfo vs remote_option_version_astc.
+// ROOT CAUSE BLACKLIST (dari log analisis):
+//   #1 "Nonaktifkan data upload" + "modifier" → GIN TCP tembus langsung ke
+//      gin.freefiremobile.com karena patchGetLoginData() tidak patch CECNLHCONMI.
+//      Bukti: debugger 02:43 — CECNLHCONMI.is_enable_ggp masih TRUE di client.
+//      BackendLog: Proto_GET_TOKEN_NTF lalu Proto_CLIENT_DATA_FORWARD_NTF → BL.
+//      GIN mengirim AHLR (hash library) ke server → server detect libmemek/mod.
 //
-// Fix #1 di sini: spoof semua GIN/GGP handshake + TCP keepalive path.
-// Fix #2 ada di gamevar.js (versi sync) + cdn.js (403 → 404 fallback).
+//   #2 "modifier" detect → EventTypeAndroidApplicationDetection detection code
+//      [352,353,...] sudah ada di semua sesi tapi tidak trigger BL sendiri.
+//      Yang trigger BL adalah CLIENT_DATA_FORWARD_NTF yang isinya AHLR dengan
+//      AHLC berbeda tiap sesi ($7a94XX$$, $2LJaSU7$$, $9XJC37Y$$) = signature
+//      anomaly detection.
+//
+//   FIX: patchGetLoginData() harus matiin semua flag CECNLHCONMI (sama dengan
+//        patchGinUrl() di proxy.js). Dan intercept CheckHackBehavior di sini.
+
 const SPOOF_PATHS = [
     // ── Telemetry & log upload ──
     '/api/network_logNetworkLogEvent',
     '/api/network_log/NetworkLogEvent',
     '/web_log/NetworkLogEvent',
     '/LogEvent', '/ReportEventPushInfo',
-    '/CheckHackBehavior', '/CheckNeedUpdateGPToken',
+    '/CheckHackBehavior',           // ← KRITIS: intercept di app.js juga
+    '/CheckNeedUpdateGPToken',
     '/ReportAntiAddiction', '/anti_addiction/report', '/AntiAddiction',
     '/firebase/log', '/crashlytics/report', '/sentry',
     '/upload', '/data/upload', '/DataUpload',
     '/SendLog', '/ReportLog', '/event/upload',
     '/sdk/log', '/sdk/report',
-    // ── GIN / GGP — PATCH BARU ──
-    // GIN adalah GGP (Garena Game Protection) yang konek TCP ke gin.freefiremobile.com.
-    // Semua path di bawah ini perlu di-spoof supaya game berhenti connect ke GIN asli.
+    // ── GIN / GGP ──
     '/GinReport', '/gin/report', '/api/gin',
-    '/gin/connect',             // TCP handshake GIN
-    '/gin/keepalive',           // TCP keepalive GIN
-    '/gin/disconnect',          // TCP disconnect GIN
-    '/gin/upload',              // GIN data upload
-    '/gin/batch',               // GIN batch report
-    '/GGP', '/ggp/report',      // GGP alias
+    '/gin/connect', '/gin/keepalive', '/gin/disconnect',
+    '/gin/upload', '/gin/batch',
+    '/GGP', '/ggp/report',
     '/GGPReport', '/ggp/upload',
     '/ggp/connect', '/ggp/keepalive',
-    '/CheckHackData',           // Antihack data check
-    '/ReportHackData',          // Antihack report
-    '/ReportClientData',        // CLIENT_DATA_FORWARD_NTF endpoint
-    '/ClientDataForward',       // CLIENT_DATA_FORWARD_NTF (variant)
+    '/CheckHackData', '/ReportHackData',
+    '/ReportClientData', '/ClientDataForward',
     '/AnticheatReport',
     '/anticheat/report', '/anticheat/upload',
     '/AnticheatUpload',
-    '/SecurityReport',
-    '/ReportSecurityEvent',
+    '/SecurityReport', '/ReportSecurityEvent',
     '/DataReport', '/DataUploadEvent',
     '/DisableUpload',
 ];
@@ -111,21 +111,20 @@ app.all('*', (req, res, next) => {
         lower.includes('hackdata') ||
         lower.includes('clientdata') ||
         lower.includes('dataforward') ||
-        // ── GIN / GGP catch-all ── PATCH BARU
+        lower.includes('checkhack') ||        // ← tambahan
         lower.includes('/gin/') ||
         lower.includes('/ggp/') ||
         lower.includes('ginreport') ||
         lower.includes('ggpreport') ||
         lower.includes('ggpupload') ||
         lower.includes('ginupload') ||
-        // ── generic upload ──
         (lower.includes('report') && lower.includes('event')) ||
         (lower.includes('upload') && !lower.includes('cdn'));
     if (isUpload) return spoofOK(req, res);
     next();
 });
 
-// ============ PROXY /GetLoginData (dengan GIN + BAN PATCH) ============
+// ============ PROXY /GetLoginData (GIN + BAN PATCH) ============
 app.post('/GetLoginData', (req, res) => {
     const body = req.body;
     const zlib = require('zlib');
@@ -141,26 +140,46 @@ app.post('/GetLoginData', (req, res) => {
         'https://core-gmc.freefiremobile.com',
     ];
     const proxyBase = MY_IP.replace(/\/$/, '');
+    const proxyHost = proxyBase.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
     function patchGetLoginData(jsonObj) {
-        // === Patch CECNLHCONMI - matiin GGP/Gin ===
+        // ===== CECNLHCONMI — matiin GIN/GGP TCP =====
+        // BUG SEBELUMNYA: patch hanya set ggp_url ke proxy host, tapi flag
+        // is_enable_ggp, is_enable_tcp, is_get_feature, is_get_flag masih TRUE.
+        // Client baca flag-flag itu → connect TCP ke gin.freefiremobile.com langsung
+        // (bypass proxy!) → Proto_GET_TOKEN_NTF → CLIENT_DATA_FORWARD_NTF → BLACKLIST.
+        //
+        // FIX: matiin SEMUA flag sekaligus, sama persis dengan patchGinUrl() di proxy.js.
         if (jsonObj && typeof jsonObj['CECNLHCONMI'] === 'object' && jsonObj['CECNLHCONMI'] !== null) {
             const g = jsonObj['CECNLHCONMI'];
             const orig = g.ggp_url;
+            // Flag utama
             g.is_report_to_ggp   = false;
             g.is_transfer_report = false;
             g.is_enable_ggp      = false;
             g.is_get_feature     = false;
             g.is_get_flag        = false;
             g.is_enable_tcp      = false;
-            g.ggp_url            = proxyBase.replace(/^https?:\/\//, '').replace(/\/$/, '');
-            console.log(`[GetLoginData-PATCH] GIN disabled: ggp_url ${orig} → ${g.ggp_url}`);
+            // Flag tambahan (ada di beberapa versi client)
+            g.is_enable_gin_tcp  = false;
+            g.is_report_gin      = false;
+            g.is_gin_active      = false;
+            g.is_ggp_active      = false;
+            g.enable_gin         = false;
+            g.enable_ggp         = false;
+            // Port ke 0 — kalau client tetap coba connect, port invalid → gagal
+            if (g.ggp_port !== undefined) g.ggp_port = 0;
+            if (g.gin_port !== undefined) g.gin_port = 0;
+            // Redirect URL ke proxy (defense-in-depth)
+            g.ggp_url = proxyHost;
+            if (g.gin_url !== undefined) g.gin_url = proxyHost;
+            console.log(`[GetLoginData-PATCH] CECNLHCONMI: ggp_url ${orig} → ${proxyHost}, semua flag GIN/GGP=false`);
         }
-        // === Patch AEBBNFBNIDB - clear ban ===
+        // ===== AEBBNFBNIDB — clear ban =====
         if (jsonObj && typeof jsonObj['AEBBNFBNIDB'] === 'object' && jsonObj['AEBBNFBNIDB'] !== null) {
             const b = jsonObj['AEBBNFBNIDB'];
-            b.ban_mode   = 0;
-            b.unban_time = 0;
+            b.ban_mode    = 0;
+            b.unban_time  = 0;
             b.hint_string = '';
             console.log('[GetLoginData-PATCH] ban_mode → 0');
         }
@@ -240,7 +259,6 @@ app.get('/Assembly-CSharp-patch.bytes', (req, res) => {
 });
 
 // ============ MODULES INIT ============
-// Urutan penting: tglog → protobuf → cdn → game handlers → proxy (catch-all terakhir)
 if (modules.tglog)      modules.tglog.init(app);
 if (modules.protobuf)   modules.protobuf.init(app);
 if (modules.cdn)        modules.cdn.init(app);

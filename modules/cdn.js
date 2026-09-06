@@ -378,12 +378,64 @@ function init(app) {
     });
 
     // /live/ABHotUpdates/android_max_astc/optional/<type>/<ver>/fileinfo
-    // → proxy ke Garena CDN
+    // PATCH: Sebelumnya proxyUpstream() me-return status apapun dari upstream ke game.
+    // Kalau upstream return 403 → game retry 5x → semua fail → server flag "Data Abnormal".
+    // Fix: coba lokal dulu, proxy upstream dengan fallback 200-empty kalau upstream gagal.
+    // 200-empty = game anggap resource sudah up-to-date, skip download, tidak retry.
     app.get(/^\/live\/ABHotUpdates\/android_max_astc\/optional\//, (req, res) => {
-        const fullPath = req.path; // sudah include /live/ABHotUpdates/...
+        const fullPath = req.path;
         const target = `https://dl.cdn.freefiremobile.com${fullPath}`;
+
+        // Coba lokal dulu (kalau ada file hasil download sebelumnya)
+        const local = safeLocalPath(fullPath);
+        if (local) {
+            console.log(`[CDN] optional LOCAL HIT ${local}`);
+            return sendLocal(req, res, local);
+        }
+
         console.log(`[CDN] optional → upstream ${target}`);
-        return proxyUpstream(req, res, target);
+        const u = new URL(target);
+        const upHeaders = {
+            'User-Agent':      req.headers['user-agent'] || 'Dalvik/2.1.0',
+            'Accept':          req.headers.accept || '*/*',
+            'Accept-Language': req.headers['accept-language'] || 'id-ID,en-US;q=0.9',
+            'Connection':      'keep-alive',
+            'Host':            u.host,
+        };
+        if (req.headers.range) upHeaders.Range = req.headers.range;
+
+        const r = https.get({ hostname: u.hostname, path: u.pathname + u.search, headers: upHeaders, agent: AGENT }, upstreamRes => {
+            const status = upstreamRes.statusCode || 502;
+            if (status === 200 || status === 206) {
+                res.statusCode = status;
+                for (const h of ['content-type','content-length','content-range','accept-ranges','etag','last-modified','cache-control']) {
+                    if (upstreamRes.headers[h] !== undefined) res.setHeader(h, upstreamRes.headers[h]);
+                }
+                upstreamRes.pipe(res);
+                upstreamRes.on('error', () => { if (!res.headersSent) res.status(502).end(); else res.destroy(); });
+            } else {
+                // Upstream error (403/404/5xx) — drain body lalu spoof 200 empty.
+                // Ini mencegah game retry 5x dan trigger "Data Abnormal" flag di server.
+                console.log(`[CDN] optional upstream ${status} ${fullPath} → spoof 200 empty (no retry)`);
+                upstreamRes.resume();
+                if (!res.headersSent) {
+                    res.setHeader('Content-Type', 'application/octet-stream');
+                    res.setHeader('Content-Length', '0');
+                    res.setHeader('Accept-Ranges', 'bytes');
+                    res.status(200).end();
+                }
+            }
+        });
+        r.setTimeout(15000, () => { r.destroy(new Error('optional upstream timeout')); });
+        r.on('error', err => {
+            console.log(`[CDN] optional upstream error: ${err.message} → spoof 200 empty`);
+            if (!res.headersSent) {
+                res.setHeader('Content-Type', 'application/octet-stream');
+                res.setHeader('Content-Length', '0');
+                res.setHeader('Accept-Ranges', 'bytes');
+                res.status(200).end();
+            }
+        });
     });
 
     // /live/ABHotUpdates/android_max_astc/<ver>/gameassetbundles/<file> (selain cache_res)
