@@ -1,121 +1,100 @@
 // modules/cdn.js
-// Railway-safe CDN handler:
-// - Explicit local-file resolution for /cdn/* dan /cdn/live/ABHotUpdates/*
-// - Supports Range/HEAD so game downloaders can resume correctly
-// - Never returns a JSON success body for a missing binary asset
-// - Falls back to upstream only for non-local assets
-// - Upstream proxy: streaming chunked, 90s socket timeout, retry 1x on ECONNRESET
-// - [SX2 Bypass] android_max_astc/2.131.22 support (FF MAX variant)
+// [SX2 Bypass] Railway-safe CDN handler
+// - Local file serve untuk: fileinfo, cache_res, codepatch (Assembly-CSharp-patch)
+// - 302 REDIRECT ke Garena CDN untuk semua file lain yang tidak ada lokal
+//   → client download langsung dari Garena, Railway tidak perlu buffering file besar
+//   → ikutin pola SX2: proxy hanya file kritis, sisanya redirect ke CDN asli
+// - Range/HEAD support untuk file lokal
+// - android_max_astc/2.131.22 support
 
 'use strict';
 
 const path = require('path');
-const fs = require('fs');
+const fs   = require('fs');
 const https = require('https');
 
-const BASE_DIR = path.resolve(__dirname, '..', 'public', 'cdn');
-const VERSION = '1.130.22';
+const BASE_DIR    = path.resolve(__dirname, '..', 'public', 'cdn');
+const VERSION     = '1.130.22';
 const VERSION_MAX = '2.131.22';
 
-// Versi android_astc yang tersedia lokal
-const LOCAL_VERSIONS = ['1.126.3', '1.130.22', '2.130.22'];
+// CDN Garena langsung — tujuan redirect untuk file yang tidak ada lokal
+const GARENA_CDN_BASE = 'https://dl.cdn.freefiremobile.com/live/ABHotUpdates/';
 
-// Versi android_max_astc yang tersedia lokal (FF MAX / com.dts.freefiremax)
+const LOCAL_VERSIONS     = ['1.126.3', '1.130.22', '2.130.22'];
 const LOCAL_MAX_VERSIONS = ['2.131.22'];
 
-// Keep-alive agent: reuse TCP connections ke CDN Garena
+// Keep-alive agent — dipakai hanya untuk HEAD check jika diperlukan
 const AGENT = new https.Agent({
     keepAlive: true,
     keepAliveMsecs: 10000,
-    maxSockets: 16,
-    timeout: 90000,
+    maxSockets: 8,
+    timeout: 30000,
 });
 
+// ─── Path resolver ───────────────────────────────────────────────────────────
 function safeLocalPath(urlPath) {
     let p;
-    try {
-        // Express req.path is normally decoded; decode once for clients that percent-encode.
-        p = decodeURIComponent(urlPath);
-    } catch (_) {
-        p = urlPath;
-    }
+    try { p = decodeURIComponent(urlPath); } catch (_) { p = urlPath; }
 
-    // Prevent path traversal
     p = p.replace(/\\/g, '/');
     if (p.includes('\0') || p.includes('..')) return null;
 
     const candidates = [
-        // Direct match: /cdn/<path>
         path.join(BASE_DIR, p.replace(/^\/+/, '')),
-        // Strip /live/ABHotUpdates prefix
         path.join(BASE_DIR, p.replace(/^\/live\/ABHotUpdates\/?/, '')),
     ];
 
-    // ── [SX2 Bypass] android_max_astc support ────────────────────────────────
-    // Game FF MAX request: /live/ABHotUpdates/android_max_astc/<ver>/fileinfo
-    // → serve dari /cdn/android_max_astc/<ver>/fileinfo
+    // ── android_max_astc ──
     const maxFileInfoMatch = /^\/live\/ABHotUpdates\/android_max_astc\/[^/]+\/fileinfo$/.exec(p);
     if (maxFileInfoMatch) {
-        for (const ver of LOCAL_MAX_VERSIONS) {
+        for (const ver of LOCAL_MAX_VERSIONS)
             candidates.push(path.join(BASE_DIR, 'android_max_astc', ver, 'fileinfo'));
-        }
     }
 
-    // Game FF MAX request: /live/ABHotUpdates/android_max_astc/<ver>/gameassetbundles/<file>
-    // → serve dari /cdn/android_max_astc/<ver>/gameassetbundles/<file>
     const maxAstcMatch = /^\/live\/ABHotUpdates\/android_max_astc\/[^/]+\/(gameassetbundles\/.+)$/.exec(p);
     if (maxAstcMatch) {
-        for (const ver of LOCAL_MAX_VERSIONS) {
+        for (const ver of LOCAL_MAX_VERSIONS)
             candidates.push(path.join(BASE_DIR, 'android_max_astc', ver, maxAstcMatch[1]));
-        }
     }
 
-    // Direct android_max_astc tanpa /live/ABHotUpdates prefix
-    const maxAstcDirectMatch = /^\/android_max_astc\/[^/]+\/(gameassetbundles\/.+)$/.exec(p);
-    if (maxAstcDirectMatch) {
-        for (const ver of LOCAL_MAX_VERSIONS) {
-            candidates.push(path.join(BASE_DIR, 'android_max_astc', ver, maxAstcDirectMatch[1]));
-        }
+    const maxAstcDirect = /^\/android_max_astc\/[^/]+\/(gameassetbundles\/.+)$/.exec(p);
+    if (maxAstcDirect) {
+        for (const ver of LOCAL_MAX_VERSIONS)
+            candidates.push(path.join(BASE_DIR, 'android_max_astc', ver, maxAstcDirect[1]));
     }
-    // ─────────────────────────────────────────────────────────────────────────
+    // ─────────────────────
 
-    // Fallback: /live/ABHotUpdates/gameassetbundles/<file> → semua versi android_astc
+    // android_astc fallback
     const abMatch = /^\/live\/ABHotUpdates\/(gameassetbundles\/.+)$/.exec(p);
     if (abMatch) {
-        for (const ver of LOCAL_VERSIONS) {
+        for (const ver of LOCAL_VERSIONS)
             candidates.push(path.join(BASE_DIR, 'android_astc', ver, abMatch[1]));
-        }
     }
 
-    // Fallback codepatch: /live/ABHotUpdates/android_astc/<ver>/gameassetbundles/codepatch/<file>
     const codepatchMatch = /^\/live\/ABHotUpdates\/android_astc\/[^/]+\/(gameassetbundles\/codepatch\/.+)$/.exec(p);
     if (codepatchMatch) {
         candidates.push(path.join(BASE_DIR, 'live', 'ABHotUpdates', codepatchMatch[1]));
-        for (const ver of LOCAL_VERSIONS) {
+        for (const ver of LOCAL_VERSIONS)
             candidates.push(path.join(BASE_DIR, 'android_astc', ver, codepatchMatch[1]));
-        }
     }
 
-    // Fallback: /android_astc/<ver>/gameassetbundles/<file>
     const astcMatch = /^\/android_astc\/[^/]+\/(gameassetbundles\/.+)$/.exec(p);
     if (astcMatch) {
-        for (const ver of LOCAL_VERSIONS) {
+        for (const ver of LOCAL_VERSIONS)
             candidates.push(path.join(BASE_DIR, 'android_astc', ver, astcMatch[1]));
-        }
         candidates.push(path.join(BASE_DIR, 'live', 'ABHotUpdates', astcMatch[1]));
     }
 
     for (const candidate of candidates) {
         const resolved = path.resolve(candidate);
         if (resolved === BASE_DIR || resolved.startsWith(BASE_DIR + path.sep)) {
-            if (fs.existsSync(resolved) && fs.statSync(resolved).isFile()) {
-                return resolved;
-            }
+            if (fs.existsSync(resolved) && fs.statSync(resolved).isFile()) return resolved;
         }
     }
     return null;
 }
 
+// ─── Local file sender (dengan Range support) ────────────────────────────────
 function sendLocal(req, res, filePath) {
     const stat = fs.statSync(filePath);
     const size = stat.size;
@@ -133,23 +112,15 @@ function sendLocal(req, res, filePath) {
     if (!range) {
         res.setHeader('Content-Length', String(size));
         return fs.createReadStream(filePath)
-            .on('error', err => {
-                console.log(`[CDN] LOCAL STREAM ERROR: ${err.message}`);
-                if (!res.headersSent) res.status(500).end();
-            })
+            .on('error', err => { if (!res.headersSent) res.status(500).end(); })
             .pipe(res);
     }
 
-    // Range request
     const m = /^bytes=(\d*)-(\d*)$/.exec(range);
-    if (!m) {
-        return res.status(416).setHeader('Content-Range', `bytes */${size}`).end();
-    }
+    if (!m) return res.status(416).setHeader('Content-Range', `bytes */${size}`).end();
 
     let start, end;
-
     if (!m[1] && m[2]) {
-        // Suffix range: bytes=-N
         const suffix = Number(m[2]);
         start = Math.max(0, size - suffix);
         end = size - 1;
@@ -158,110 +129,50 @@ function sendLocal(req, res, filePath) {
         end   = m[2] ? Number(m[2]) : size - 1;
     }
 
-    if (
-        !Number.isInteger(start) || !Number.isInteger(end) ||
-        start < 0 || end < start || start >= size
-    ) {
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || start >= size)
         return res.status(416).setHeader('Content-Range', `bytes */${size}`).end();
-    }
 
     end = Math.min(end, size - 1);
     res.status(206);
     res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`);
     res.setHeader('Content-Length', String(end - start + 1));
-
     return fs.createReadStream(filePath, { start, end })
-        .on('error', err => {
-            console.log(`[CDN] RANGE STREAM ERROR: ${err.message}`);
-            if (!res.headersSent) res.status(500).end();
-        })
+        .on('error', err => { if (!res.headersSent) res.status(500).end(); })
         .pipe(res);
 }
 
-function upstreamTarget(reqPath) {
+// ─── Redirect URL builder ─────────────────────────────────────────────────────
+// Bangun URL Garena CDN untuk redirect
+// Semua android_max_astc → android_astc di Garena (path yang sama, cuma variant beda)
+function buildRedirectUrl(reqPath) {
     let p = reqPath;
     if (!p.startsWith('/')) p = '/' + p;
 
-    // Normalisasi ke path upstream: semua request harus lewat /live/ABHotUpdates/
-    if (!p.includes('/live/ABHotUpdates/')) {
-        p = `/live/ABHotUpdates${p}`;
-    }
+    // Strip /live/ABHotUpdates jika ada (sudah di base path)
+    p = p.replace(/^\/live\/ABHotUpdates\/?/, '/');
 
-    // Ganti placeholder versi dengan VERSION aktif
+    // android_max_astc/<ver>/ → android_astc/<ver_max>/
+    p = p.replace(/\/android_max_astc\/[^/]+\//g, `/android_astc/${VERSION_MAX}/`);
+
+    // Normalisasi versi placeholder
     p = p.replace('/OB54/', `/${VERSION}/`);
     p = p.replace(/\/1\.126\.3\//g, `/${VERSION}/`);
     p = p.replace(/\/2\.130\.22\//g, `/${VERSION}/`);
 
-    // [SX2 Bypass] android_max_astc → upstream pakai android_astc path dengan VERSION_MAX
-    // Garena CDN serve MAX assets di path android_astc juga, cuma beda versi
-    p = p.replace(/\/android_max_astc\/[^/]+\//g, `/android_astc/${VERSION_MAX}/`);
+    // Pastikan mulai dengan /
+    if (!p.startsWith('/')) p = '/' + p;
 
-    return `https://dl.cdn.freefiremobile.com${p}`;
+    return `${GARENA_CDN_BASE}${p.replace(/^\//, '')}`;
 }
 
-// Coba proxy ke upstream. attempt=1 pertama kali, attempt=2 retry.
-function proxyUpstream(req, res, target, attempt) {
-    attempt = attempt || 1;
-    console.log(`[CDN] UPSTREAM ${target} (attempt ${attempt})`);
-
-    const u = new URL(target);
-    const headers = {
-        'User-Agent': req.headers['user-agent'] || 'Dalvik/2.1.0',
-        'Accept': req.headers.accept || '*/*',
-        'Accept-Language': req.headers['accept-language'] || 'id-ID,en-US;q=0.9',
-        'Connection': 'keep-alive',
-        'Host': u.host,
-    };
-
-    if (req.headers.range) headers.Range = req.headers.range;
-
-    const r = https.get({
-        hostname: u.hostname,
-        path: u.pathname + u.search,
-        headers,
-        agent: AGENT,
-    }, upstreamRes => {
-        const status = upstreamRes.statusCode || 502;
-        res.statusCode = status;
-
-        for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges', 'etag', 'last-modified', 'cache-control']) {
-            if (upstreamRes.headers[h] !== undefined) res.setHeader(h, upstreamRes.headers[h]);
-        }
-
-        // Streaming langsung pipe — tidak buffer di memory
-        upstreamRes.pipe(res);
-
-        upstreamRes.on('error', err => {
-            console.log(`[CDN] UPSTREAM RES ERROR: ${err.message}`);
-            if (!res.headersSent) res.status(502).end();
-            else res.destroy();
-        });
-    });
-
-    // 90 detik timeout
-    r.setTimeout(90000, () => {
-        console.log(`[CDN] UPSTREAM SOCKET TIMEOUT: ${target}`);
-        r.destroy(new Error('upstream timeout'));
-    });
-
-    r.on('error', err => {
-        console.log(`[CDN] UPSTREAM ERROR (attempt ${attempt}): ${err.message} — ${target}`);
-
-        // Retry sekali untuk ECONNRESET / timeout
-        if (attempt === 1 && (err.code === 'ECONNRESET' || err.message === 'upstream timeout')) {
-            console.log(`[CDN] RETRYING ${target}`);
-            return proxyUpstream(req, res, target, 2);
-        }
-
-        if (!res.headersSent) res.status(502).send('CDN upstream error');
-    });
-}
-
+// ─── Main handler ─────────────────────────────────────────────────────────────
 function init(app) {
     app.use('/cdn', (req, res) => {
         const reqPath = req.path || '/';
-        console.log(`[CDN] ${req.method} ${reqPath} range=${req.headers.range || '-'}`);
+        const method  = req.method;
+        console.log(`[CDN] ${method} ${reqPath} range=${req.headers.range || '-'}`);
 
+        // 1. Cek file lokal
         const local = safeLocalPath(reqPath);
         if (local) {
             const size = fs.statSync(local).size;
@@ -269,14 +180,19 @@ function init(app) {
             return sendLocal(req, res, local);
         }
 
-        // cache_res adalah file kritis — jika tidak ada lokal, jangan proxy ke upstream
-        // karena upstream mungkin punya versi berbeda yang tidak kompatibel.
+        // 2. cache_res kritis — harus ada lokal, jangan redirect ke Garena
+        //    karena hash/content beda antara proxy vs Garena asli
         if (reqPath.includes('cache_res')) {
             console.log(`[CDN] CACHE_RES MISS (no local file): ${reqPath}`);
             return res.status(404).send('cache_res not found locally');
         }
 
-        return proxyUpstream(req, res, upstreamTarget(reqPath));
+        // 3. Semua file lain → 302 redirect ke Garena CDN langsung
+        //    Client download dari Garena, Railway tidak perlu buffering
+        //    Ini persis cara SX2: proxy hanya file kritis, sisanya ke CDN asli
+        const redirectUrl = buildRedirectUrl(reqPath);
+        console.log(`[CDN] REDIRECT → ${redirectUrl}`);
+        return res.redirect(302, redirectUrl);
     });
 }
 
