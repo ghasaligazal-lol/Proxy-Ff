@@ -137,9 +137,14 @@ function init(app) {
                         console.log(`[MAJORLOGIN-PATCH] server_url: ${originalServerUrl} → ${proxyBase}`);
                     }
 
-                    // ── Patch tp_url / ano_url juga (backup server URL) ────────
-                    if (rafinObj.tp_url  && rafinObj.tp_url  !== proxyBase) { rafinObj.tp_url  = proxyBase; modified = true; }
-                    if (rafinObj.ano_url && rafinObj.ano_url !== proxyBase) { rafinObj.ano_url = proxyBase; modified = true; }
+                    // ── Kosongkan tp_url / ffanti_url / ano_url ─────────────────
+                    // tp_url dan ffanti_url berisi IP stronghold Garena untuk koneksi TCP Gin
+                    // JANGAN di-redirect ke proxy — proxy tidak handle TCP Gin
+                    // Solusi: kosongkan → game tidak bisa resolve target TCP Gin
+                    if (rafinObj.tp_url     !== undefined) { rafinObj.tp_url     = ''; modified = true; }
+                    if (rafinObj.ffanti_url !== undefined) { rafinObj.ffanti_url = ''; modified = true; }
+                    if (rafinObj.ano_url    !== undefined) { rafinObj.ano_url    = ''; modified = true; }
+                    console.log(`[MAJORLOGIN-PATCH] tp_url/ffanti_url/ano_url dikosongkan`);
 
                     const uid    = rafinObj.account_id || '?';
                     const region = rafinObj.lock_region || '?';
