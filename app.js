@@ -259,6 +259,7 @@ app.get('/Assembly-CSharp-patch.bytes', (req, res) => {
 });
 
 // ============ MODULES INIT ============
+if (modules.config)     modules.config.init(app);   // harus sebelum gamevar
 if (modules.tglog)      modules.tglog.init(app);
 if (modules.protobuf)   modules.protobuf.init(app);
 if (modules.cdn)        modules.cdn.init(app);
@@ -269,6 +270,7 @@ if (modules.gamevar)    modules.gamevar.init(app);
 if (modules.routes)     modules.routes.init(app);
 if (modules.skin)       modules.skin.init(app);
 if (modules.majorlogin) modules.majorlogin.init(app);
+if (modules['404'])     modules['404'].init(app);
 if (modules['404'])     modules['404'].init(app);
 if (modules.proxy)      modules.proxy.init(app);  // catch-all — HARUS PALING AKHIR
 

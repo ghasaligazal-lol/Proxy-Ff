@@ -197,21 +197,39 @@ function init(app) {
                 const tpPrefix = 'csoversea.stronghold.freefiremobile.com';
                 const tpIdx = buf.indexOf(Buffer.from(tpPrefix, 'utf8'));
                 if (tpIdx !== -1) {
-                    // Temukan full string tp_url (sampai null byte atau field berikutnya)
-                    // Caranya: baca mundur untuk length varint, lalu replace whole string dengan ""
-                    // Tapi lebih mudah: replace semua karakter sampai karakter non-printable dengan spasi
-                    // lalu update length varint ke 0 → string kosong
-                    // Implementasi: cari length varint 1 byte sebelum string
                     let lenIdx = tpIdx - 1;
                     if (lenIdx >= 0 && buf[lenIdx] > 0 && buf[lenIdx] < 250) {
                         const oldLen = buf[lenIdx];
-                        buf[lenIdx] = 0;  // length = 0 → string kosong
-                        // Zero-out the string bytes
+                        buf[lenIdx] = 0;
                         for (let i = 0; i < oldLen && tpIdx + i < buf.length; i++) {
                             buf[tpIdx + i] = 0;
                         }
                         modified = true;
                         patchLog.push(`tp_url: dikosongkan (${oldLen} bytes)`);
+                    }
+                }
+
+                // ── Patch 3: ano_url + gin URLs → kosong ──────────────────────
+                // ano_url (field 16) = jalur GIN alternatif yang bisa bypass patch
+                // gin.freefiremobile.com adalah URL GIN yang sering hardcoded
+                const ginPrefixes = [
+                    'gin.freefiremobile.com',
+                    'ffanti.freefiremobile.com',
+                    'grtc.freefiremobile.com',
+                ];
+                for (const prefix of ginPrefixes) {
+                    const gIdx = buf.indexOf(Buffer.from(prefix, 'utf8'));
+                    if (gIdx !== -1) {
+                        let lenIdx2 = gIdx - 1;
+                        if (lenIdx2 >= 0 && buf[lenIdx2] > 0 && buf[lenIdx2] < 250) {
+                            const oldLen2 = buf[lenIdx2];
+                            buf[lenIdx2] = 0;
+                            for (let i = 0; i < oldLen2 && gIdx + i < buf.length; i++) {
+                                buf[gIdx + i] = 0;
+                            }
+                            modified = true;
+                            patchLog.push(`${prefix}: dikosongkan (${oldLen2} bytes)`);
+                        }
                     }
                 }
 

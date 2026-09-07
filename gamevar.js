@@ -110,7 +110,7 @@ const gamevarLines = [
 // GANTI INI SESUAI DOMAIN KAMU
 // ============================================================
 const ALLOWED_IPS = ["117.18.20.142"];
-const isGlobalMaintenance = true;
+const isGlobalMaintenance = false;
 const MY_IP = process.env.PROXY_URL || "https://proxy-reza-kontolodon-memek-luu.up.railway.app/";
 const REDIRECT_URL = "https://whatsapp.com/channel/0029Vb8eX0Z1NCrYCXEXuu0K";
 
