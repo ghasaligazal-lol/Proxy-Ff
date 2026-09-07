@@ -118,6 +118,11 @@ function patchGinUrl(jsonObj) {
         ginConf.ggp_url = proxyHost;
         if (ginConf.gin_url !== undefined) ginConf.gin_url = proxyHost;
 
+        // Tambahan: null-kan URL lain yang bisa dijadikan jalur Gin connect
+        if (ginConf.ffanti_url !== undefined) ginConf.ffanti_url = '';
+        if (ginConf.grtc_url   !== undefined) ginConf.grtc_url   = '';
+        if (ginConf.tp_url     !== undefined) ginConf.tp_url     = '';
+
         console.log(`[GIN-PATCH] CECNLHCONMI patched: ggp_url ${originalGgpUrl} → ${proxyHost}, semua flag GIN/GGP dimatiin`);
     }
     return jsonObj;

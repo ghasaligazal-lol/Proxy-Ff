@@ -158,7 +158,7 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
     "garena_hint":                       true,
     "garena_login":                      true,
     "gdpr_version":                      1,
-    "ggp_url":                           "gin.freefiremobile.com",
+    "ggp_url":                           "",  // PATCH: kosongkan ggp_url → GIN tidak bisa resolve TCP target
     "gop_url":                           "",
     "grey_update_percent":               0,
     "guest_login":                       true,
