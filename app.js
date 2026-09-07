@@ -187,12 +187,12 @@ app.post('/GetLoginData', (req, res) => {
     }
 
     const options = {
-        hostname: 'loginbp.ggblueshark.com',
+        hostname: 'clientbp.ggpolarbear.com',
         path:     '/GetLoginData',
         method:   'POST',
         headers: {
             ...req.headers,
-            'Host':           'loginbp.ggblueshark.com',
+            'Host':           'clientbp.ggpolarbear.com',
             'Content-Length': Buffer.isBuffer(body) ? body.length : 0
         }
     };

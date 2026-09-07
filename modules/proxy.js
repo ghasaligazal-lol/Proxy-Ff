@@ -583,6 +583,7 @@ function init(app) {
         // Route: client endpoints (clientbp) → clientProxy (ban patch, mail inject, reward patch)
         //        login endpoints → loginProxy
         const CLIENT_PATHS = [
+            '/GetLoginData',           // ← PATCH: intercept GIN/GGP config → patchGinUrl
             '/GetPlayerPersonalShow', '/GetMailList', '/GetCharacterRewardData',
             '/GetLoginReward', '/GetDailyLogin', '/GetAvatarInfo',
             '/GetClothesInfo', '/GetWeaponSkinInfo', '/GetCharInfo',
