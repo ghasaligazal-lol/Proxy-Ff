@@ -1,370 +1,864 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Config Dashboard</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JUNMODS — Admin Panel</title>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg:         #05070d;
+  --bg2:        #080c15;
+  --surface:    #0c1120;
+  --surface2:   #101828;
+  --surface3:   #141f30;
+  --border:     #1a2540;
+  --border2:    #1e2d4a;
+  --border3:    #243558;
+  --text:       #c8d8f0;
+  --text2:      #8fa8cc;
+  --muted:      #4a6080;
+  --muted2:     #334460;
 
-        body {
-            background: radial-gradient(circle at top, rgba(35,134,54,0.10), transparent 35%), #0d1117;
-            color: #c9d1d9;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            padding: 20px 20px 40px;
-            font-family: 'Segoe UI', system-ui, sans-serif;
-        }
+  /* accent: electric violet-blue */
+  --accent:     #6c8fff;
+  --accent2:    #4d72f5;
+  --accent-bg:  rgba(108,143,255,0.09);
+  --accent-ring:rgba(108,143,255,0.22);
+  --accent-glow:rgba(108,143,255,0.15);
 
-        .container { width: 100%; max-width: 480px; }
+  /* cyan for data/stats */
+  --cyan:       #00d4ff;
+  --cyan-bg:    rgba(0,212,255,0.08);
 
-        .status-header { text-align: center; margin-bottom: 20px; padding-top: 10px; }
-        .status-badge {
-            display: inline-flex; align-items: center; gap: 8px;
-            background: rgba(46,160,67,0.13); border: 1px solid rgba(46,160,67,0.4);
-            color: #3fb950; font-size: 13px; font-weight: 600;
-            padding: 7px 14px; border-radius: 20px; margin-bottom: 12px;
-        }
-        .status-dot {
-            width: 8px; height: 8px; background: #3fb950; border-radius: 50%;
-            box-shadow: 0 0 10px rgba(63,185,80,0.8); animation: pulse 2s ease-in-out infinite;
-        }
-        @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(.85)} }
-        .title { font-size: 21px; font-weight: 700; color: #f0f6fc; }
-        .subtitle { font-size: 13px; color: #8b949e; margin-top: 6px; }
+  /* green for online/ok */
+  --green:      #00e87e;
+  --green-bg:   rgba(0,232,126,0.08);
 
-        .card {
-            background: #0d1117; border: 1px solid #21262d;
-            border-radius: 12px; padding: 16px; margin-bottom: 16px;
-        }
-        .card-header {
-            display: flex; align-items: center; gap: 8px;
-            font-size: 12px; font-weight: 600; color: #8b949e;
-            text-transform: uppercase; letter-spacing: .6px; margin-bottom: 14px;
-        }
-        .card-header svg { flex-shrink: 0; }
+  /* amber for warnings */
+  --amber:      #ffb020;
+  --amber-bg:   rgba(255,176,32,0.09);
 
-        /* Speed toggle row */
-        .toggle-row {
-            display: flex; justify-content: space-between;
-            align-items: center; margin-bottom: 4px;
-        }
-        .toggle-label { font-size: 14px; font-weight: 600; color: #f0f6fc; }
-        .badge-max {
-            background: rgba(46,160,67,0.15); border: 1px solid rgba(46,160,67,0.4);
-            color: #3fb950; font-size: 10px; font-weight: 700;
-            padding: 2px 8px; border-radius: 20px;
-        }
-        .toggle-switch {
-            position: relative; width: 46px; height: 26px;
-        }
-        .toggle-switch input { opacity: 0; width: 0; height: 0; }
-        .toggle-track {
-            position: absolute; cursor: pointer; inset: 0;
-            background: #21262d; border-radius: 26px; transition: .3s;
-        }
-        .toggle-track::before {
-            content: ''; position: absolute;
-            width: 20px; height: 20px; left: 3px; bottom: 3px;
-            background: #fff; border-radius: 50%; transition: .3s;
-        }
-        input:checked + .toggle-track { background: #3fb950; }
-        input:checked + .toggle-track::before { transform: translateX(20px); }
+  /* red for errors */
+  --red:        #ff4466;
+  --red-bg:     rgba(255,68,102,0.09);
 
-        .speed-hint { font-size: 12px; color: #8b949e; margin-bottom: 12px; }
+  /* purple for special */
+  --purple:     #a78bfa;
+  --purple-bg:  rgba(167,139,250,0.09);
+}
 
-        .speed-input-row {
-            display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
-        }
-        .speed-input-row label { font-size: 13px; color: #8b949e; white-space: nowrap; }
-        .speed-val-box {
-            margin-left: auto;
-            background: #161b22; border: 1px solid #30363d; border-radius: 8px;
-            padding: 8px 12px; font-size: 15px; font-weight: 600; color: #f0f6fc;
-            width: 90px; text-align: center;
-        }
+html { scroll-behavior: smooth; }
 
-        .range-wrap { position: relative; margin-bottom: 4px; }
-        input[type=range] {
-            -webkit-appearance: none; width: 100%; height: 6px;
-            border-radius: 3px; outline: none; cursor: pointer;
-            background: linear-gradient(to right, #3fb950 0%, #3fb950 var(--pct,50%), #21262d var(--pct,50%), #21262d 100%);
-        }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none; width: 20px; height: 20px;
-            background: #3fb950; border-radius: 50%;
-            box-shadow: 0 0 6px rgba(63,185,80,.5);
-        }
-        .range-labels {
-            display: flex; justify-content: space-between;
-            font-size: 11px; color: #8b949e; margin-top: 2px;
-        }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  padding-bottom: 48px;
+  font-size: 14px;
+  line-height: 1.5;
+}
 
-        /* Sensi grid */
-        .sensi-hint { font-size: 12px; color: #8b949e; margin-bottom: 12px; }
-        .sensi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .sensi-item label { font-size: 12px; color: #8b949e; display: block; margin-bottom: 5px; }
-        .sensi-item input[type=number] {
-            width: 100%; background: #161b22; border: 1px solid #30363d;
-            border-radius: 8px; padding: 10px; color: #f0f6fc;
-            font-size: 15px; font-weight: 600; outline: none;
-            transition: border-color .2s;
-        }
-        .sensi-item input[type=number]:focus { border-color: #3fb950; }
-        .sensi-full { grid-column: 1 / -1; }
+/* grid noise */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(108,143,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(108,143,255,0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
 
-        /* Save button */
-        .btn-save {
-            width: 100%; padding: 16px; background: #3fb950; border: none;
-            border-radius: 12px; font-size: 16px; font-weight: 700;
-            color: #0d1117; cursor: pointer; display: flex; justify-content: center;
-            align-items: center; gap: 8px; transition: filter .2s, transform .15s;
-            margin-bottom: 12px;
-        }
-        .btn-save:hover  { filter: brightness(1.1); }
-        .btn-save:active { transform: scale(.98); }
-        .btn-save:disabled { opacity: .6; cursor: not-allowed; transform: none; filter: none; }
+/* radial hero glow */
+body::after {
+  content: '';
+  position: fixed; top: -120px; left: 50%; transform: translateX(-50%);
+  width: 700px; height: 400px;
+  background: radial-gradient(ellipse at 50% 0%, rgba(108,143,255,0.1) 0%, transparent 70%);
+  pointer-events: none; z-index: 0;
+}
 
-        .spin {
-            width: 16px; height: 16px;
-            border: 2px solid rgba(0,0,0,0.3); border-top-color: #0d1117;
-            border-radius: 50%; animation: spin .7s linear infinite; display: none;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
+.wrap { max-width: 520px; margin: 0 auto; padding: 0 16px; position: relative; z-index: 1; }
 
-        .msg-box {
-            text-align: center; font-size: 13px; padding: 10px;
-            border-radius: 8px; display: none; margin-bottom: 8px;
-        }
-        .msg-box.ok  { display:block; background:rgba(46,160,67,.1);  border:1px solid rgba(46,160,67,.3);  color:#3fb950; }
-        .msg-box.err { display:block; background:rgba(248,81,73,.1); border:1px solid rgba(248,81,73,.3); color:#f85149; }
+/* ── Header ── */
+.header {
+  padding: 32px 0 24px;
+  text-align: center;
+  position: relative;
+}
 
-        .back-link {
-            display: block; text-align: center; margin-top: 4px;
-            color: #58a6ff; font-size: 13px; text-decoration: none;
-        }
-    </style>
+.admin-badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--accent-bg);
+  border: 1px solid rgba(108,143,255,0.25);
+  color: var(--accent);
+  font-size: 9px; font-weight: 800; letter-spacing: .14em;
+  padding: 4px 12px; border-radius: 4px;
+  margin-bottom: 14px; text-transform: uppercase;
+}
+.admin-badge .adot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  animation: adotBlink 1.8s ease-in-out infinite;
+}
+@keyframes adotBlink {
+  0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+}
+
+.logo {
+  font-size: 28px; font-weight: 900;
+  letter-spacing: -1.5px; line-height: 1;
+  color: #fff;
+}
+.logo .lo-j { color: var(--accent); }
+.logo .lo-sub { font-size: 11px; font-weight: 600; letter-spacing: .3em; color: var(--muted); display: block; margin-top: 5px; text-transform: uppercase; }
+
+/* ── Stat strip ── */
+.stat-strip {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 8px; margin-bottom: 14px;
+}
+.stat-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px; padding: 12px 10px;
+  text-align: center;
+  position: relative; overflow: hidden;
+}
+.stat-box::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+}
+.stat-box.s-blue::before  { background: linear-gradient(90deg, transparent, var(--accent), transparent); }
+.stat-box.s-cyan::before  { background: linear-gradient(90deg, transparent, var(--cyan), transparent); }
+.stat-box.s-green::before { background: linear-gradient(90deg, transparent, var(--green), transparent); }
+
+.stat-val {
+  font-size: 22px; font-weight: 900; font-family: 'SF Mono', monospace;
+  line-height: 1; margin-bottom: 4px;
+}
+.s-blue  .stat-val { color: var(--accent); }
+.s-cyan  .stat-val { color: var(--cyan); }
+.s-green .stat-val { color: var(--green); }
+.stat-lbl { font-size: 9px; color: var(--muted); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+
+/* ── Card ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 10px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color .2s;
+}
+.card:hover { border-color: var(--border2); }
+
+/* left accent line */
+.card-accent {
+  position: absolute; top: 16px; bottom: 16px; left: 0;
+  width: 2.5px; border-radius: 0 2px 2px 0;
+}
+.ca-blue   { background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+.ca-cyan   { background: var(--cyan);   box-shadow: 0 0 8px rgba(0,212,255,.15); }
+.ca-amber  { background: var(--amber);  box-shadow: 0 0 8px rgba(255,176,32,.15); }
+.ca-green  { background: var(--green);  box-shadow: 0 0 8px rgba(0,232,126,.12); }
+.ca-purple { background: var(--purple); box-shadow: 0 0 8px rgba(167,139,250,.15); }
+
+.card-head {
+  display: flex; align-items: center; gap: 9px;
+  margin-bottom: 14px; padding-left: 10px;
+}
+.card-head-icon {
+  width: 30px; height: 30px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.chi-blue   { background: var(--accent-bg); }
+.chi-cyan   { background: var(--cyan-bg); }
+.chi-amber  { background: var(--amber-bg); }
+.chi-green  { background: var(--green-bg); }
+.chi-purple { background: var(--purple-bg); }
+
+.card-title { font-size: 12px; font-weight: 800; color: var(--text); letter-spacing: .01em; }
+.card-desc  { font-size: 10px; color: var(--muted); margin-top: 1px; }
+
+/* ── Info rows ── */
+.info-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+.info-row:last-child { border-bottom: none; padding-bottom: 0; }
+.info-row .lbl { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.info-row .val { color: var(--text); font-weight: 600; font-size: 12px; font-family: 'SF Mono', monospace; text-align: right; word-break: break-all; }
+.info-row .val.hi { color: var(--accent); }
+.info-row .val.ok { color: var(--green); }
+.info-row .val.warn { color: var(--amber); }
+
+/* ── Mode grid ── */
+.mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; padding-left: 10px; }
+.mode-btn {
+  padding: 14px 12px;
+  background: var(--surface2);
+  border: 1.5px solid var(--border2);
+  border-radius: 10px;
+  color: var(--muted);
+  cursor: pointer; text-align: center;
+  transition: all .18s ease;
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  position: relative; overflow: hidden;
+}
+.mode-btn:hover { border-color: var(--accent); color: var(--text); background: var(--accent-bg); }
+.mode-btn.active {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring), inset 0 0 20px rgba(108,143,255,0.04);
+}
+.mode-btn .mi { width: 24px; height: 24px; }
+.mode-btn .mn { font-size: 11px; font-weight: 800; }
+.mode-btn .md { font-size: 10px; color: var(--muted); line-height: 1.4; }
+.mode-btn.active .md { color: rgba(108,143,255,0.6); }
+
+/* ── Setting row ── */
+.setting {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 10px;
+  border-bottom: 1px solid var(--border);
+  gap: 14px;
+}
+.setting:last-child { border-bottom: none; }
+.setting-info { flex: 1; }
+.setting-label { font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 7px; }
+.setting-desc  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.setting-ctrl  { flex-shrink: 0; }
+
+/* ── Toggle ── */
+.toggle { position: relative; width: 42px; height: 24px; }
+.toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+.toggle-track {
+  position: absolute; inset: 0;
+  background: var(--border2); border-radius: 12px;
+  cursor: pointer; transition: background .2s;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+.toggle-track::after {
+  content: ''; position: absolute;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; top: 2px; left: 2px;
+  transition: transform .2s cubic-bezier(.4,0,.2,1);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+.toggle input:checked + .toggle-track { background: var(--accent); }
+.toggle input:checked + .toggle-track::after { transform: translateX(18px); }
+
+/* ── Tag ── */
+.tag {
+  font-size: 9px; font-weight: 800; padding: 2px 7px;
+  border-radius: 4px; letter-spacing: .06em; text-transform: uppercase;
+}
+.tag-amber  { background: var(--amber-bg);  color: var(--amber);  border: 1px solid rgba(255,176,32,0.2); }
+.tag-blue   { background: var(--accent-bg); color: var(--accent); border: 1px solid rgba(108,143,255,0.25); }
+.tag-cyan   { background: var(--cyan-bg);   color: var(--cyan);   border: 1px solid rgba(0,212,255,0.2); }
+.tag-purple { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(167,139,250,0.2); }
+
+/* ── Number input ── */
+.num-input {
+  background: var(--surface2);
+  border: 1.5px solid var(--border2);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px; font-weight: 700;
+  padding: 8px 10px;
+  width: 90px; text-align: center;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+  -moz-appearance: textfield;
+  font-family: 'SF Mono', monospace;
+}
+.num-input::-webkit-outer-spin-button,
+.num-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.num-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+.num-input.err  { border-color: var(--red) !important; box-shadow: 0 0 0 3px rgba(255,68,102,0.15) !important; }
+
+/* ── Slider ── */
+.slider-wrap { padding: 0 10px; }
+.slider {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 4px;
+  background: var(--border2); border-radius: 2px; outline: none;
+  cursor: pointer; margin: 6px 0;
+}
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+  cursor: pointer; transition: transform .1s;
+}
+.slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+.slider-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); }
+
+/* ── Sensi grid ── */
+.sensi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 10px; }
+.sensi-item label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 5px; }
+.sensi-item .num-input { width: 100%; text-align: left; }
+
+/* ── Speed panel anim ── */
+#speedPanel { overflow: hidden; max-height: 0; opacity: 0; transition: max-height .3s ease, opacity .2s; }
+#speedPanel.open { max-height: 200px; opacity: 1; }
+
+/* ── Save button ── */
+.btn-save {
+  width: 100%; padding: 15px;
+  background: linear-gradient(135deg, var(--accent2) 0%, var(--accent) 100%);
+  border: none; border-radius: 11px;
+  color: #fff; font-size: 14px; font-weight: 900;
+  cursor: pointer; letter-spacing: .04em;
+  display: flex; justify-content: center; align-items: center; gap: 9px;
+  transition: filter .15s, transform .1s, box-shadow .15s;
+  box-shadow: 0 4px 24px rgba(108,143,255,0.25);
+  position: relative; overflow: hidden;
+  margin-top: 4px;
+}
+.btn-save::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 55%);
+  pointer-events: none;
+}
+.btn-save:hover { filter: brightness(1.1); box-shadow: 0 6px 32px rgba(108,143,255,0.38); }
+.btn-save:active { transform: scale(.98); }
+.btn-save:disabled { opacity: .4; cursor: not-allowed; transform: none; filter: none; box-shadow: none; }
+
+.spin {
+  width: 16px; height: 16px;
+  border: 2.5px solid rgba(255,255,255,0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: rot .6s linear infinite;
+  display: none; flex-shrink: 0;
+}
+@keyframes rot { to { transform: rotate(360deg); } }
+
+/* ── Action row ── */
+.btn-row { display: flex; gap: 9px; margin-top: 10px; }
+.btn-sm {
+  flex: 1; padding: 10px 8px;
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 9px; color: var(--muted);
+  font-size: 11px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  transition: border-color .15s, background .15s, color .15s;
+  text-decoration: none;
+}
+.btn-sm:hover { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+.btn-sm.danger:hover { border-color: var(--red); background: var(--red-bg); color: var(--red); }
+
+/* ── Toast ── */
+.toast {
+  position: fixed; bottom: 24px; left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 10px; padding: 11px 18px;
+  font-size: 13px; font-weight: 600;
+  box-shadow: 0 16px 48px rgba(0,0,0,.7);
+  display: flex; align-items: center; gap: 9px;
+  transition: transform .3s cubic-bezier(.34,1.56,.64,1), opacity .2s;
+  opacity: 0; pointer-events: none; z-index: 99;
+  white-space: nowrap;
+}
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+.toast.ok  { border-color: rgba(0,232,126,.3);  color: var(--green); }
+.toast.err { border-color: rgba(255,68,102,.3); color: var(--red); }
+.toast.inf { border-color: rgba(108,143,255,.3);color: var(--accent); }
+
+/* ── Log terminal ── */
+.log-box {
+  background: #030509;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px; line-height: 1.7;
+  color: #5a7090;
+  min-height: 80px;
+  max-height: 180px;
+  overflow-y: auto;
+  margin: 0 10px;
+}
+.log-box .log-ok   { color: var(--green); }
+.log-box .log-err  { color: var(--red); }
+.log-box .log-warn { color: var(--amber); }
+.log-box .log-info { color: var(--accent); }
+.log-box .log-time { color: var(--muted2); }
+
+/* ── Divider ── */
+.divider {
+  height: 1px; background: var(--border);
+  margin: 6px 10px; position: relative;
+}
+
+/* ── Back link ── */
+.back-link {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  color: var(--muted); font-size: 12px; font-weight: 600;
+  text-decoration: none; padding: 10px;
+  transition: color .15s;
+}
+.back-link:hover { color: var(--accent); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
 </head>
 <body>
-<div class="container">
+<div class="wrap">
 
-    <div class="status-header">
-        <div class="status-badge">
-            <span class="status-dot"></span>
-            <span>PROXY SERVER ONLINE</span>
-        </div>
-        <div class="title">Config Dashboard</div>
-        <div class="subtitle">Atur speed, sensitivity, dan mode patch.</div>
+  <!-- Header -->
+  <div class="header">
+    <div class="admin-badge"><span class="adot"></span> Admin Panel</div>
+    <div class="logo">
+      <span class="lo-j">JUN</span>MODS
+      <span class="lo-sub">Config Control Dashboard</span>
     </div>
+  </div>
 
-    <!-- SPEED CARD -->
-    <div class="card">
-        <div class="card-header">
-            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#8b949e" stroke-width="2">
-                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-            </svg>
-            CUSTOM SPEED
-            <span class="badge-max" id="speedBadge">MAX 10</span>
-        </div>
-
-        <div class="toggle-row">
-            <span class="toggle-label">Custom Speed</span>
-            <label class="toggle-switch">
-                <input type="checkbox" id="speedToggle" onchange="onToggleSpeed()">
-                <span class="toggle-track"></span>
-            </label>
-        </div>
-        <div class="speed-hint">Default speed = 4.0</div>
-
-        <div class="speed-input-row" id="speedRow">
-            <label>RunSpeed Value</label>
-            <div class="speed-val-box" id="speedDisplay">5,5</div>
-        </div>
-
-        <div class="range-wrap" id="rangeWrap">
-            <input type="range" id="speedSlider" min="0.1" max="10" step="0.1" value="5.5" oninput="onSlide(this)">
-        </div>
-        <div class="range-labels">
-            <span>0.1 slow</span>
-            <span>5.0 normal</span>
-            <span>10 max</span>
-        </div>
+  <!-- Stat strip -->
+  <div class="stat-strip">
+    <div class="stat-box s-blue">
+      <div class="stat-val" id="statUsers">—</div>
+      <div class="stat-lbl">Koneksi</div>
     </div>
-
-    <!-- SENSITIVITY CARD -->
-    <div class="card">
-        <div class="card-header">
-            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#8b949e" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-            </svg>
-            SENSITIVITY
-        </div>
-        <div class="sensi-hint">Maks sensitivity per scope · default 9.5 · maks 999.99</div>
-
-        <div class="sensi-grid">
-            <div class="sensi-item">
-                <label>Free Look</label>
-                <input type="number" id="sFree" min="0" max="999.99" step="0.01" value="999">
-            </div>
-            <div class="sensi-item">
-                <label>1P (Hip Fire)</label>
-                <input type="number" id="s1P" min="0" max="999.99" step="0.01" value="999">
-            </div>
-            <div class="sensi-item">
-                <label>Scope ×1</label>
-                <input type="number" id="sX1" min="0" max="999.99" step="0.01" value="999">
-            </div>
-            <div class="sensi-item">
-                <label>Scope ×2</label>
-                <input type="number" id="sX2" min="0" max="999.99" step="0.01" value="999">
-            </div>
-            <div class="sensi-item">
-                <label>Scope ×4</label>
-                <input type="number" id="sX4" min="0" max="999.99" step="0.01" value="999">
-            </div>
-            <div class="sensi-item">
-                <label>Scope ×8</label>
-                <input type="number" id="sX8" min="0" max="999.99" step="0.01" value="999">
-            </div>
-            <div class="sensi-item sensi-full">
-                <label>General Max</label>
-                <input type="number" id="sGen" min="0" max="999.99" step="0.01" value="500">
-            </div>
-        </div>
+    <div class="stat-box s-cyan">
+      <div class="stat-val" id="statReqs">—</div>
+      <div class="stat-lbl">Request</div>
     </div>
+    <div class="stat-box s-green">
+      <div class="stat-val" id="statUptime">—</div>
+      <div class="stat-lbl">Uptime</div>
+    </div>
+  </div>
 
-    <div id="msgBox" class="msg-box"></div>
+  <!-- Server Info -->
+  <div class="card">
+    <div class="card-accent ca-cyan"></div>
+    <div class="card-head">
+      <div class="card-head-icon chi-cyan">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+      </div>
+      <div><div class="card-title">Server Info</div><div class="card-desc">Status dan konfigurasi proxy</div></div>
+    </div>
+    <div class="info-row">
+      <span class="lbl">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10 15 15 0 0 1 4-10z"/></svg>
+        Proxy URL
+      </span>
+      <span class="val hi" id="srvUrl">—</span>
+    </div>
+    <div class="info-row">
+      <span class="lbl">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="1"/></svg>
+        Status Server
+      </span>
+      <span class="val ok">● Online</span>
+    </div>
+    <div class="info-row">
+      <span class="lbl">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Mode Patch
+      </span>
+      <span class="val" id="srvMode">—</span>
+    </div>
+    <div class="info-row">
+      <span class="lbl">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Run Speed
+      </span>
+      <span class="val" id="srvSpeed">—</span>
+    </div>
+  </div>
 
-    <button class="btn-save" id="saveBtn" onclick="saveConfig()">
-        <span class="spin" id="saveSpin"></span>
-        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" id="saveIcon">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-            <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
-        </svg>
-        Simpan Config
+  <!-- Body Mode -->
+  <div class="card">
+    <div class="card-accent ca-blue"></div>
+    <div class="card-head">
+      <div class="card-head-icon chi-blue">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      </div>
+      <div><div class="card-title">Body Mode</div><div class="card-desc">Mode patch yang digunakan client</div></div>
+    </div>
+    <div style="padding: 0 0 14px;" id="modeSubtitle">
+      <div style="font-size:11px;color:var(--muted);padding: 0 10px 10px;">Pilih mode aktif untuk semua user</div>
+      <div class="mode-grid">
+        <button class="mode-btn active" id="mode_full" onclick="setMode('full')">
+          <svg class="mi" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="icon_full"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          <span class="mn">Full Mod</span>
+          <span class="md">Speed · Sensi · Anti-ban</span>
+        </button>
+        <button class="mode-btn" id="mode_hs_only" onclick="setMode('hs_only')">
+          <svg class="mi" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="icon_hs"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="14.5" y2="14.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
+          <span class="mn">HS Only</span>
+          <span class="md">Body headshoot saja</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Run Speed -->
+  <div class="card" id="speedCard">
+    <div class="card-accent ca-amber"></div>
+    <div class="card-head">
+      <div class="card-head-icon chi-amber">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      </div>
+      <div><div class="card-title">Run Speed</div><div class="card-desc">Custom speed movement client</div></div>
+    </div>
+    <div class="setting">
+      <div class="setting-info">
+        <div class="setting-label">Custom Speed <span class="tag tag-amber">MAX 10</span></div>
+        <div class="setting-desc">Default = 4.0 — aktifkan untuk override</div>
+      </div>
+      <div class="setting-ctrl">
+        <label class="toggle"><input type="checkbox" id="speedToggle" onchange="onSpeedToggle()"><span class="toggle-track"></span></label>
+      </div>
+    </div>
+    <div id="speedPanel">
+      <div class="divider"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 10px 8px;">
+        <span style="font-size:12px;color:var(--muted)">RunSpeed Value</span>
+        <input type="number" class="num-input" id="speedVal" min="0.1" max="10" step="0.1" value="4.0" oninput="syncSlider()">
+      </div>
+      <div class="slider-wrap">
+        <input type="range" class="slider" id="speedSlider" min="0.1" max="10" step="0.1" value="4.0" oninput="syncInput()">
+        <div class="slider-labels"><span>0.1</span><span>5.0 default</span><span>10.0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sensitivity -->
+  <div class="card" id="sensiCard">
+    <div class="card-accent ca-purple"></div>
+    <div class="card-head">
+      <div class="card-head-icon chi-purple">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="14.5" y2="14.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
+      </div>
+      <div>
+        <div class="card-title">Sensitivity Max <span class="tag tag-purple" style="vertical-align:middle">Per Scope</span></div>
+        <div class="card-desc">Override sensitivity maksimal · default 9.5 · maks 999.99</div>
+      </div>
+    </div>
+    <div class="sensi-grid" style="margin-bottom:14px;">
+      <div class="sensi-item"><label>Free Look</label><input type="number" class="num-input" id="s_FreeLook" min="1" max="999.99" step="0.1" value="9.5"></div>
+      <div class="sensi-item"><label>1P (Hip Fire)</label><input type="number" class="num-input" id="s_1P" min="1" max="999.99" step="0.1" value="9.5"></div>
+      <div class="sensi-item"><label>Scope ×1</label><input type="number" class="num-input" id="s_X1" min="1" max="999.99" step="0.1" value="9.5"></div>
+      <div class="sensi-item"><label>Scope ×2</label><input type="number" class="num-input" id="s_X2" min="1" max="999.99" step="0.1" value="9.5"></div>
+      <div class="sensi-item"><label>Scope ×4</label><input type="number" class="num-input" id="s_X4" min="1" max="999.99" step="0.1" value="9.5"></div>
+      <div class="sensi-item"><label>Scope ×8</label><input type="number" class="num-input" id="s_X8" min="1" max="999.99" step="0.1" value="9.5"></div>
+      <div class="sensi-item" style="grid-column:1/-1"><label>General Max</label><input type="number" class="num-input" id="s_General" min="1" max="999.99" step="0.1" value="9.5" style="width:100%"></div>
+    </div>
+  </div>
+
+  <!-- Activity Log -->
+  <div class="card">
+    <div class="card-accent ca-green"></div>
+    <div class="card-head">
+      <div class="card-head-icon chi-green">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      </div>
+      <div><div class="card-title">Activity Log</div><div class="card-desc">Request & event terbaru</div></div>
+    </div>
+    <div class="log-box" id="logBox">
+      <span class="log-time">[--:--:--] </span><span class="log-info">Menghubungkan ke server...</span>
+    </div>
+  </div>
+
+  <!-- Save -->
+  <button class="btn-save" id="saveBtn" onclick="saveConfig()">
+    <span class="spin" id="saveSpin"></span>
+    <svg id="saveIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+    <span id="saveLabel">Simpan Config</span>
+  </button>
+
+  <div class="btn-row">
+    <button class="btn-sm" onclick="loadStatus()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      Refresh
     </button>
+    <button class="btn-sm" onclick="downloadCfg()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      localconfig
+    </button>
+    <button class="btn-sm danger" onclick="clearLog()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+      Clear Log
+    </button>
+  </div>
 
-    <a href="/" class="back-link">← Kembali ke halaman utama</a>
+  <a href="/" class="back-link">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+    Kembali ke Dashboard
+  </a>
+
 </div>
 
+<div class="toast" id="toast"></div>
+
 <script>
-// ── State ──────────────────────────────────────────────────────────────────────
-let speedEnabled = false;
-let currentSpeed = 5.5;
+const PROXY = window.location.origin;
+let _mode = 'full';
+let _logLines = [];
 
-function fmtSpeed(v) {
-    return v.toFixed(1).replace('.', ',');
+// ── Toast ──────────────────────────────────────────────────────────────────────
+function showToast(msg, type = 'ok', dur = 2800) {
+  const t = document.getElementById('toast');
+  const icons = {
+    ok:  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+    err: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+    inf: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>',
+  };
+  t.innerHTML = (icons[type] || icons.inf) + msg;
+  t.className = `toast ${type} show`;
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = 'toast', dur);
 }
 
-function onToggleSpeed() {
-    speedEnabled = document.getElementById('speedToggle').checked;
-    document.getElementById('speedRow').style.opacity  = speedEnabled ? '1' : '.4';
-    document.getElementById('rangeWrap').style.opacity = speedEnabled ? '1' : '.4';
-    document.getElementById('speedRow').style.pointerEvents  = speedEnabled ? '' : 'none';
-    document.getElementById('rangeWrap').style.pointerEvents = speedEnabled ? '' : 'none';
+// ── Log ────────────────────────────────────────────────────────────────────────
+function addLog(msg, cls = '') {
+  const now = new Date();
+  const time = now.toTimeString().slice(0, 8);
+  _logLines.push(`<span class="log-time">[${time}]</span> <span class="${cls}">${msg}</span>`);
+  if (_logLines.length > 60) _logLines.shift();
+  const box = document.getElementById('logBox');
+  box.innerHTML = _logLines.join('<br>');
+  box.scrollTop = box.scrollHeight;
 }
 
-function onSlide(el) {
-    currentSpeed = parseFloat(el.value);
-    const pct = ((currentSpeed - 0.1) / (10 - 0.1) * 100).toFixed(1);
-    el.style.setProperty('--pct', pct + '%');
-    document.getElementById('speedDisplay').textContent = fmtSpeed(currentSpeed);
+function clearLog() {
+  _logLines = [];
+  document.getElementById('logBox').innerHTML = '<span class="log-time">[--:--:--] </span><span class="log-info">Log dibersihkan.</span>';
 }
 
-// ── Load config dari server ────────────────────────────────────────────────────
-async function loadConfig() {
-    try {
-        const res = await fetch('/api/config', { cache: 'no-store' });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const cfg = await res.json();
+// ── Uptime — real dari server ──────────────────────────────────────────────────
+function fmtUptime(s) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}j${m}m`;
+  if (m > 0) return `${m}m${sec}s`;
+  return `${sec}s`;
+}
 
-        // Speed
-        if (cfg.runSpeed !== null && cfg.runSpeed !== undefined) {
-            speedEnabled = true;
-            currentSpeed = parseFloat(cfg.runSpeed);
-        } else {
-            speedEnabled = false;
-            currentSpeed = 5.5;
-        }
-        const slider = document.getElementById('speedSlider');
-        slider.value = currentSpeed;
-        const pct = ((currentSpeed - 0.1) / (10 - 0.1) * 100).toFixed(1);
-        slider.style.setProperty('--pct', pct + '%');
-        document.getElementById('speedDisplay').textContent = fmtSpeed(currentSpeed);
-        document.getElementById('speedToggle').checked = speedEnabled;
-        onToggleSpeed();
+let _serverUptimeBase = null;   // server uptime detik saat fetch terakhir
+let _serverFetchAt    = null;   // Date.now() saat fetch itu
 
-        // Sensi
-        const s = cfg.sensi || {};
-        document.getElementById('sFree').value = s.FreeLookMaxSetting      ?? 999;
-        document.getElementById('s1P').value   = s.Sensitivity1PMaxSetting ?? 999;
-        document.getElementById('sX1').value   = s.X1ScopeMaxSetting       ?? 999;
-        document.getElementById('sX2').value   = s.X2ScopeMaxSetting       ?? 999;
-        document.getElementById('sX4').value   = s.X4ScopeMaxSetting       ?? 999;
-        document.getElementById('sX8').value   = s.X8ScopeMaxSetting       ?? 999;
-        document.getElementById('sGen').value  = s.SensitivityMaxSetting   ?? 500;
-
-    } catch(e) {
-        showMsg('⚠️ Gagal load config: ' + e.message, 'err');
+async function fetchStats() {
+  try {
+    const r = await fetch('/api/stats', { cache: 'no-store' });
+    if (!r.ok) {
+      const txt = await r.text();
+      addLog(`/api/stats error ${r.status}: ${txt.substring(0,80)}`, 'log-warn');
+      return;
     }
+    const d = await r.json();
+    _serverUptimeBase = d.uptime;
+    _serverFetchAt    = Date.now();
+    if (d.requests    != null) document.getElementById('statReqs').textContent   = d.requests.toLocaleString();
+    if (d.connections != null) document.getElementById('statUsers').textContent  = d.connections.toLocaleString();
+  } catch(e) {
+    // silent — ticker tetap jalan dari nilai terakhir
+  }
 }
 
-// ── Save config ke server ──────────────────────────────────────────────────────
+function tickUptime() {
+  if (_serverUptimeBase === null) {
+    document.getElementById('statUptime').textContent = '…';
+    return;
+  }
+  const elapsed = Math.floor((Date.now() - _serverFetchAt) / 1000);
+  document.getElementById('statUptime').textContent = fmtUptime(_serverUptimeBase + elapsed);
+}
+
+// Fetch stats tiap 5 detik, update uptime display tiap detik
+fetchStats();
+setInterval(fetchStats,  5000);
+setInterval(tickUptime,  1000);
+
+// ── Mode selector ─────────────────────────────────────────────────────────────
+function setMode(mode) {
+  _mode = mode;
+  ['full', 'hs_only'].forEach(m => {
+    document.getElementById('mode_' + m).classList.toggle('active', m === mode);
+  });
+  const iF = document.getElementById('icon_full');
+  const iH = document.getElementById('icon_hs');
+  if (mode === 'full') {
+    iF.setAttribute('stroke', 'var(--accent)');
+    iH.setAttribute('stroke', 'var(--muted)');
+  } else {
+    iF.setAttribute('stroke', 'var(--muted)');
+    iH.setAttribute('stroke', 'var(--accent)');
+  }
+  const isFull = mode === 'full';
+  ['speedCard', 'sensiCard'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.opacity = isFull ? '1' : '0.4';
+    el.style.pointerEvents = isFull ? '' : 'none';
+  });
+}
+
+// ── Speed toggle ──────────────────────────────────────────────────────────────
+function onSpeedToggle() {
+  const on = document.getElementById('speedToggle').checked;
+  document.getElementById('speedPanel').classList.toggle('open', on);
+}
+
+function syncSlider() {
+  const v = parseFloat(document.getElementById('speedVal').value);
+  if (!isNaN(v)) document.getElementById('speedSlider').value = Math.min(10, Math.max(0.1, v));
+}
+function syncInput() {
+  document.getElementById('speedVal').value = document.getElementById('speedSlider').value;
+}
+
+// ── Load status/config ────────────────────────────────────────────────────────
+async function loadStatus() {
+  document.getElementById('srvUrl').textContent = PROXY;
+  try {
+    const r = await fetch('/api/config', { cache: 'no-store' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    if (d.bodyMode) setMode(d.bodyMode);
+    document.getElementById('srvMode').textContent = d.bodyMode === 'full' ? 'Full Mod' : 'HS Only';
+    if (d.runSpeed != null) {
+      document.getElementById('speedToggle').checked = true;
+      document.getElementById('speedPanel').classList.add('open');
+      document.getElementById('speedVal').value = d.runSpeed;
+      document.getElementById('speedSlider').value = d.runSpeed;
+      document.getElementById('srvSpeed').textContent = d.runSpeed + 'x';
+      document.getElementById('srvSpeed').className = 'val warn';
+    } else {
+      document.getElementById('srvSpeed').textContent = 'Default (4.0)';
+      document.getElementById('srvSpeed').className = 'val';
+    }
+    const s = d.sensi || {};
+    document.getElementById('s_General').value  = s.SensitivityMaxSetting   ?? 9.5;
+    document.getElementById('s_1P').value        = s.Sensitivity1PMaxSetting ?? 9.5;
+    document.getElementById('s_X1').value        = s.X1ScopeMaxSetting       ?? 9.5;
+    document.getElementById('s_X2').value        = s.X2ScopeMaxSetting       ?? 9.5;
+    document.getElementById('s_X4').value        = s.X4ScopeMaxSetting       ?? 9.5;
+    document.getElementById('s_X8').value        = s.X8ScopeMaxSetting       ?? 9.5;
+    document.getElementById('s_FreeLook').value  = s.FreeLookMaxSetting      ?? 9.5;
+    addLog(`Config loaded — mode: ${d.bodyMode || '?'}, speed: ${d.runSpeed ?? 'default'}`, 'log-ok');
+  } catch(e) {
+    addLog('Gagal load config: ' + e.message, 'log-err');
+  }
+
+  // Stats (uptime, requests, connections) dihandle oleh fetchStats() terpisah
+}
+
+// ── Save config ───────────────────────────────────────────────────────────────
 async function saveConfig() {
-    const btn  = document.getElementById('saveBtn');
-    const spin = document.getElementById('saveSpin');
-    const icon = document.getElementById('saveIcon');
+  const btn   = document.getElementById('saveBtn');
+  const spin  = document.getElementById('saveSpin');
+  const icon  = document.getElementById('saveIcon');
+  const label = document.getElementById('saveLabel');
 
-    btn.disabled       = true;
-    spin.style.display = 'block';
-    icon.style.display = 'none';
-    showMsg('', '');
+  const speedOn  = document.getElementById('speedToggle').checked;
+  const speedRaw = parseFloat(document.getElementById('speedVal').value);
+  if (speedOn && (isNaN(speedRaw) || speedRaw < 0.1 || speedRaw > 10)) {
+    document.getElementById('speedVal').classList.add('err');
+    showToast('Speed harus 0.1 – 10', 'err');
+    return;
+  }
+  document.getElementById('speedVal').classList.remove('err');
 
-    const payload = {
-        runSpeed: speedEnabled ? currentSpeed : null,
-        sensi: {
-            SensitivityMaxSetting:   parseFloat(document.getElementById('sGen').value)  || 9.5,
-            Sensitivity1PMaxSetting: parseFloat(document.getElementById('s1P').value)   || 9.5,
-            X1ScopeMaxSetting:       parseFloat(document.getElementById('sX1').value)   || 9.5,
-            X2ScopeMaxSetting:       parseFloat(document.getElementById('sX2').value)   || 9.5,
-            X4ScopeMaxSetting:       parseFloat(document.getElementById('sX4').value)   || 9.5,
-            X8ScopeMaxSetting:       parseFloat(document.getElementById('sX8').value)   || 9.5,
-            FreeLookMaxSetting:      parseFloat(document.getElementById('sFree').value) || 9.5,
-        }
-    };
-
-    try {
-        const res = await fetch('/api/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (data.ok) {
-            showMsg('✅ Config berhasil disimpan! Speed & sensi aktif di game.', 'ok');
-        } else {
-            showMsg('❌ Gagal simpan: ' + (data.error || 'Unknown error'), 'err');
-        }
-    } catch(e) {
-        showMsg('❌ Network error: ' + e.message, 'err');
-    } finally {
-        btn.disabled       = false;
-        spin.style.display = 'none';
-        icon.style.display = '';
+  const payload = {
+    bodyMode: _mode,
+    runSpeed: speedOn ? speedRaw : null,
+    sensi: {
+      SensitivityMaxSetting:   getNum('s_General',  9.5),
+      Sensitivity1PMaxSetting: getNum('s_1P',       9.5),
+      X1ScopeMaxSetting:       getNum('s_X1',       9.5),
+      X2ScopeMaxSetting:       getNum('s_X2',       9.5),
+      X4ScopeMaxSetting:       getNum('s_X4',       9.5),
+      X8ScopeMaxSetting:       getNum('s_X8',       9.5),
+      FreeLookMaxSetting:      getNum('s_FreeLook',  9.5),
     }
+  };
+
+  btn.disabled = true;
+  spin.style.display = 'block';
+  icon.style.display = 'none';
+  label.textContent  = 'Menyimpan...';
+
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      throw new Error(`HTTP ${r.status}: ${txt.substring(0, 120)}`);
+    }
+    const d = await r.json();
+    if (d.ok) {
+      showToast('Config tersimpan!', 'ok');
+      addLog(`Config disimpan — mode: ${_mode}, speed: ${speedOn ? speedRaw : 'off'}`, 'log-ok');
+      await loadStatus();
+    } else {
+      showToast('Gagal simpan: ' + (d.error || '?'), 'err');
+      addLog('Gagal simpan: ' + (d.error || '?'), 'log-err');
+    }
+  } catch(e) {
+    showToast('Error: ' + e.message, 'err');
+    addLog('Save error: ' + e.message, 'log-err');
+  } finally {
+    btn.disabled = false;
+    spin.style.display = 'none';
+    icon.style.display = 'block';
+    label.textContent  = 'Simpan Config';
+  }
 }
 
-function showMsg(text, type) {
-    const box = document.getElementById('msgBox');
-    box.className = type ? 'msg-box ' + type : 'msg-box';
-    box.textContent = text;
+function getNum(id, def) {
+  const v = parseFloat(document.getElementById(id).value);
+  return (!isNaN(v) && v >= 0) ? Math.min(999.99, v) : def;
 }
 
-// Slider gradient sync saat init
-document.getElementById('speedSlider').addEventListener('input', function() { onSlide(this); });
+async function downloadCfg() {
+  try {
+    const r = await fetch('/localconfig.json', { cache: 'no-store' });
+    if (!r.ok) throw new Error('localconfig.json tidak ditemukan');
+    const cfg = await r.json();
+    cfg.verAddr = cfg.verAddr || PROXY + '/';
+    const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(blob), download: 'localconfig.json'
+    });
+    document.body.appendChild(a); a.click(); a.remove();
+    showToast('localconfig.json didownload', 'inf');
+    addLog('localconfig.json didownload', 'log-info');
+  } catch(e) {
+    showToast(e.message, 'err');
+    addLog(e.message, 'log-err');
+  }
+}
 
-document.addEventListener('DOMContentLoaded', loadConfig);
+document.addEventListener('DOMContentLoaded', () => {
+  loadStatus();
+  tickUptime();
+  addLog('Admin panel loaded', 'log-info');
+});
 </script>
 </body>
 </html>

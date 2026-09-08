@@ -3,6 +3,26 @@
 const fs   = require('fs');
 const path = require('path');
 
+// ── Real request counter ───────────────────────────────────────────────────
+let _totalRequests = 0;
+let _activeConnections = 0;
+
+function getStats() {
+    return {
+        uptime:     Math.floor(process.uptime()),   // real server uptime in seconds
+        requests:   _totalRequests,
+        connections: _activeConnections,
+    };
+}
+
+function trackRequest(req, res, next) {
+    _totalRequests++;
+    _activeConnections++;
+    res.on('finish', () => { _activeConnections = Math.max(0, _activeConnections - 1); });
+    res.on('close',  () => { _activeConnections = Math.max(0, _activeConnections - 1); });
+    next();
+}
+
 const CONFIG_PATH = path.join(__dirname, '..', 'db', 'gameconfig.json');
 
 const DEFAULTS = {
@@ -50,11 +70,13 @@ function init(app) {
     // POST config — simpan dari dashboard
     app.post('/api/config', (req, res) => {
         try {
+            // Body sudah di-parse jadi object oleh express.json() di app.js
+            // tapi tetap handle Buffer untuk safety
             let body = req.body;
             if (Buffer.isBuffer(body)) {
                 try { body = JSON.parse(body.toString('utf8')); } catch (_) { body = {}; }
             }
-            if (typeof body !== 'object' || !body) body = {};
+            if (typeof body !== 'object' || body === null) body = {};
 
             // Validasi bodyMode
             const bodyMode = (body.bodyMode === 'hs_only') ? 'hs_only' : 'full';
@@ -88,6 +110,11 @@ function init(app) {
         } catch (e) {
             res.status(400).json({ ok: false, error: e.message });
         }
+    });
+
+    // ── /api/stats — real server stats untuk dashboard ─────────────────
+    app.get('/api/stats', (req, res) => {
+        res.json(getStats());
     });
 
     // ── /api/device — return IP + geo info untuk dashboard ─────────────
@@ -138,7 +165,7 @@ function init(app) {
         res.json({ ip: clientIp, device, platform, city, region, country, isp });
     });
 
-    console.log('[CONFIG] Active → GET/POST /api/config | GET /api/device');
+    console.log('[CONFIG] Active → GET/POST /api/config | GET /api/device | GET /api/stats');
 }
 
-module.exports = { load, save, init };
+module.exports = { load, save, init, getStats, trackRequest };
