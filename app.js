@@ -76,6 +76,11 @@ const SPOOF_PATHS = [
     '/SecurityReport', '/ReportSecurityEvent',
     '/DataReport', '/DataUploadEvent',
     '/DisableUpload',
+    // GRTC/SDK validate endpoints - spoof supaya SDK ga bisa report ke Garena
+    '/grtc/report', '/grtc/validate', '/grtc/sdk',
+    '/sdk/validate', '/sdk/report', '/sdk/check',
+    '/noop',  // dummy endpoint untuk redirect idevent/idnetwork
+    '/report', '/Report',
 ];
 
 function spoofOK(req, res) {
@@ -155,9 +160,31 @@ app.post('/GetLoginData', (req, res) => {
             g.enable_ggp         = false;
             if (g.ggp_port !== undefined) g.ggp_port = 0;
             if (g.gin_port !== undefined) g.gin_port = 0;
-            g.ggp_url = proxyHost;
-            if (g.gin_url !== undefined) g.gin_url = proxyHost;
-            console.log(`[GetLoginData-PATCH] CECNLHCONMI: ggp_url ${orig} → ${proxyHost}, semua flag GIN/GGP=false`);
+            // Set ke 0.0.0.0 supaya TCP connect GAGAL, bukan ke proxyHost
+            g.ggp_url = '0.0.0.0';
+            if (g.gin_url    !== undefined) g.gin_url    = '0.0.0.0';
+            if (g.ffanti_url !== undefined) g.ffanti_url = '';
+            if (g.grtc_url   !== undefined) g.grtc_url   = '';
+            if (g.tp_url     !== undefined) g.tp_url     = '';
+            console.log(`[GetLoginData-PATCH] CECNLHCONMI: ggp_url ${orig} → 0.0.0.0 (dead), semua flag GIN/GGP=false`);
+        }
+        // Patch LJAPOJNBOFE (GRTC/SDK URL list)
+        if (jsonObj && jsonObj['LJAPOJNBOFE'] !== undefined) {
+            const orig = jsonObj['LJAPOJNBOFE'];
+            jsonObj['LJAPOJNBOFE'] = '';
+            console.log(`[GetLoginData-PATCH] LJAPOJNBOFE: "${String(orig).substring(0,40)}..." → ""`);
+        }
+        // Patch POEPGJPHCMJ (idevent URL)
+        if (jsonObj && jsonObj['POEPGJPHCMJ'] !== undefined) {
+            jsonObj['POEPGJPHCMJ'] = proxyBase + '/noop';
+        }
+        // Patch EMFPDECPCDG (idnetwork URL)
+        if (jsonObj && jsonObj['EMFPDECPCDG'] !== undefined) {
+            jsonObj['EMFPDECPCDG'] = proxyBase + '/noop';
+        }
+        // Patch PDJHKBDIHGL (gateway URL)
+        if (jsonObj && jsonObj['PDJHKBDIHGL'] !== undefined) {
+            jsonObj['PDJHKBDIHGL'] = proxyBase + '/noop';
         }
         if (jsonObj && typeof jsonObj['AEBBNFBNIDB'] === 'object' && jsonObj['AEBBNFBNIDB'] !== null) {
             const b = jsonObj['AEBBNFBNIDB'];
