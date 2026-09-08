@@ -1,3 +1,32 @@
+// ── Baca config DB (speed + sensi dari dashboard) ─────────────────────────────
+const fs   = require('fs');
+const path = require('path');
+
+const CONFIG_PATH = path.join(__dirname, '..', 'db', 'gameconfig.json');
+const CONFIG_DEFAULTS = {
+  runSpeed: null,
+  sensi: {
+    SensitivityMaxSetting:   9.5,
+    Sensitivity1PMaxSetting: 9.5,
+    X1ScopeMaxSetting:       9.5,
+    X2ScopeMaxSetting:       9.5,
+    X4ScopeMaxSetting:       9.5,
+    X8ScopeMaxSetting:       9.5,
+    FreeLookMaxSetting:      9.5,
+  }
+};
+
+function loadGameConfig() {
+  try {
+    if (fs.existsSync(CONFIG_PATH)) {
+      const raw = fs.readFileSync(CONFIG_PATH, 'utf8');
+      return Object.assign({}, CONFIG_DEFAULTS, JSON.parse(raw));
+    }
+  } catch (_) {}
+  return Object.assign({}, CONFIG_DEFAULTS);
+}
+
+// Baris gamevar STATIS — RunSpeed & sensi di-inject dinamis oleh buildGamevarLines()
 const gamevarLines = [
   "var_name,comment,var_type,var_value,var_region,var_platform",
   "var_name,comment,var_type,var_value,var_region,var_platform",
@@ -93,7 +122,8 @@ const gamevarLines = [
   "TurnSpeed,Combat,float,9999.0,,",
   "ActionSpeedScale,Combat,float,3.0,,",
   "HighFallActionSpeed,Combat,float,9999.0,,",
-  "RunSpeed,,float,4.2,,",
+  // RunSpeed di-inject dinamis oleh buildGamevarLines() dari db/gameconfig.json
+  "RunSpeed,,float,__RUNSPEED__,,",
   "DashSpeedScale,,float,100,,",
   "SwapSpeed,SwapSpeed,float,0.1,,",
   "JumpSpeed,JumpSpeed,float,10.0,,",
@@ -102,13 +132,14 @@ const gamevarLines = [
   "MaxJumpCount,MaxJumpCount,int,3,,",
   "FastSwap,FastSwap,bool,true,,",
 
-  "SensitivityMaxSetting,SensitivityMaxSetting,float,9.5,,",
-  "Sensitivity1PMaxSetting,Sensitivity1PMaxSetting,float,9.5,,",
-  "X1ScopeMaxSetting,X1ScopeMaxSetting,float,9.5,,",
-  "X2ScopeMaxSetting,X2ScopeMaxSetting,float,9.5,,",
-  "X4ScopeMaxSetting,X4ScopeMaxSetting,float,9.5,,",
-  "X8ScopeMaxSetting,X8ScopeMaxSetting,float,9.5,,",
-  "FreeLookMaxSetting,FreeLookMaxSetting,float,9.5,,",
+  // Sensi di-inject dinamis oleh buildGamevarLines() dari db/gameconfig.json
+  "SensitivityMaxSetting,SensitivityMaxSetting,float,__SENSI_GENERAL__,,",
+  "Sensitivity1PMaxSetting,Sensitivity1PMaxSetting,float,__SENSI_1P__,,",
+  "X1ScopeMaxSetting,X1ScopeMaxSetting,float,__SENSI_X1__,,",
+  "X2ScopeMaxSetting,X2ScopeMaxSetting,float,__SENSI_X2__,,",
+  "X4ScopeMaxSetting,X4ScopeMaxSetting,float,__SENSI_X4__,,",
+  "X8ScopeMaxSetting,X8ScopeMaxSetting,float,__SENSI_X8__,,",
+  "FreeLookMaxSetting,FreeLookMaxSetting,float,__SENSI_FREELOOK__,,",
   "FreeMoveAngularSpeed,FreeMoveAngularSpeed,float,9999.0,,",
   "FreeMoveAngularSpeedStand,FreeMoveAngularSpeedStand,float,9999.0,,",
   "FreeMoveAngularSpeedCrouch,FreeMoveAngularSpeedCrouch,float,9999.0,,",
@@ -123,6 +154,26 @@ const gamevarLines = [
   "CanSwapWeaponContinueShoot,Combat,bool,true,,",
   "PVPFireShakeEnable,Combat,bool,false,,",
 ];
+
+// ── buildGamevarLines: inject RunSpeed + sensi dari config DB ─────────────────
+function buildGamevarLines() {
+  const cfg   = loadGameConfig();
+  const speed = (cfg.runSpeed !== null && cfg.runSpeed !== undefined)
+    ? parseFloat(cfg.runSpeed)
+    : 4.2;   // default kalau belum diset
+  const sensi = cfg.sensi || CONFIG_DEFAULTS.sensi;
+
+  return gamevarLines.map(line => line
+    .replace('__RUNSPEED__',        speed.toString())
+    .replace('__SENSI_GENERAL__',   (sensi.SensitivityMaxSetting   ?? 9.5).toString())
+    .replace('__SENSI_1P__',        (sensi.Sensitivity1PMaxSetting ?? 9.5).toString())
+    .replace('__SENSI_X1__',        (sensi.X1ScopeMaxSetting       ?? 9.5).toString())
+    .replace('__SENSI_X2__',        (sensi.X2ScopeMaxSetting       ?? 9.5).toString())
+    .replace('__SENSI_X4__',        (sensi.X4ScopeMaxSetting       ?? 9.5).toString())
+    .replace('__SENSI_X8__',        (sensi.X8ScopeMaxSetting       ?? 9.5).toString())
+    .replace('__SENSI_FREELOOK__',  (sensi.FreeLookMaxSetting      ?? 9.5).toString())
+  );
+}
 
 // ============================================================
 // GANTI INI SESUAI DOMAIN KAMU
@@ -172,7 +223,7 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
     "force_to_restart_app":              false,
     "free_guest_login":                  true,
     "free_rematch":                      true,
-    "gamevar":                           gamevarLines.join("\n"),
+    "gamevar":                           buildGamevarLines().join("\n"),
     "garena_hint":                       true,
     "garena_login":                      true,
     "gdpr_version":                      1,

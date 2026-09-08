@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Config Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: radial-gradient(circle at top, rgba(35,134,54,0.10), transparent 35%), #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 20px 20px 40px;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        .container { width: 100%; max-width: 480px; }
+
+        .status-header { text-align: center; margin-bottom: 20px; padding-top: 10px; }
+        .status-badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: rgba(46,160,67,0.13); border: 1px solid rgba(46,160,67,0.4);
+            color: #3fb950; font-size: 13px; font-weight: 600;
+            padding: 7px 14px; border-radius: 20px; margin-bottom: 12px;
+        }
+        .status-dot {
+            width: 8px; height: 8px; background: #3fb950; border-radius: 50%;
+            box-shadow: 0 0 10px rgba(63,185,80,0.8); animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(.85)} }
+        .title { font-size: 21px; font-weight: 700; color: #f0f6fc; }
+        .subtitle { font-size: 13px; color: #8b949e; margin-top: 6px; }
+
+        .card {
+            background: #0d1117; border: 1px solid #21262d;
+            border-radius: 12px; padding: 16px; margin-bottom: 16px;
+        }
+        .card-header {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 12px; font-weight: 600; color: #8b949e;
+            text-transform: uppercase; letter-spacing: .6px; margin-bottom: 14px;
+        }
+        .card-header svg { flex-shrink: 0; }
+
+        /* Speed toggle row */
+        .toggle-row {
+            display: flex; justify-content: space-between;
+            align-items: center; margin-bottom: 4px;
+        }
+        .toggle-label { font-size: 14px; font-weight: 600; color: #f0f6fc; }
+        .badge-max {
+            background: rgba(46,160,67,0.15); border: 1px solid rgba(46,160,67,0.4);
+            color: #3fb950; font-size: 10px; font-weight: 700;
+            padding: 2px 8px; border-radius: 20px;
+        }
+        .toggle-switch {
+            position: relative; width: 46px; height: 26px;
+        }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-track {
+            position: absolute; cursor: pointer; inset: 0;
+            background: #21262d; border-radius: 26px; transition: .3s;
+        }
+        .toggle-track::before {
+            content: ''; position: absolute;
+            width: 20px; height: 20px; left: 3px; bottom: 3px;
+            background: #fff; border-radius: 50%; transition: .3s;
+        }
+        input:checked + .toggle-track { background: #3fb950; }
+        input:checked + .toggle-track::before { transform: translateX(20px); }
+
+        .speed-hint { font-size: 12px; color: #8b949e; margin-bottom: 12px; }
+
+        .speed-input-row {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+        }
+        .speed-input-row label { font-size: 13px; color: #8b949e; white-space: nowrap; }
+        .speed-val-box {
+            margin-left: auto;
+            background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+            padding: 8px 12px; font-size: 15px; font-weight: 600; color: #f0f6fc;
+            width: 90px; text-align: center;
+        }
+
+        .range-wrap { position: relative; margin-bottom: 4px; }
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; height: 6px;
+            border-radius: 3px; outline: none; cursor: pointer;
+            background: linear-gradient(to right, #3fb950 0%, #3fb950 var(--pct,50%), #21262d var(--pct,50%), #21262d 100%);
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 20px; height: 20px;
+            background: #3fb950; border-radius: 50%;
+            box-shadow: 0 0 6px rgba(63,185,80,.5);
+        }
+        .range-labels {
+            display: flex; justify-content: space-between;
+            font-size: 11px; color: #8b949e; margin-top: 2px;
+        }
+
+        /* Sensi grid */
+        .sensi-hint { font-size: 12px; color: #8b949e; margin-bottom: 12px; }
+        .sensi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .sensi-item label { font-size: 12px; color: #8b949e; display: block; margin-bottom: 5px; }
+        .sensi-item input[type=number] {
+            width: 100%; background: #161b22; border: 1px solid #30363d;
+            border-radius: 8px; padding: 10px; color: #f0f6fc;
+            font-size: 15px; font-weight: 600; outline: none;
+            transition: border-color .2s;
+        }
+        .sensi-item input[type=number]:focus { border-color: #3fb950; }
+        .sensi-full { grid-column: 1 / -1; }
+
+        /* Save button */
+        .btn-save {
+            width: 100%; padding: 16px; background: #3fb950; border: none;
+            border-radius: 12px; font-size: 16px; font-weight: 700;
+            color: #0d1117; cursor: pointer; display: flex; justify-content: center;
+            align-items: center; gap: 8px; transition: filter .2s, transform .15s;
+            margin-bottom: 12px;
+        }
+        .btn-save:hover  { filter: brightness(1.1); }
+        .btn-save:active { transform: scale(.98); }
+        .btn-save:disabled { opacity: .6; cursor: not-allowed; transform: none; filter: none; }
+
+        .spin {
+            width: 16px; height: 16px;
+            border: 2px solid rgba(0,0,0,0.3); border-top-color: #0d1117;
+            border-radius: 50%; animation: spin .7s linear infinite; display: none;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .msg-box {
+            text-align: center; font-size: 13px; padding: 10px;
+            border-radius: 8px; display: none; margin-bottom: 8px;
+        }
+        .msg-box.ok  { display:block; background:rgba(46,160,67,.1);  border:1px solid rgba(46,160,67,.3);  color:#3fb950; }
+        .msg-box.err { display:block; background:rgba(248,81,73,.1); border:1px solid rgba(248,81,73,.3); color:#f85149; }
+
+        .back-link {
+            display: block; text-align: center; margin-top: 4px;
+            color: #58a6ff; font-size: 13px; text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <div class="status-header">
+        <div class="status-badge">
+            <span class="status-dot"></span>
+            <span>PROXY SERVER ONLINE</span>
+        </div>
+        <div class="title">Config Dashboard</div>
+        <div class="subtitle">Atur speed, sensitivity, dan mode patch.</div>
+    </div>
+
+    <!-- SPEED CARD -->
+    <div class="card">
+        <div class="card-header">
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#8b949e" stroke-width="2">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+            CUSTOM SPEED
+            <span class="badge-max" id="speedBadge">MAX 10</span>
+        </div>
+
+        <div class="toggle-row">
+            <span class="toggle-label">Custom Speed</span>
+            <label class="toggle-switch">
+                <input type="checkbox" id="speedToggle" onchange="onToggleSpeed()">
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+        <div class="speed-hint">Default speed = 4.0</div>
+
+        <div class="speed-input-row" id="speedRow">
+            <label>RunSpeed Value</label>
+            <div class="speed-val-box" id="speedDisplay">5,5</div>
+        </div>
+
+        <div class="range-wrap" id="rangeWrap">
+            <input type="range" id="speedSlider" min="0.1" max="10" step="0.1" value="5.5" oninput="onSlide(this)">
+        </div>
+        <div class="range-labels">
+            <span>0.1 slow</span>
+            <span>5.0 normal</span>
+            <span>10 max</span>
+        </div>
+    </div>
+
+    <!-- SENSITIVITY CARD -->
+    <div class="card">
+        <div class="card-header">
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#8b949e" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            SENSITIVITY
+        </div>
+        <div class="sensi-hint">Maks sensitivity per scope · default 9.5 · maks 999.99</div>
+
+        <div class="sensi-grid">
+            <div class="sensi-item">
+                <label>Free Look</label>
+                <input type="number" id="sFree" min="0" max="999.99" step="0.01" value="999">
+            </div>
+            <div class="sensi-item">
+                <label>1P (Hip Fire)</label>
+                <input type="number" id="s1P" min="0" max="999.99" step="0.01" value="999">
+            </div>
+            <div class="sensi-item">
+                <label>Scope ×1</label>
+                <input type="number" id="sX1" min="0" max="999.99" step="0.01" value="999">
+            </div>
+            <div class="sensi-item">
+                <label>Scope ×2</label>
+                <input type="number" id="sX2" min="0" max="999.99" step="0.01" value="999">
+            </div>
+            <div class="sensi-item">
+                <label>Scope ×4</label>
+                <input type="number" id="sX4" min="0" max="999.99" step="0.01" value="999">
+            </div>
+            <div class="sensi-item">
+                <label>Scope ×8</label>
+                <input type="number" id="sX8" min="0" max="999.99" step="0.01" value="999">
+            </div>
+            <div class="sensi-item sensi-full">
+                <label>General Max</label>
+                <input type="number" id="sGen" min="0" max="999.99" step="0.01" value="500">
+            </div>
+        </div>
+    </div>
+
+    <div id="msgBox" class="msg-box"></div>
+
+    <button class="btn-save" id="saveBtn" onclick="saveConfig()">
+        <span class="spin" id="saveSpin"></span>
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" id="saveIcon">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+        </svg>
+        Simpan Config
+    </button>
+
+    <a href="/" class="back-link">← Kembali ke halaman utama</a>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+let speedEnabled = false;
+let currentSpeed = 5.5;
+
+function fmtSpeed(v) {
+    return v.toFixed(1).replace('.', ',');
+}
+
+function onToggleSpeed() {
+    speedEnabled = document.getElementById('speedToggle').checked;
+    document.getElementById('speedRow').style.opacity  = speedEnabled ? '1' : '.4';
+    document.getElementById('rangeWrap').style.opacity = speedEnabled ? '1' : '.4';
+    document.getElementById('speedRow').style.pointerEvents  = speedEnabled ? '' : 'none';
+    document.getElementById('rangeWrap').style.pointerEvents = speedEnabled ? '' : 'none';
+}
+
+function onSlide(el) {
+    currentSpeed = parseFloat(el.value);
+    const pct = ((currentSpeed - 0.1) / (10 - 0.1) * 100).toFixed(1);
+    el.style.setProperty('--pct', pct + '%');
+    document.getElementById('speedDisplay').textContent = fmtSpeed(currentSpeed);
+}
+
+// ── Load config dari server ────────────────────────────────────────────────────
+async function loadConfig() {
+    try {
+        const res = await fetch('/api/config', { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const cfg = await res.json();
+
+        // Speed
+        if (cfg.runSpeed !== null && cfg.runSpeed !== undefined) {
+            speedEnabled = true;
+            currentSpeed = parseFloat(cfg.runSpeed);
+        } else {
+            speedEnabled = false;
+            currentSpeed = 5.5;
+        }
+        const slider = document.getElementById('speedSlider');
+        slider.value = currentSpeed;
+        const pct = ((currentSpeed - 0.1) / (10 - 0.1) * 100).toFixed(1);
+        slider.style.setProperty('--pct', pct + '%');
+        document.getElementById('speedDisplay').textContent = fmtSpeed(currentSpeed);
+        document.getElementById('speedToggle').checked = speedEnabled;
+        onToggleSpeed();
+
+        // Sensi
+        const s = cfg.sensi || {};
+        document.getElementById('sFree').value = s.FreeLookMaxSetting      ?? 999;
+        document.getElementById('s1P').value   = s.Sensitivity1PMaxSetting ?? 999;
+        document.getElementById('sX1').value   = s.X1ScopeMaxSetting       ?? 999;
+        document.getElementById('sX2').value   = s.X2ScopeMaxSetting       ?? 999;
+        document.getElementById('sX4').value   = s.X4ScopeMaxSetting       ?? 999;
+        document.getElementById('sX8').value   = s.X8ScopeMaxSetting       ?? 999;
+        document.getElementById('sGen').value  = s.SensitivityMaxSetting   ?? 500;
+
+    } catch(e) {
+        showMsg('⚠️ Gagal load config: ' + e.message, 'err');
+    }
+}
+
+// ── Save config ke server ──────────────────────────────────────────────────────
+async function saveConfig() {
+    const btn  = document.getElementById('saveBtn');
+    const spin = document.getElementById('saveSpin');
+    const icon = document.getElementById('saveIcon');
+
+    btn.disabled       = true;
+    spin.style.display = 'block';
+    icon.style.display = 'none';
+    showMsg('', '');
+
+    const payload = {
+        runSpeed: speedEnabled ? currentSpeed : null,
+        sensi: {
+            SensitivityMaxSetting:   parseFloat(document.getElementById('sGen').value)  || 9.5,
+            Sensitivity1PMaxSetting: parseFloat(document.getElementById('s1P').value)   || 9.5,
+            X1ScopeMaxSetting:       parseFloat(document.getElementById('sX1').value)   || 9.5,
+            X2ScopeMaxSetting:       parseFloat(document.getElementById('sX2').value)   || 9.5,
+            X4ScopeMaxSetting:       parseFloat(document.getElementById('sX4').value)   || 9.5,
+            X8ScopeMaxSetting:       parseFloat(document.getElementById('sX8').value)   || 9.5,
+            FreeLookMaxSetting:      parseFloat(document.getElementById('sFree').value) || 9.5,
+        }
+    };
+
+    try {
+        const res = await fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showMsg('✅ Config berhasil disimpan! Speed & sensi aktif di game.', 'ok');
+        } else {
+            showMsg('❌ Gagal simpan: ' + (data.error || 'Unknown error'), 'err');
+        }
+    } catch(e) {
+        showMsg('❌ Network error: ' + e.message, 'err');
+    } finally {
+        btn.disabled       = false;
+        spin.style.display = 'none';
+        icon.style.display = '';
+    }
+}
+
+function showMsg(text, type) {
+    const box = document.getElementById('msgBox');
+    box.className = type ? 'msg-box ' + type : 'msg-box';
+    box.textContent = text;
+}
+
+// Slider gradient sync saat init
+document.getElementById('speedSlider').addEventListener('input', function() { onSlide(this); });
+
+document.addEventListener('DOMContentLoaded', loadConfig);
+</script>
+</body>
+</html>
