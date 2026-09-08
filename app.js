@@ -259,7 +259,6 @@ app.get('/Assembly-CSharp-patch.bytes', (req, res) => {
 });
 
 // ============ MODULES INIT ============
-if (modules.config)     modules.config.init(app);   // harus sebelum gamevar
 if (modules.tglog)      modules.tglog.init(app);
 if (modules.protobuf)   modules.protobuf.init(app);
 if (modules.cdn)        modules.cdn.init(app);

@@ -27,6 +27,8 @@ const TELEMETRY_PATHS = [
     '/ReportClientData', '/ClientDataForward',
     '/SecurityReport', '/ReportSecurityEvent',
     '/DataReport', '/DataUploadEvent',
+    '/LogEvent', '/logevent', '/SendEventLog',
+    '/SendEvent', '/EventLog', '/ClientEvent',
 ];
 
 function isTelemetryPath(path) {
@@ -124,6 +126,40 @@ function patchGinUrl(jsonObj) {
         if (ginConf.tp_url     !== undefined) ginConf.tp_url     = '';
 
         console.log(`[GIN-PATCH] CECNLHCONMI patched: ggp_url ${originalGgpUrl} → ${proxyHost}, semua flag GIN/GGP dimatiin`);
+    }
+    return jsonObj;
+}
+
+// ===== EVENT/TELEMETRY URL PATCH =====
+// Field POEPGJPHCMJ (idevent.ggblueshark.com) dan EMFPDECPCDG (idnetwork.ggblueshark.com)
+// di GetLoginData response dipakai game untuk kirim LogEvent (EventTypeAndroidApplicationDetection, dll)
+// langsung bypass proxy. Fix: redirect ke proxy kita supaya bisa di-block di TELEMETRY_PATHS.
+const EVENT_URL_KEY    = 'POEPGJPHCMJ';  // idevent — kirim LogEvent detection
+const NETWORK_URL_KEY  = 'EMFPDECPCDG';  // idnetwork — network event log
+const GATEWAY_URL_KEY  = 'PDJHKBDIHGL';  // sggigateway — gateway bypass
+
+function patchEventUrls(jsonObj) {
+    if (!jsonObj || typeof jsonObj !== 'object') return jsonObj;
+
+    const proxyUrl = MY_IP;  // sudah trailing slash
+
+    // Redirect idevent URL ke proxy (LogEvent akan lewat proxy dan di-block di TELEMETRY_PATHS)
+    if (jsonObj[EVENT_URL_KEY]) {
+        const orig = jsonObj[EVENT_URL_KEY];
+        jsonObj[EVENT_URL_KEY] = proxyUrl;
+        console.log(`[EVENT-PATCH] ${EVENT_URL_KEY}: ${orig} → ${proxyUrl}`);
+    }
+    // Redirect idnetwork URL ke proxy
+    if (jsonObj[NETWORK_URL_KEY]) {
+        const orig = jsonObj[NETWORK_URL_KEY];
+        jsonObj[NETWORK_URL_KEY] = proxyUrl;
+        console.log(`[EVENT-PATCH] ${NETWORK_URL_KEY}: ${orig} → ${proxyUrl}`);
+    }
+    // Null-kan gateway URL
+    if (jsonObj[GATEWAY_URL_KEY]) {
+        const orig = jsonObj[GATEWAY_URL_KEY];
+        jsonObj[GATEWAY_URL_KEY] = proxyUrl;
+        console.log(`[EVENT-PATCH] ${GATEWAY_URL_KEY}: ${orig} → ${proxyUrl}`);
     }
     return jsonObj;
 }
@@ -452,6 +488,7 @@ function createClientProxyWithBanPatch() {
                     if (parsed && typeof parsed === 'object') {
                         patchBanInfo(parsed);
                         patchGinUrl(parsed);
+                        patchEventUrls(parsed);
                         patchMailList(parsed, req.url || '');
                         if (isLoginRewardEndpoint(req.url || '')) {
                             patchLoginReward(parsed, req.url || '');

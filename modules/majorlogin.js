@@ -47,7 +47,6 @@ function decodeReqFields(buf) {
                 if (fieldNum === 29)  out.access_token   = str.substring(0, 20) + '...';
                 if (fieldNum === 57)  out.client_version = str;
                 if (fieldNum === 83)  out.version_code   = str;
-                if (fieldNum === 3)   out.device_id      = str;
                 if (fieldNum === 20)  out.client_ip      = str;
                 if (fieldNum === 11)  out.network_type   = str;
             } else if (wireType === 5) { reader.fixed32();
@@ -176,25 +175,6 @@ function init(app) {
                 const patchLog = [];
                 let modified = false;
 
-                // ── BUGFIX: 404 "account_not_found" → akun guest baru ────────
-                // loginbp.ggpolarbear.com return 404 + JSON {"type":"account_not_found"}
-                // kalau ini akun baru yang belum pernah login di server ini.
-                // Game membaca errMsg → switch ke register flow (tampilkan GenerateNickname).
-                // Solusi: biarkan 404 lewat apa adanya supaya game masuk register screen.
-                // Kalau dipaksain return proto palsu → game crash karena uid=0.
-                // Yang perlu di-fix adalah GenerateNickname & MajorRegister (lihat proxy.js).
-                if (proxyRes.statusCode === 404) {
-                    const bodyStr = buf.toString('utf8');
-                    if (bodyStr.includes('account_not_found')) {
-                        console.log('[MAJORLOGIN] 404 account_not_found → guest/new account, pass-through to trigger register flow');
-                        tglog.send(`ℹ️ <b>MajorLogin</b>\n404 account_not_found — akun baru masuk register flow\nopen_id: ${reqInfo.open_id || '-'}`);
-                        const headers = { ...proxyRes.headers, 'content-length': buf.length };
-                        delete headers['transfer-encoding'];
-                        res.writeHead(404, headers);
-                        return res.end(buf);
-                    }
-                }
-
                 // ── Patch 1: server_url → proxyBase ──────────────────────────
                 // "https://clientbp.ggpolarbear.com" → proxy kita
                 const serverUrls = [
@@ -217,39 +197,21 @@ function init(app) {
                 const tpPrefix = 'csoversea.stronghold.freefiremobile.com';
                 const tpIdx = buf.indexOf(Buffer.from(tpPrefix, 'utf8'));
                 if (tpIdx !== -1) {
+                    // Temukan full string tp_url (sampai null byte atau field berikutnya)
+                    // Caranya: baca mundur untuk length varint, lalu replace whole string dengan ""
+                    // Tapi lebih mudah: replace semua karakter sampai karakter non-printable dengan spasi
+                    // lalu update length varint ke 0 → string kosong
+                    // Implementasi: cari length varint 1 byte sebelum string
                     let lenIdx = tpIdx - 1;
                     if (lenIdx >= 0 && buf[lenIdx] > 0 && buf[lenIdx] < 250) {
                         const oldLen = buf[lenIdx];
-                        buf[lenIdx] = 0;
+                        buf[lenIdx] = 0;  // length = 0 → string kosong
+                        // Zero-out the string bytes
                         for (let i = 0; i < oldLen && tpIdx + i < buf.length; i++) {
                             buf[tpIdx + i] = 0;
                         }
                         modified = true;
                         patchLog.push(`tp_url: dikosongkan (${oldLen} bytes)`);
-                    }
-                }
-
-                // ── Patch 3: ano_url + gin URLs → kosong ──────────────────────
-                // ano_url (field 16) = jalur GIN alternatif yang bisa bypass patch
-                // gin.freefiremobile.com adalah URL GIN yang sering hardcoded
-                const ginPrefixes = [
-                    'gin.freefiremobile.com',
-                    'ffanti.freefiremobile.com',
-                    'grtc.freefiremobile.com',
-                ];
-                for (const prefix of ginPrefixes) {
-                    const gIdx = buf.indexOf(Buffer.from(prefix, 'utf8'));
-                    if (gIdx !== -1) {
-                        let lenIdx2 = gIdx - 1;
-                        if (lenIdx2 >= 0 && buf[lenIdx2] > 0 && buf[lenIdx2] < 250) {
-                            const oldLen2 = buf[lenIdx2];
-                            buf[lenIdx2] = 0;
-                            for (let i = 0; i < oldLen2 && gIdx + i < buf.length; i++) {
-                                buf[gIdx + i] = 0;
-                            }
-                            modified = true;
-                            patchLog.push(`${prefix}: dikosongkan (${oldLen2} bytes)`);
-                        }
                     }
                 }
 

@@ -49,27 +49,6 @@ const gamevarLines = [
   "EnableFileCacherReadOpt_2022,EnableFileCacherReadOpt_2022,bool,false,,",
   "EnableGGPDecryptFailureProtection,EnableGGPDecryptFailureProtection,bool,false,,",
 
-  // ApplicationDetection bypass
-  "EnableApplicationDetection,EnableApplicationDetection,bool,false,,",
-  "ApplicationDetectionInterval,ApplicationDetectionInterval,int,0,,",
-  "EnableAndroidAppDetection,EnableAndroidAppDetection,bool,false,,",
-  "EnableAndroidAppDetectionReport,EnableAndroidAppDetectionReport,bool,false,,",
-  "MaxApplicationDetectionCount,MaxApplicationDetectionCount,int,0,,",
-  "EnableDetectionUpload,EnableDetectionUpload,bool,false,,",
-  "EnableDataUpload,EnableDataUpload,bool,false,,",
-  "EnableAnticheatUpload,EnableAnticheatUpload,bool,false,,",
-  "EnableClientDataForward,EnableClientDataForward,bool,false,,",
-  "ClientDataForwardInterval,ClientDataForwardInterval,int,0,,",
-  "EnableGinReport,EnableGinReport,bool,false,,",
-  "GinReportInterval,GinReportInterval,int,0,,",
-  "EnableGGPReport,EnableGGPReport,bool,false,,",
-
-  // Hacker group bypass
-  "EnableHackerGroup,EnableHackerGroup,bool,false,,",
-  "HackerGroupDetectionLevel,HackerGroupDetectionLevel,int,0,,",
-  "EnableJoinHackerGroup,EnableJoinHackerGroup,bool,false,,",
-  "HackerGroupReportInterval,HackerGroupReportInterval,int,0,,",
-
   "ReportInstantiateJank,ReportInstantiateJank,bool,false,,",
   "InstantiateJankTimeLimit,InstantiateJankTimeLimit,int,0,,",
   "BugReportIntervalOnLowMemory,BugReportIntervalOnLowMemory,int,0,,",
@@ -132,10 +111,7 @@ const gamevarLines = [
 // ============================================================
 const ALLOWED_IPS = ["117.18.20.142"];
 const isGlobalMaintenance = false;
-const _rawUrl = process.env.PROXY_URL
-    || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/` : null)
-    || "https://proxy-reza-kontolodon-memek-luu.up.railway.app/";
-const MY_IP = _rawUrl.endsWith("/") ? _rawUrl : _rawUrl + "/";
+const MY_IP = process.env.PROXY_URL || "https://proxy-reza-kontolodon-memek-luu.up.railway.app/";
 const REDIRECT_URL = "https://whatsapp.com/channel/0029Vb8eX0Z1NCrYCXEXuu0K";
 
 function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
@@ -144,24 +120,24 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
   const CDN_BASE = myDomain + "cdn/";
 
   return {
-    "abhotupdate_cdn_url":               myDomain + "cdn/live/ABHotUpdates/",
+    "abhotupdate_cdn_url":               myDomain + "live/ABHotUpdates/",
     "abhotupdate_check":                 "cache_res",
     "anti_hack_open":                    false,
     "appstore_url":                      REDIRECT_URL,
     "backup_appstore_url":               "",
-    "backup_cdn_url":                    myDomain + "cdn/live/ABHotUpdates/",
+    "backup_cdn_url":                    myDomain + "live/ABHotUpdates/",
     "billboard_bg_url":                  myDomain + "cdn/common/OB23/version/Patch_Bg.png",
     "billboard_cdn_url":                 REDIRECT_URL,
     "billboard_msg":                     "",
     "cdn_active":                        myDomain,
     "cdn_ip_list":                       [],
     "cdn_port":                          6072,
-    "cdn_url":                           myDomain + "cdn/live/ABHotUpdates/",
+    "cdn_url":                           myDomain + "live/ABHotUpdates/",
     "client_ip":                         clientIp,
     "code":                              0,
     "core_ip_list":                      ["0.0.0.0","50.109.27.134","129.226.2.163","129.226.1.13","129.226.1.16"],
     "core_url":                          "csoversea.castle.freefiremobile.com",
-    "country_code":                      "",
+    "country_code":                      "BR",
     "device_whitelist_sp_version":       "1.0.0",
     "device_whitelist_version":          "",
     "whitelist_mask":                    0,
@@ -207,7 +183,7 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
     "max_video":                         "",
     "max_web":                           "",
     "min_hint_size":                     1,
-    "multi_region":                      "",
+    "multi_region":                      "BR",
     "need_check_ip_list":                ["202.81.108.9"],
     "need_track_hotupdate":              true,
     "network_log_server":                myDomain + "api/network_log",
@@ -218,8 +194,8 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
     "remote_option_version":             "optionallocres:50|optionalavatarres:791|optionalclothres:1228|optionalfootballres:27|optionalfullscreencgres:319|optionalhuntinggroundres:246|optionalinfection:125|optionalingameres:503|optionallobbyres:640|optionallonewolfres:86|optionallonewolfstrikeoutres:59|optionalludores:42|optionalmap1res:385|optionalmap2res:156|optionalmap4res:139|optionalmaphippores:118|optionalmapres:357|optionalnewblast:163|optionalpetres:910|optionalrushb:108|optionalrushingpetsres:84|optionalsnowduelres:65|optionalsocialres:223|optionaltrainingres:297|optionalugcres:844|optionalvoiceres:344|optionalwerewolves:153|optionalwerunres:92|optionalmapponyres:204|optionalugcoldparadiseres:34|optionalmultiregionres:29",
     "remote_option_version_astc":        "optionallocres:50|optionalavatarres:753|optionalclothres:1228|optionalfootballres:29|optionalfullscreencgres:306|optionalhuntinggroundres:216|optionalinfection:124|optionalingameres:461|optionallobbyres:640|optionallonewolfres:206|optionallonewolfstrikeoutres:155|optionalludores:175|optionalmap1res:385|optionalmap2res:192|optionalmap4res:175|optionalmaphippores:120|optionalmapres:391|optionalnewblast:162|optionalpetres:910|optionalrushb:241|optionalrushingpetsres:217|optionalsnowduelres:65|optionalsocialres:215|optionaltrainingres:267|optionalugcres:786|optionalvoiceres:379|optionalwerewolves:286|optionalwerunres:81|optionalmapponyres:204|optionalugcoldparadiseres:33|optionalmultiregionres:27",
     "remote_version":                    "2.131.22",
-    "res_url":                           myDomain + "cdn/live/ABHotUpdates/",
-    "server_url":                        "https://loginbp.ggpolarbear.com/",  // loginbp Garena asli
+    "res_url":                           myDomain + "live/ABHotUpdates/",
+    "server_url":                        "https://loginbp.ggpolarbear.com/",
     "should_check_ab_exist":             true,
     "should_check_ab_load":              false,
     "should_check_ab_size":              true,

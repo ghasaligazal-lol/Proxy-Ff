@@ -1,760 +1,305 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rezaa — Proxy Dashboard</title>
-<style>
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxy Active - Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
-:root {
-    --bg:         #070b0f;
-    --surface:    #0d1117;
-    --surface2:   #111820;
-    --surface3:   #161e28;
-    --border:     #1c2530;
-    --border2:    #223040;
-    --text:       #c9d4e0;
-    --muted:      #4e5f70;
-    --muted2:     #38485a;
-    --green:      #00e87e;
-    --green2:     #00c46a;
-    --green-bg:   rgba(0,232,126,0.08);
-    --green-ring: rgba(0,232,126,0.18);
-    --blue:       #3ab4f5;
-    --blue-bg:    rgba(58,180,245,0.08);
-    --amber:      #f5a623;
-    --amber-bg:   rgba(245,166,35,0.09);
-    --red:        #f44262;
-    --red-bg:     rgba(244,66,98,0.09);
-}
+        body {
+            background: radial-gradient(circle at top, rgba(35, 134, 54, 0.10), transparent 35%), #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
 
-html { scroll-behavior: smooth; }
+        .container {
+            width: 100%;
+            max-width: 480px;
+            background: rgba(22, 27, 34, 0.96);
+            border: 1px solid #30363d;
+            border-radius: 18px;
+            padding: 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+        }
 
-body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    min-height: 100vh;
-    padding: 0 0 48px;
-    line-height: 1.5;
-    font-size: 14px;
-}
+        .status-header { text-align: center; margin-bottom: 20px; }
 
-/* ── Scanline overlay ── */
-body::before {
-    content: '';
-    position: fixed; inset: 0; z-index: 0; pointer-events: none;
-    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px);
-}
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(46, 160, 67, 0.13);
+            border: 1px solid rgba(46, 160, 67, 0.4);
+            color: #3fb950;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 7px 14px;
+            border-radius: 20px;
+            margin-bottom: 12px;
+        }
 
-.wrap { max-width: 480px; margin: 0 auto; padding: 0 16px; position: relative; z-index: 1; }
+        .status-dot {
+            width: 8px; height: 8px;
+            background: #3fb950;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(63,185,80,0.8);
+            animation: pulse 2s ease-in-out infinite;
+        }
 
-/* ── Animated Header BG ── */
-.hero-bg {
-    position: relative;
-    padding: 36px 16px 28px;
-    overflow: hidden;
-    text-align: center;
-}
-.hero-bg::before {
-    content: '';
-    position: absolute; inset: 0;
-    background: radial-gradient(ellipse 70% 60% at 50% 0%, rgba(0,232,126,0.12) 0%, transparent 70%);
-    animation: heroPulse 4s ease-in-out infinite;
-}
-@keyframes heroPulse {
-    0%,100% { opacity: 0.7; transform: scaleY(1); }
-    50% { opacity: 1; transform: scaleY(1.1); }
-}
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50%       { opacity: 0.6; transform: scale(0.85); }
+        }
 
-/* ── Status badge ── */
-.badge {
-    display: inline-flex; align-items: center; gap: 7px;
-    background: var(--green-bg);
-    border: 1px solid rgba(0,232,126,0.22);
-    color: var(--green);
-    font-size: 10px; font-weight: 700; letter-spacing: .1em;
-    padding: 5px 13px; border-radius: 20px;
-    margin-bottom: 16px; text-transform: uppercase;
-    position: relative;
-}
-.dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: var(--green);
-    position: relative;
-}
-.dot::after {
-    content: '';
-    position: absolute; inset: -4px;
-    border-radius: 50%;
-    background: var(--green);
-    opacity: 0;
-    animation: ping 2s cubic-bezier(0,0,0.2,1) infinite;
-}
-@keyframes ping {
-    0% { transform: scale(1); opacity: 0.6; }
-    100% { transform: scale(2.4); opacity: 0; }
-}
+        .title    { font-size: 21px; font-weight: 700; color: #f0f6fc; }
+        .subtitle { font-size: 13px; color: #8b949e; margin-top: 6px; }
 
-.logo {
-    font-size: 32px; font-weight: 900; color: #fff;
-    letter-spacing: -1px; line-height: 1;
-    position: relative;
-    text-shadow: 0 0 40px rgba(0,232,126,0.15);
-}
-.logo span { color: var(--green); }
-.tagline { font-size: 12px; color: var(--muted); margin-top: 6px; letter-spacing: .04em; }
+        .card {
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
 
-/* ── Cards ── */
-.card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 16px 18px;
-    margin-bottom: 12px;
-    position: relative;
-    overflow: hidden;
-    transition: border-color .2s;
-}
-.card:hover { border-color: var(--border2); }
-.card::before {
-    content: '';
-    position: absolute; top: 0; left: 0; right: 0; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(0,232,126,0.15), transparent);
-}
+        .card-title { font-size: 13px; font-weight: 600; color: #8b949e; margin-bottom: 12px; }
 
-.card-head {
-    display: flex; align-items: center; gap: 8px;
-    font-size: 10px; font-weight: 700; letter-spacing: .1em;
-    color: var(--muted); text-transform: uppercase;
-    margin-bottom: 14px;
-}
-.card-head svg { opacity: .7; flex-shrink: 0; }
+        .device-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+            padding: 7px 0;
+            border-bottom: 1px solid #21262d;
+            font-size: 13px;
+        }
+        .device-item:last-child { border-bottom: none; }
+        .device-item .label { color: #8b949e; white-space: nowrap; }
+        .device-item .value { font-weight: 500; color: #c9d1d9; word-break: break-all; text-align: right; }
 
-/* ── Info rows ── */
-.info-row {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 9px 0;
-    border-bottom: 1px solid var(--border);
-    font-size: 13px;
-    gap: 12px;
-}
-.info-row:last-child { border-bottom: none; padding-bottom: 0; }
-.info-row .lbl { color: var(--muted); white-space: nowrap; display: flex; align-items: center; gap: 6px; }
-.info-row .val { color: var(--text); font-weight: 600; text-align: right; word-break: break-all; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+        .info-box {
+            background: rgba(234, 179, 8, 0.08);
+            border: 1px solid rgba(234, 179, 8, 0.28);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 16px;
+            font-size: 12px;
+            color: #eab308;
+            line-height: 1.6;
+        }
+        .info-box ul { margin-left: 16px; margin-top: 4px; }
+        .info-box .disclaimer { margin-top: 8px; color: #f87171; }
 
-/* ── Mode selector ── */
-.mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
-.mode-btn {
-    padding: 14px 10px;
-    background: var(--surface2);
-    border: 1.5px solid var(--border2);
-    border-radius: 12px;
-    color: var(--muted);
-    cursor: pointer; text-align: center;
-    transition: all .18s cubic-bezier(.4,0,.2,1);
-    display: flex; flex-direction: column; align-items: center; gap: 6px;
-    position: relative; overflow: hidden;
-}
-.mode-btn::after {
-    content: ''; position: absolute; inset: 0;
-    background: var(--green-bg);
-    opacity: 0; transition: opacity .18s;
-}
-.mode-btn:hover { border-color: var(--green); color: var(--text); }
-.mode-btn:hover::after { opacity: 1; }
-.mode-btn.active {
-    background: var(--green-bg);
-    border-color: var(--green);
-    color: var(--green);
-    box-shadow: 0 0 0 3px var(--green-ring);
-}
-.mode-btn .mode-icon { width: 26px; height: 26px; position: relative; z-index: 1; }
-.mode-btn .mode-name { font-size: 12px; font-weight: 800; position: relative; z-index: 1; }
-.mode-btn .mode-desc { font-size: 10px; color: var(--muted); font-weight: 400; line-height: 1.4; position: relative; z-index: 1; }
-.mode-btn.active .mode-desc { color: rgba(0,232,126,0.65); }
-.mode-btn.active .mode-icon svg { stroke: var(--green); }
+        .community-box {
+            background: rgba(56, 139, 253, 0.08);
+            border: 1px solid rgba(56, 139, 253, 0.25);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 20px;
+            font-size: 12px;
+            color: #58a6ff;
+            line-height: 1.5;
+        }
 
-/* ── Settings rows ── */
-.setting {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--border);
-    gap: 14px;
-}
-.setting:last-child { border-bottom: none; padding-bottom: 0; }
-.setting-info { flex: 1; min-width: 0; }
-.setting-label {
-    font-size: 13px; font-weight: 600; color: #dde8f5;
-    display: flex; align-items: center; gap: 7px;
-}
-.setting-desc { font-size: 11px; color: var(--muted); margin-top: 3px; }
-.setting-ctrl { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .actions { display: flex; flex-direction: column; gap: 11px; }
 
-/* ── Tag ── */
-.tag {
-    font-size: 9px; font-weight: 800; padding: 2px 7px;
-    border-radius: 5px; letter-spacing: .06em; text-transform: uppercase;
-}
-.tag-amber { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245,166,35,0.2); }
-.tag-green { background: var(--green-bg); color: var(--green); border: 1px solid rgba(0,232,126,0.2); }
-.tag-blue  { background: var(--blue-bg);  color: var(--blue);  border: 1px solid rgba(58,180,245,0.2); }
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform .18s ease, filter .18s ease, box-shadow .18s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            color: #fff;
+            text-decoration: none;
+        }
+        .btn:hover  { transform: translateY(-1px); filter: brightness(1.08); }
+        .btn:active { transform: translateY(0); }
 
-/* ── Toggle ── */
-.toggle { position: relative; width: 44px; height: 25px; flex-shrink: 0; }
-.toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
-.toggle-track {
-    position: absolute; inset: 0;
-    background: var(--border2); border-radius: 13px;
-    cursor: pointer; transition: background .2s;
-    border: 1px solid rgba(255,255,255,0.05);
-}
-.toggle-track::after {
-    content: ''; position: absolute;
-    width: 19px; height: 19px; border-radius: 50%;
-    background: #fff; top: 2px; left: 2px;
-    transition: transform .2s cubic-bezier(.4,0,.2,1);
-    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-}
-.toggle input:checked + .toggle-track { background: var(--green); }
-.toggle input:checked + .toggle-track::after { transform: translateX(19px); }
+        .btn-group   { background: #128c4a; border-color: #128c4a; box-shadow: 0 5px 18px rgba(18,140,74,.16); }
+        .btn-channel { background: #25d366; border-color: #25d366; color: #071b0e; box-shadow: 0 5px 18px rgba(37,211,102,.14); }
+        .btn-start   { background: #238636; border-color: #238636; margin-top: 5px; box-shadow: 0 5px 18px rgba(35,134,54,.16); }
+        .btn-start:hover    { background: #2ea043; }
+        .btn-start:disabled { opacity: 0.6; cursor: not-allowed; transform: none; filter: none; }
 
-/* ── Number input ── */
-.num-input {
-    background: var(--surface2);
-    border: 1.5px solid var(--border2);
-    border-radius: 9px;
-    color: var(--text);
-    font-size: 14px; font-weight: 700;
-    padding: 8px 10px;
-    width: 84px; text-align: center;
-    outline: none;
-    transition: border-color .15s, box-shadow .15s;
-    -moz-appearance: textfield;
-    font-family: 'SF Mono', 'Fira Code', monospace;
-}
-.num-input::-webkit-outer-spin-button,
-.num-input::-webkit-inner-spin-button { -webkit-appearance: none; }
-.num-input:focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-ring); }
-.num-input.error { border-color: var(--red) !important; box-shadow: 0 0 0 3px rgba(244,66,98,0.15) !important; }
+        .spin {
+            width: 16px; height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin .7s linear infinite;
+            display: none;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ── Slider ── */
-.speed-slider-wrap { margin-top: 12px; }
-.slider {
-    -webkit-appearance: none; appearance: none;
-    width: 100%; height: 4px;
-    background: var(--border2); border-radius: 2px; outline: none;
-    cursor: pointer;
-}
-.slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 20px; height: 20px; border-radius: 50%;
-    background: var(--green);
-    box-shadow: 0 0 0 3px var(--green-ring), 0 2px 6px rgba(0,0,0,0.4);
-    cursor: pointer; transition: transform .1s;
-}
-.slider::-webkit-slider-thumb:hover { transform: scale(1.12); }
-.slider::-moz-range-thumb {
-    width: 20px; height: 20px; border-radius: 50%;
-    background: var(--green); border: none;
-    box-shadow: 0 0 0 3px var(--green-ring);
-}
-.slider-labels {
-    display: flex; justify-content: space-between;
-    font-size: 10px; color: var(--muted); margin-top: 6px;
-}
-
-/* ── Sensi grid ── */
-.sensi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
-.sensi-item label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 5px; }
-.sensi-item .num-input { width: 100%; text-align: left; }
-
-/* ── Save button ── */
-.btn-save {
-    width: 100%; padding: 15px;
-    background: var(--green);
-    border: none; border-radius: 12px;
-    color: #030d07; font-size: 15px; font-weight: 900;
-    cursor: pointer; letter-spacing: .02em;
-    display: flex; justify-content: center; align-items: center; gap: 9px;
-    transition: filter .15s, transform .1s, box-shadow .15s;
-    margin-top: 4px;
-    box-shadow: 0 4px 24px rgba(0,232,126,0.2);
-    position: relative; overflow: hidden;
-}
-.btn-save::before {
-    content: '';
-    position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 60%);
-    pointer-events: none;
-}
-.btn-save:hover { filter: brightness(1.08); box-shadow: 0 6px 32px rgba(0,232,126,0.32); }
-.btn-save:active { transform: scale(.98); }
-.btn-save:disabled { opacity: .45; cursor: not-allowed; transform: none; filter: none; box-shadow: none; }
-
-/* ── Spin ── */
-.spin {
-    width: 17px; height: 17px;
-    border: 2.5px solid rgba(3,13,7,.25);
-    border-top-color: #030d07;
-    border-radius: 50%;
-    animation: rot .6s linear infinite;
-    display: none; flex-shrink: 0;
-}
-@keyframes rot { to { transform: rotate(360deg); } }
-
-/* ── Secondary buttons ── */
-.btn-row { display: flex; gap: 9px; margin-top: 12px; }
-.btn-sm {
-    flex: 1; padding: 11px 8px;
-    background: var(--surface); border: 1px solid var(--border2);
-    border-radius: 10px; color: var(--muted);
-    font-size: 12px; font-weight: 700; cursor: pointer;
-    display: flex; align-items: center; justify-content: center; gap: 6px;
-    transition: border-color .15s, background .15s, color .15s;
-    text-decoration: none;
-}
-.btn-sm:hover { border-color: var(--green); background: var(--green-bg); color: var(--green); }
-.btn-sm svg { flex-shrink: 0; }
-
-/* ── Toast ── */
-.toast {
-    position: fixed; bottom: 24px; left: 50%;
-    transform: translateX(-50%) translateY(90px);
-    background: var(--surface2);
-    border: 1px solid var(--border2);
-    border-radius: 12px; padding: 12px 20px;
-    font-size: 13px; font-weight: 600;
-    box-shadow: 0 12px 40px rgba(0,0,0,.6);
-    display: flex; align-items: center; gap: 10px;
-    transition: transform .3s cubic-bezier(.34,1.56,.64,1), opacity .2s;
-    opacity: 0; pointer-events: none; white-space: nowrap; z-index: 99;
-}
-.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
-.toast.ok  { border-color: rgba(0,232,126,.35); color: var(--green); }
-.toast.err { border-color: rgba(244,66,98,.35); color: var(--red); }
-
-/* ── Speed panel animation ── */
-#speedPanel { overflow: hidden; transition: max-height .25s cubic-bezier(.4,0,.2,1), opacity .2s; max-height: 0; opacity: 0; padding-top: 0 !important; }
-#speedPanel.open { max-height: 160px; opacity: 1; padding-top: 12px !important; }
-</style>
+        .msg-box {
+            text-align: center;
+            font-size: 13px;
+            margin-top: 12px;
+            padding: 10px;
+            border-radius: 8px;
+            display: none;
+        }
+        .msg-box.success { display: block; background: rgba(46,160,67,.1); border: 1px solid rgba(46,160,67,.3); color: #3fb950; }
+        .msg-box.error   { display: block; background: rgba(248,81,73,.1); border: 1px solid rgba(248,81,73,.3); color: #f85149; }
+    </style>
 </head>
+
 <body>
-<div class="wrap">
+<div class="container">
 
-    <div class="hero-bg">
-        <div class="badge">
-            <span class="dot"></span> Server Online
+    <div class="status-header">
+        <div class="status-badge">
+            <span class="status-dot"></span>
+            <span>PROXY SERVER ONLINE</span>
         </div>
-        <div class="logo">PROXY — Reza<span>Nih</span></div>
-        <div class="tagline">Game Config Dashboard</div>
+        <div class="title">Proxy Access Portal</div>
+        <div class="subtitle">Your proxy connection is ready to use immediately.</div>
     </div>
 
-    <!-- Device Info -->
     <div class="card">
-        <div class="card-head">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="18" r="1"/></svg>
-            Device Info
+        <div class="card-title">DEVICE INFORMATION</div>
+        <div class="device-item">
+            <span class="label">IP Address</span>
+            <span class="value" id="deviceIp">Loading...</span>
         </div>
-        <div class="info-row">
-            <span class="lbl">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                IP Address
-            </span>
-            <span class="val" id="dIp">—</span>
+        <div class="device-item">
+            <span class="label">Device</span>
+            <span class="value" id="deviceName">Loading...</span>
         </div>
-        <div class="info-row">
-            <span class="lbl">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                Kota
-            </span>
-            <span class="val" id="dCity">—</span>
+        <div class="device-item">
+            <span class="label">Platform</span>
+            <span class="value" id="devicePlatform">Loading...</span>
         </div>
-        <div class="info-row">
-            <span class="lbl">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="18" r="1"/></svg>
-                Device
-            </span>
-            <span class="val" id="dDev">—</span>
-        </div>
-        <div class="info-row">
-            <span class="lbl">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                Platform
-            </span>
-            <span class="val" id="dPlat">—</span>
-        </div>
-        <div class="info-row">
-            <span class="lbl">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="16" height="10" rx="2"/><path d="M22 11v2"/></svg>
-                Baterai
-            </span>
-            <span class="val" id="dBatt">—</span>
-        </div>
-        <div class="info-row">
-            <span class="lbl">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
-                ISP
-            </span>
-            <span class="val" id="dIsp">—</span>
+        <div class="device-item">
+            <span class="label">Browser</span>
+            <span class="value" id="deviceUa">Loading...</span>
         </div>
     </div>
 
-    <!-- Body Mode -->
-    <div class="card">
-        <div class="card-head">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-            Body Mode
-        </div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Pilih mode untuk client</div>
-        <div class="mode-grid">
-            <button class="mode-btn active" id="mode_full" onclick="setMode('full')">
-                <span class="mode-icon">
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4e5f70" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="icon_full"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                </span>
-                <span class="mode-name">Full Mod</span>
-                <span class="mode-desc">Speed · Sensi · Anti-ban flags inject</span>
-            </button>
-            <button class="mode-btn" id="mode_hs_only" onclick="setMode('hs_only')">
-                <span class="mode-icon">
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4e5f70" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="icon_hs"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="14.5" y2="14.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
-                </span>
-                <span class="mode-name">HS Only</span>
-                <span class="mode-desc">Hanya body headshoot</span>
-            </button>
+    <div class="info-box">
+        <strong>Update V4 Features:</strong>
+        <ul>
+            <li>Speed Run</li>
+            <li>Body Headshot</li>
+            <li>High Sensitivity</li>
+        </ul>
+        <div class="disclaimer">
+            <strong>DISCLAIMER:</strong>
+            Using a primary account is strongly discouraged.
+            All risks regarding account bans or penalties are solely the user's responsibility.
         </div>
     </div>
 
-    <!-- Speed Settings -->
-    <div class="card" id="speedCard">
-        <div class="card-head">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-            Run Speed
-        </div>
-        <div class="setting">
-            <div class="setting-info">
-                <div class="setting-label">
-                    Custom Speed
-                    <span class="tag tag-amber">MAX 10</span>
-                </div>
-                <div class="setting-desc">Default speed = 4.0</div>
-            </div>
-            <div class="setting-ctrl">
-                <label class="toggle">
-                    <input type="checkbox" id="speedToggle" onchange="onSpeedToggle()">
-                    <span class="toggle-track"></span>
-                </label>
-            </div>
-        </div>
-        <div id="speedPanel" style="padding-top:0;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                <span style="font-size:12px;color:var(--muted)">RunSpeed Value</span>
-                <input type="number" class="num-input" id="speedVal"
-                    min="0.1" max="10" step="0.1" value="4.0"
-                    oninput="syncSlider()">
-            </div>
-            <input type="range" class="slider" id="speedSlider"
-                min="0.1" max="10" step="0.1" value="4.0"
-                oninput="syncInput()">
-            <div class="slider-labels">
-                <span>0.1 slow</span>
-                <span>5.0 normal</span>
-                <span>10 max</span>
-            </div>
+    <div class="community-box">
+        <strong>Join Our Community:</strong>
+        <div style="margin-top:4px;">
+            Join our official WhatsApp group and channel to receive
+            faster update announcements and support.
         </div>
     </div>
 
-    <!-- Sensitivity -->
-    <div class="card" id="sensiCard">
-        <div class="card-head">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="14.5" y2="14.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
-            Sensitivity
-        </div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Maks sensitivity per scope · default 9.5 · maks 999.99</div>
-        <div class="sensi-grid">
-            <div class="sensi-item">
-                <label>Free Look</label>
-                <input type="number" class="num-input" id="s_FreeLook" min="1" max="999.99" step="0.1" value="9.5">
-            </div>
-            <div class="sensi-item">
-                <label>1P (Hip Fire)</label>
-                <input type="number" class="num-input" id="s_1P" min="1" max="999.99" step="0.1" value="9.5">
-            </div>
-            <div class="sensi-item">
-                <label>Scope ×1</label>
-                <input type="number" class="num-input" id="s_X1" min="1" max="999.99" step="0.1" value="9.5">
-            </div>
-            <div class="sensi-item">
-                <label>Scope ×2</label>
-                <input type="number" class="num-input" id="s_X2" min="1" max="999.99" step="0.1" value="9.5">
-            </div>
-            <div class="sensi-item">
-                <label>Scope ×4</label>
-                <input type="number" class="num-input" id="s_X4" min="1" max="999.99" step="0.1" value="9.5">
-            </div>
-            <div class="sensi-item">
-                <label>Scope ×8</label>
-                <input type="number" class="num-input" id="s_X8" min="1" max="999.99" step="0.1" value="9.5">
-            </div>
-            <div class="sensi-item" style="grid-column:1/-1">
-                <label>General Max</label>
-                <input type="number" class="num-input" id="s_General" min="1" max="999.99" step="0.1" value="9.5" style="width:100%">
-            </div>
-        </div>
-    </div>
-
-    <!-- Save -->
-    <button class="btn-save" id="saveBtn" onclick="saveConfig()">
-        <span class="spin" id="saveSpin"></span>
-        <svg id="saveIcon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#030d07" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-        <span id="saveLabel">Simpan Config</span>
-    </button>
-
-    <!-- Action buttons -->
-    <div class="btn-row">
-        <a href="https://chat.whatsapp.com/BTA9WjmjtO43DDMmqRMKVJ?s=cl&p=a&mlu=4" target="_blank" class="btn-sm">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            WA Group
+    <div class="actions">
+        <a href="https://chat.whatsapp.com/BTA9WjmjtO43DDMmqRMKVJ?s=cl&p=a&mlu=4"
+           target="_blank" rel="noopener noreferrer" class="btn btn-group">
+            <span>Join WhatsApp Group</span>
         </a>
-        <a href="https://whatsapp.com/channel/0029Vb8eX0Z1NCrYCXEXuu0K" target="_blank" class="btn-sm">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-            Channel
+
+        <a href="https://whatsapp.com/channel/0029Vb8eX0Z1NCrYCXEXuu0K"
+           target="_blank" rel="noopener noreferrer" class="btn btn-channel">
+            <span>Join WhatsApp Channel</span>
         </a>
-        <button class="btn-sm" onclick="downloadConfig()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            localconfig
+
+        <button type="button" class="btn btn-start" id="dlBtn" onclick="downloadConfig()">
+            <span class="spin" id="dlSpin"></span>
+            <span id="dlLabel">DOWNLOAD FILES</span>
         </button>
     </div>
 
+    <div id="msgBox" class="msg-box"></div>
+
 </div>
 
-<div class="toast" id="toast"></div>
-
 <script>
-const PROXY_URL = window.location.origin + '/';
+    const NEW_PROXY_URL = "https://proxy-reza-kontolodon-memek-luu.up.railway.app/";
 
-function showToast(msg, type = 'ok', dur = 2800) {
-    const t = document.getElementById('toast');
-    const icon = type === 'ok'
-        ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
-        : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
-    t.innerHTML = icon + msg;
-    t.className = `toast ${type} show`;
-    clearTimeout(t._t);
-    t._t = setTimeout(() => { t.className = 'toast'; }, dur);
-}
-
-function onSpeedToggle() {
-    const on = document.getElementById('speedToggle').checked;
-    const panel = document.getElementById('speedPanel');
-    panel.classList.toggle('open', on);
-}
-
-function syncSlider() {
-    const v = parseFloat(document.getElementById('speedVal').value);
-    if (!isNaN(v)) document.getElementById('speedSlider').value = Math.min(10, Math.max(0.1, v));
-}
-function syncInput() {
-    document.getElementById('speedVal').value = document.getElementById('speedSlider').value;
-}
-
-let _currentMode = 'full';
-function setMode(mode) {
-    _currentMode = mode;
-    ['full','hs_only'].forEach(m => {
-        document.getElementById('mode_'+m).classList.toggle('active', m === mode);
-    });
-    const iconFull = document.getElementById('icon_full');
-    const iconHs   = document.getElementById('icon_hs');
-    if (mode === 'full') {
-        iconFull.setAttribute('stroke', 'var(--green)');
-        iconHs.setAttribute('stroke', '#4e5f70');
-    } else {
-        iconFull.setAttribute('stroke', '#4e5f70');
-        iconHs.setAttribute('stroke', 'var(--green)');
-    }
-    const isFull = mode === 'full';
-    ['speedCard','sensiCard'].forEach(id => {
-        const el = document.getElementById(id);
-        el.style.opacity = isFull ? '1' : '0.45';
-        el.style.pointerEvents = isFull ? '' : 'none';
-    });
-}
-
-async function loadConfig() {
-    try {
-        const r = await fetch('/api/config');
-        const d = await r.json();
-        if (d.bodyMode) setMode(d.bodyMode);
-        if (d.runSpeed != null) {
-            document.getElementById('speedToggle').checked = true;
-            document.getElementById('speedPanel').classList.add('open');
-            document.getElementById('speedVal').value = d.runSpeed;
-            document.getElementById('speedSlider').value = d.runSpeed;
+    async function fetchDeviceInfo() {
+        try {
+            const res = await fetch('/api/device');
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            document.getElementById('deviceIp').textContent       = data.ip        || '127.0.0.1';
+            document.getElementById('deviceName').textContent     = data.device    || 'Android';
+            document.getElementById('devicePlatform').textContent = data.platform  || 'Linux armv8l';
+            document.getElementById('deviceUa').textContent       = data.userAgent || navigator.userAgent;
+        } catch (_) {
+            document.getElementById('deviceIp').textContent       = '127.0.0.1';
+            document.getElementById('deviceName').textContent     = navigator.platform || 'Android';
+            document.getElementById('devicePlatform').textContent = navigator.userAgentData
+                ? navigator.userAgentData.platform : 'Mobile';
+            document.getElementById('deviceUa').textContent = navigator.userAgent;
         }
-        const s = d.sensi || {};
-        setVal('s_General',  s.SensitivityMaxSetting,   9.5);
-        setVal('s_1P',       s.Sensitivity1PMaxSetting, 9.5);
-        setVal('s_X1',       s.X1ScopeMaxSetting,       9.5);
-        setVal('s_X2',       s.X2ScopeMaxSetting,       9.5);
-        setVal('s_X4',       s.X4ScopeMaxSetting,       9.5);
-        setVal('s_X8',       s.X8ScopeMaxSetting,       9.5);
-        setVal('s_FreeLook', s.FreeLookMaxSetting,       9.5);
-    } catch(e) { console.warn('Load config:', e); }
-}
-
-function setVal(id, v, def) {
-    document.getElementById(id).value = (v != null) ? v : def;
-}
-
-async function saveConfig() {
-    const btn   = document.getElementById('saveBtn');
-    const spin  = document.getElementById('saveSpin');
-    const icon  = document.getElementById('saveIcon');
-    const label = document.getElementById('saveLabel');
-    const speedOn  = document.getElementById('speedToggle').checked;
-    const speedRaw = parseFloat(document.getElementById('speedVal').value);
-    if (speedOn && (isNaN(speedRaw) || speedRaw < 0.1 || speedRaw > 10)) {
-        document.getElementById('speedVal').classList.add('error');
-        showToast('Speed harus 0.1 – 10', 'err');
-        return;
-    }
-    document.getElementById('speedVal').classList.remove('error');
-    const payload = {
-        bodyMode: _currentMode,
-        runSpeed: speedOn ? speedRaw : null,
-        sensi: {
-            SensitivityMaxSetting:   getNum('s_General',  9.5),
-            Sensitivity1PMaxSetting: getNum('s_1P',       9.5),
-            X1ScopeMaxSetting:       getNum('s_X1',       9.5),
-            X2ScopeMaxSetting:       getNum('s_X2',       9.5),
-            X4ScopeMaxSetting:       getNum('s_X4',       9.5),
-            X8ScopeMaxSetting:       getNum('s_X8',       9.5),
-            FreeLookMaxSetting:      getNum('s_FreeLook',  9.5),
-        }
-    };
-    btn.disabled = true;
-    spin.style.display = 'block';
-    icon.style.display = 'none';
-    label.textContent = 'Menyimpan...';
-    try {
-        const r = await fetch('/api/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const d = await r.json();
-        if (d.ok) {
-            showToast('Config tersimpan!', 'ok', 3500);
-            await loadConfig();
-        } else {
-            showToast('Gagal simpan: ' + (d.error || '?'), 'err');
-        }
-    } catch(e) {
-        showToast('Network error: ' + e.message, 'err');
-    } finally {
-        btn.disabled = false;
-        spin.style.display = 'none';
-        icon.style.display = 'block';
-        label.textContent = 'Simpan Config';
-    }
-}
-
-function getNum(id, def) {
-    const v = parseFloat(document.getElementById(id).value);
-    return (!isNaN(v) && v >= 0) ? Math.min(999.99, v) : def;
-}
-
-async function loadDevice() {
-    // ── Device name — ambil dari UA client-side (lebih akurat dari server) ──
-    // FF WebView UA format: "Dalvik/... (Linux; U; Android X.X; <MODEL> Build/...)"
-    // atau browser: "Mozilla/... (Linux; Android X; <MODEL>) AppleWebKit/..."
-    function getDeviceName() {
-        const ua = navigator.userAgent;
-        // Android: ambil model dari dalam kurung
-        let m = ua.match(/\(Linux;\s*(?:U;\s*)?Android\s*[\d.]+;\s*([^)]+?)\s*(?:Build\/[^)]+)?\)/i);
-        if (m) {
-            let model = m[1].trim();
-            // Buang "wv" suffix WebView
-            model = model.replace(/\s*wv\s*$/i, '').trim();
-            if (model && model !== 'armv8l' && !model.startsWith('Linux')) return model;
-        }
-        // Fallback: coba format Dalvik
-        m = ua.match(/;\s*([A-Za-z0-9 _\-]+?)\s*Build\//i);
-        if (m) {
-            const model = m[1].trim();
-            if (model && model.length > 2 && !model.startsWith('Android') && model !== 'armv8l') return model;
-        }
-        // iPhone
-        if (/iPhone/i.test(ua)) return 'iPhone';
-        if (/iPad/i.test(ua))   return 'iPad';
-        return 'Android Device';
     }
 
-    function getPlatform() {
-        const ua = navigator.userAgent;
-        if (/Android/i.test(ua)) return 'Android';
-        if (/iPhone|iPad/i.test(ua)) return 'iOS';
-        if (/Windows/i.test(ua)) return 'Windows';
-        return navigator.platform || 'Other';
-    }
+    async function downloadConfig() {
+        const msgBox = document.getElementById('msgBox');
+        const btn    = document.getElementById('dlBtn');
+        const spin   = document.getElementById('dlSpin');
+        const label  = document.getElementById('dlLabel');
 
-    document.getElementById('dDev').textContent  = getDeviceName();
-    document.getElementById('dPlat').textContent = getPlatform();
+        btn.disabled       = true;
+        spin.style.display = 'block';
+        label.textContent  = 'Preparing...';
+        msgBox.className   = 'msg-box success';
+        msgBox.textContent = 'Mengambil localconfig.json dari server...';
 
-    // ── IP + Geo dari server ──
-    try {
-        const r = await fetch('/api/device');
-        const d = await r.json();
-        document.getElementById('dIp').textContent   = d.ip || '—';
-        document.getElementById('dCity').textContent = d.city && d.country ? `${d.city}, ${d.country}` : (d.city || '—');
-        document.getElementById('dIsp').textContent  = d.isp || '—';
-    } catch(_) {
-        document.getElementById('dIp').textContent   = '—';
-        document.getElementById('dCity').textContent = '—';
-        document.getElementById('dIsp').textContent  = '—';
-    }
+        try {
+            const response = await fetch('/localconfig.json', { cache: 'no-store' });
 
-    // ── Baterai — Battery Status API ──
-    try {
-        if ('getBattery' in navigator) {
-            const batt = await navigator.getBattery();
-            function updateBatt(b) {
-                const pct    = Math.round(b.level * 100);
-                const status = b.charging ? '⚡ Charging' : (pct <= 20 ? '🔴' : pct <= 50 ? '🟡' : '🟢');
-                document.getElementById('dBatt').textContent = `${status} ${pct}%`;
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status} — localconfig.json tidak ditemukan`);
             }
-            updateBatt(batt);
-            batt.addEventListener('levelchange',    () => updateBatt(batt));
-            batt.addEventListener('chargingchange', () => updateBatt(batt));
-        } else {
-            document.getElementById('dBatt').textContent = 'Tidak didukung';
+
+            const config = await response.json();
+            config.verAddr = NEW_PROXY_URL;
+
+            const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement('a');
+            a.href     = url;
+            a.download = 'localconfig.json';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+
+            msgBox.className   = 'msg-box success';
+            msgBox.textContent = '✅ localconfig.json berhasil dibuat dan didownload.';
+            setTimeout(() => { msgBox.className = 'msg-box'; }, 3500);
+
+        } catch (err) {
+            console.error(err);
+            msgBox.className   = 'msg-box error';
+            msgBox.textContent = '❌ ' + err.message;
+        } finally {
+            btn.disabled       = false;
+            spin.style.display = 'none';
+            label.textContent  = 'DOWNLOAD FILES';
         }
-    } catch(_) {
-        document.getElementById('dBatt').textContent = '—';
     }
-}
 
-async function downloadConfig() {
-    try {
-        const r = await fetch('/localconfig.json', { cache: 'no-store' });
-        if (!r.ok) throw new Error('localconfig.json tidak ditemukan');
-        const cfg = await r.json();
-        cfg.verAddr = cfg.verAddr || PROXY_URL;
-        const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
-        const a = Object.assign(document.createElement('a'), {
-            href: URL.createObjectURL(blob), download: 'localconfig.json'
-        });
-        document.body.appendChild(a); a.click(); a.remove();
-        showToast('localconfig.json didownload', 'ok');
-    } catch(e) { showToast(e.message, 'err'); }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    loadDevice();
-    loadConfig();
-});
+    document.addEventListener('DOMContentLoaded', fetchDeviceInfo);
 </script>
 </body>
 </html>
