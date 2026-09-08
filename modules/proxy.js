@@ -33,6 +33,8 @@ const TELEMETRY_PATHS = [
     '/grtc/report', '/grtc/validate', '/grtc/sdk',
     '/sdk/validate', '/sdk/report', '/sdk/check',
     '/noop',
+    // vodka.freefiremobile.com CDN upload/report
+    '/vodka', '/vodka/report', '/vodka/upload',
     // Catch idevent & idnetwork yang diredirect ke proxy
     '/report', '/Report',
 ];
@@ -58,6 +60,7 @@ function isTelemetryPath(path) {
         lower.includes('/ggp/') ||
         lower.includes('/grtc/') ||
         lower.includes('/sdk/') ||
+        lower.includes('/vodka') ||
         lower.includes('validate') ||
         lower.includes('noop') ||
         (lower.includes('report') && lower.includes('event'))
@@ -110,15 +113,20 @@ function patchGinUrl(jsonObj) {
         ginConf.is_ggp_active        = false;
         ginConf.enable_gin           = false;
         ginConf.enable_ggp           = false;
+        ginConf.first_login          = false;
+        // Nullify content field (berisi capability flags anticheat)
+        if (ginConf.content  !== undefined) ginConf.content  = '';
+        if (ginConf.ut_flag  !== undefined) ginConf.ut_flag  = 0;
         if (ginConf.ggp_port !== undefined) ginConf.ggp_port = 0;
         if (ginConf.gin_port !== undefined) ginConf.gin_port = 0;
 
         // Set URL ke string kosong supaya DNS resolve GAGAL — GIN tidak bisa konek TCP
         ginConf.ggp_url = '0.0.0.0';
-        if (ginConf.gin_url   !== undefined) ginConf.gin_url   = '0.0.0.0';
+        if (ginConf.gin_url    !== undefined) ginConf.gin_url    = '0.0.0.0';
         if (ginConf.ffanti_url !== undefined) ginConf.ffanti_url = '';
         if (ginConf.grtc_url   !== undefined) ginConf.grtc_url   = '';
         if (ginConf.tp_url     !== undefined) ginConf.tp_url     = '';
+        if (ginConf.report_url !== undefined) ginConf.report_url = '';
 
         console.log(`[GIN-PATCH] CECNLHCONMI patched: ggp_url ${originalGgpUrl} → 0.0.0.0 (dead), semua flag GIN/GGP dimatiin`);
     }
@@ -130,25 +138,27 @@ const EVENT_URL_KEY    = 'POEPGJPHCMJ';  // idevent.ggblueshark.com
 const NETWORK_URL_KEY  = 'EMFPDECPCDG';  // idnetwork.ggblueshark.com
 const GATEWAY_URL_KEY  = 'PDJHKBDIHGL';  // sggigateway.ggblueshark.com
 
+// IIPKMIOFCJP = vodka.freefiremobile.com (CDN report/upload endpoint)
+const VODKA_URL_KEY = 'IIPKMIOFCJP';
+
 function patchEventUrls(jsonObj) {
     if (!jsonObj || typeof jsonObj !== 'object') return jsonObj;
 
-    const proxyUrl = MY_IP;
+    const noopUrl = MY_IP.replace(/\/$/, '') + '/noop';
 
-    if (jsonObj[EVENT_URL_KEY]) {
-        const orig = jsonObj[EVENT_URL_KEY];
-        jsonObj[EVENT_URL_KEY] = proxyUrl;
-        console.log(`[EVENT-PATCH] ${EVENT_URL_KEY}: ${orig} → ${proxyUrl}`);
-    }
-    if (jsonObj[NETWORK_URL_KEY]) {
-        const orig = jsonObj[NETWORK_URL_KEY];
-        jsonObj[NETWORK_URL_KEY] = proxyUrl;
-        console.log(`[EVENT-PATCH] ${NETWORK_URL_KEY}: ${orig} → ${proxyUrl}`);
-    }
-    if (jsonObj[GATEWAY_URL_KEY]) {
-        const orig = jsonObj[GATEWAY_URL_KEY];
-        jsonObj[GATEWAY_URL_KEY] = proxyUrl;
-        console.log(`[EVENT-PATCH] ${GATEWAY_URL_KEY}: ${orig} → ${proxyUrl}`);
+    const urlKillMap = {
+        [EVENT_URL_KEY]:   noopUrl,  // idevent.ggblueshark.com
+        [NETWORK_URL_KEY]: noopUrl,  // idnetwork.ggblueshark.com
+        [GATEWAY_URL_KEY]: noopUrl,  // sggigateway.ggblueshark.com
+        [VODKA_URL_KEY]:   noopUrl,  // vodka.freefiremobile.com (CDN upload)
+    };
+
+    for (const [key, replacement] of Object.entries(urlKillMap)) {
+        if (jsonObj[key] !== undefined && jsonObj[key] !== '') {
+            const orig = jsonObj[key];
+            jsonObj[key] = replacement;
+            console.log(`[EVENT-PATCH] ${key}: ${String(orig).substring(0,50)} → ${replacement}`);
+        }
     }
     return jsonObj;
 }
@@ -165,11 +175,13 @@ function patchGrtcUrl(jsonObj) {
     if (!jsonObj || typeof jsonObj !== 'object') return jsonObj;
     if (jsonObj[GRTC_URL_KEY] !== undefined && jsonObj[GRTC_URL_KEY] !== '') {
         const orig = jsonObj[GRTC_URL_KEY];
-        // Set ke empty string → SDK tidak punya target untuk connect
+        // LJAPOJNBOFE format: "domain1;domain2;ip1,ip2"
+        // SDK pakai IP hardcode (124.158.134.7, 124.158.135.168) untuk bypass DNS.
+        // Set ke empty string → SDK tidak punya target untuk connect sama sekali.
         jsonObj[GRTC_URL_KEY] = '';
-        console.log(`[GRTC-PATCH] ${GRTC_URL_KEY}: "${String(orig).substring(0,50)}..." → ""`);
+        console.log(`[GRTC-PATCH] ${GRTC_URL_KEY}: "${String(orig).substring(0,60)}..." → ""`);
     }
-    // Kill semua field SDK tambahan
+    // Kill semua field SDK tambahan yang mungkin jadi fallback
     const SDK_KILL_FIELDS = [
         'FFANTIHACK_URL', 'ffanti_url', 'grtc_url', 'tp_url',
         'sdk_url', 'report_url', 'validate_url',
@@ -487,15 +499,50 @@ function applyAllJsonPatches(parsed, urlPath) {
     patchBanInfo(parsed);
     patchGinUrl(parsed);
     patchEventUrls(parsed);
-    patchGrtcUrl(parsed);          // FIX #4: LJAPOJNBOFE
-    patchTracerouteList(parsed);   // FOGGNIHIBPG
-    patchServerNodeList(parsed);   // HDNAPFEGDGG
+    patchGrtcUrl(parsed);          // LJAPOJNBOFE (GRTC SDK URL list + hardcoded IPs)
+    patchTracerouteList(parsed);   // FOGGNIHIBPG (UDP probe list)
+    patchServerNodeList(parsed);   // HDNAPFEGDGG (server node IP list)
     patchMailList(parsed, urlPath);
     if (isLoginRewardEndpoint(urlPath)) {
         patchLoginReward(parsed, urlPath);
     }
     skin.patchSkinData(parsed, urlPath);
+    // Deep scan: cari field string yang masih mengandung domain Garena anticheat
+    patchDeepUrls(parsed);
     return parsed;
+}
+
+// ===== DEEP URL SCAN =====
+// Scan semua field string di root JSON, kill yang mengandung domain anticheat Garena.
+// Ini safety net untuk field obfuscated yang belum diketahui.
+const GARENA_KILL_DOMAINS = [
+    'grtc.garenanow.com', 'ggblueshark.com', 'gin.freefiremobile.com',
+    'ffanti.', 'ggpolarbear.com/gin', 'ggpolarbear.com/ggp',
+    '124.158.134.7', '124.158.135.168',  // hardcoded SDK backup IPs
+    'stronghold.freefiremobile.com',      // tp_url
+];
+// Whitelist: field yang TIDAK boleh di-kill meski mengandung domain Garena
+const DEEP_SCAN_WHITELIST = new Set([
+    'KOJALAPNGIP', 'BBENMPPNNEH',  // lobby/chat server IP:port (game need these)
+    'POEPGJPHCMJ', 'EMFPDECPCDG', 'PDJHKBDIHGL', 'IIPKMIOFCJP', // sudah dihandle patchEventUrls
+    'LJAPOJNBOFE', 'CECNLHCONMI',  // sudah dihandle patch tersendiri
+]);
+
+function patchDeepUrls(obj, depth) {
+    if (!obj || typeof obj !== 'object' || (depth || 0) > 3) return;
+    for (const key of Object.keys(obj)) {
+        if (DEEP_SCAN_WHITELIST.has(key)) continue;
+        const val = obj[key];
+        if (typeof val === 'string' && val.length > 0) {
+            const lower = val.toLowerCase();
+            if (GARENA_KILL_DOMAINS.some(d => lower.includes(d))) {
+                console.log(`[DEEP-PATCH] ${key}: "${val.substring(0,50)}" → ""`);
+                obj[key] = '';
+            }
+        } else if (val && typeof val === 'object') {
+            patchDeepUrls(val, (depth || 0) + 1);
+        }
+    }
 }
 
 // ===== clientProxy: selfHandleResponse untuk patch JSON =====
@@ -718,4 +765,4 @@ function init(app) {
     console.log('[PROXY] Client: ' + GARENA_CLIENT_SERVER);
 }
 
-module.exports = { init, loginProxy, clientProxy };
+module.exports = { init, loginProxy, clientProxy, applyAllJsonPatches, patchImageUrls };

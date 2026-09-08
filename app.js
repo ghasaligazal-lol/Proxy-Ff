@@ -65,6 +65,7 @@ const SPOOF_PATHS = [
     '/GinReport', '/gin/report', '/api/gin',
     '/gin/connect', '/gin/keepalive', '/gin/disconnect',
     '/gin/upload', '/gin/batch',
+    '/vodka', '/vodka/report', '/vodka/upload',
     '/GGP', '/ggp/report',
     '/GGPReport', '/ggp/upload',
     '/ggp/connect', '/ggp/keepalive',
@@ -114,6 +115,7 @@ app.all('*', (req, res, next) => {
         lower.includes('checkhack') ||
         lower.includes('/gin/') ||
         lower.includes('/ggp/') ||
+        lower.includes('/vodka') ||
         lower.includes('ginreport') ||
         lower.includes('ggpreport') ||
         lower.includes('ggpupload') ||
@@ -124,87 +126,34 @@ app.all('*', (req, res, next) => {
     next();
 });
 
-// ============ PROXY /GetLoginData (GIN + BAN PATCH) ============
-app.post('/GetLoginData', (req, res) => {
+// ============ PROXY /GetLoginData (GIN + BAN PATCH — consolidated) ============
+// NOTE: Semua patch di-delegate ke applyAllJsonPatches() dari proxy.js
+// supaya patch set selalu sinkron dan tidak duplikat.
+app.all('/GetLoginData', (req, res) => {
     const body = req.body;
     const zlib = require('zlib');
     const { MY_IP } = require('./gamevar');
+    const { applyAllJsonPatches, patchImageUrls } = require('./modules/proxy');
 
-    const GARENA_IMG_DOMAINS = [
-        'https://dl.bs.freefiremobile.com',
-        'https://dl.dir.freefiremobile.com',
-        'https://dl.cdn.freefiremobile.com',
-        'https://dl.ak.freefiremobile.com',
-        'https://dl.gmc.freefiremobile.com',
-        'https://core-bs.freefiremobile.com',
-        'https://core-gmc.freefiremobile.com',
-    ];
     const proxyBase = MY_IP.replace(/\/$/, '');
-    const proxyHost = proxyBase.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
-    function patchGetLoginData(jsonObj) {
-        if (jsonObj && typeof jsonObj['CECNLHCONMI'] === 'object' && jsonObj['CECNLHCONMI'] !== null) {
-            const g = jsonObj['CECNLHCONMI'];
-            const orig = g.ggp_url;
-            g.is_report_to_ggp   = false;
-            g.is_transfer_report = false;
-            g.is_enable_ggp      = false;
-            g.is_get_feature     = false;
-            g.is_get_flag        = false;
-            g.is_enable_tcp      = false;
-            g.is_enable_gin_tcp  = false;
-            g.is_report_gin      = false;
-            g.is_gin_active      = false;
-            g.is_ggp_active      = false;
-            g.enable_gin         = false;
-            g.enable_ggp         = false;
-            if (g.ggp_port !== undefined) g.ggp_port = 0;
-            if (g.gin_port !== undefined) g.gin_port = 0;
-            // Set ke 0.0.0.0 supaya TCP connect GAGAL, bukan ke proxyHost
-            g.ggp_url = '0.0.0.0';
-            if (g.gin_url    !== undefined) g.gin_url    = '0.0.0.0';
-            if (g.ffanti_url !== undefined) g.ffanti_url = '';
-            if (g.grtc_url   !== undefined) g.grtc_url   = '';
-            if (g.tp_url     !== undefined) g.tp_url     = '';
-            console.log(`[GetLoginData-PATCH] CECNLHCONMI: ggp_url ${orig} → 0.0.0.0 (dead), semua flag GIN/GGP=false`);
-        }
-        // Patch LJAPOJNBOFE (GRTC/SDK URL list)
-        if (jsonObj && jsonObj['LJAPOJNBOFE'] !== undefined) {
-            const orig = jsonObj['LJAPOJNBOFE'];
-            jsonObj['LJAPOJNBOFE'] = '';
-            console.log(`[GetLoginData-PATCH] LJAPOJNBOFE: "${String(orig).substring(0,40)}..." → ""`);
-        }
-        // Patch POEPGJPHCMJ (idevent URL)
-        if (jsonObj && jsonObj['POEPGJPHCMJ'] !== undefined) {
-            jsonObj['POEPGJPHCMJ'] = proxyBase + '/noop';
-        }
-        // Patch EMFPDECPCDG (idnetwork URL)
-        if (jsonObj && jsonObj['EMFPDECPCDG'] !== undefined) {
-            jsonObj['EMFPDECPCDG'] = proxyBase + '/noop';
-        }
-        // Patch PDJHKBDIHGL (gateway URL)
-        if (jsonObj && jsonObj['PDJHKBDIHGL'] !== undefined) {
-            jsonObj['PDJHKBDIHGL'] = proxyBase + '/noop';
-        }
-        if (jsonObj && typeof jsonObj['AEBBNFBNIDB'] === 'object' && jsonObj['AEBBNFBNIDB'] !== null) {
-            const b = jsonObj['AEBBNFBNIDB'];
-            b.ban_mode    = 0;
-            b.unban_time  = 0;
-            b.hint_string = '';
-            console.log('[GetLoginData-PATCH] ban_mode → 0');
-        }
-        return jsonObj;
+    // Bangun safe headers — strip accept-encoding supaya Garena return JSON plain/gzip,
+    // bukan binary protobuf stream yang tidak bisa di-parse sebagai JSON.
+    const safeHeaders = {};
+    const FORWARD_HEADERS = ['content-type', 'user-agent', 'accept-language', 'accept',
+                             'connection', 'authorization', 'cookie'];
+    for (const h of FORWARD_HEADERS) {
+        if (req.headers[h]) safeHeaders[h] = req.headers[h];
     }
+    safeHeaders['Host']            = 'clientbp.ggpolarbear.com';
+    safeHeaders['Accept-Encoding'] = 'gzip, deflate'; // strip br — Garena kadang return br tanpa brotli support
+    safeHeaders['Content-Length']  = Buffer.isBuffer(body) ? body.length : 0;
 
     const options = {
         hostname: 'clientbp.ggpolarbear.com',
         path:     '/GetLoginData',
-        method:   'POST',
-        headers: {
-            ...req.headers,
-            'Host':           'clientbp.ggpolarbear.com',
-            'Content-Length': Buffer.isBuffer(body) ? body.length : 0
-        }
+        method:   'POST',   // selalu POST ke upstream
+        headers:  safeHeaders,
     };
 
     const proxyReq = https.request(options, (proxyRes) => {
@@ -224,26 +173,30 @@ app.post('/GetLoginData', (req, res) => {
             delete headers['content-length'];
             delete headers['transfer-encoding'];
 
-            if (ct.includes('application/json')) {
-                let parsed;
-                try { parsed = JSON.parse(rawBody.toString('utf8')); } catch(_) { parsed = null; }
-                if (parsed && typeof parsed === 'object') {
-                    patchGetLoginData(parsed);
-                    let jsonStr = JSON.stringify(parsed);
-                    for (const domain of GARENA_IMG_DOMAINS) {
-                        jsonStr = jsonStr.split(domain).join(proxyBase + '/cdn');
-                    }
-                    const patched = Buffer.from(jsonStr, 'utf8');
-                    headers['content-length'] = String(patched.length);
-                    res.writeHead(proxyRes.statusCode, headers);
-                    return res.end(patched);
-                }
+            // Coba parse sebagai JSON apapun content-type-nya
+            // (Garena kadang kirim JSON dengan content-type salah)
+            let parsed = null;
+            try { parsed = JSON.parse(rawBody.toString('utf8')); } catch(_) {}
+
+            if (parsed && typeof parsed === 'object') {
+                applyAllJsonPatches(parsed, '/GetLoginData');
+                let jsonStr = patchImageUrls(JSON.stringify(parsed));
+                const patched = Buffer.from(jsonStr, 'utf8');
+                headers['content-type']   = 'application/json';
+                headers['content-length'] = String(patched.length);
+                res.writeHead(proxyRes.statusCode, headers);
+                console.log('[GetLoginData-PATCH] JSON patched OK via applyAllJsonPatches');
+                return res.end(patched);
             }
+
+            // Fallback: non-JSON (seharusnya tidak terjadi untuk GetLoginData)
+            console.log('[GetLoginData] WARNING: response bukan JSON — dikirim raw');
             headers['content-length'] = String(rawBody.length);
             res.writeHead(proxyRes.statusCode, headers);
             res.end(rawBody);
         });
-        stream.on('error', () => {
+        stream.on('error', (err) => {
+            console.log(`[GetLoginData] Decompress error: ${err.message}`);
             if (!res.headersSent) res.writeHead(502);
             res.end();
         });
