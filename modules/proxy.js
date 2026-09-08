@@ -588,11 +588,31 @@ function init(app) {
         // Route: client endpoints (clientbp) → clientProxy (ban patch, mail inject, reward patch)
         //        login endpoints → loginProxy
         const CLIENT_PATHS = [
+            // ── Data & patch ──
             '/GetLoginData',           // ← PATCH: intercept GIN/GGP config → patchGinUrl
             '/GetPlayerPersonalShow', '/GetMailList', '/GetCharacterRewardData',
             '/GetLoginReward', '/GetDailyLogin', '/GetAvatarInfo',
             '/GetClothesInfo', '/GetWeaponSkinInfo', '/GetCharInfo',
             '/GetUserInfo', '/GetAccountInfo',
+            // ── BUGFIX: endpoint yang sebelumnya 404 karena jatuh ke loginProxy ──
+            // GenerateNickname → clientbp, bukan loginbp → return HTML 404 sebelumnya
+            '/GenerateNickname',
+            // MajorRegister → clientbp untuk registrasi akun baru / guest
+            '/MajorRegister',
+            // Endpoint register & profile lain
+            '/Register', '/CreateAccount',
+            '/SetNickname', '/SetAvatar',
+            '/GetNicknameList', '/CheckNickname',
+            '/GetRecommendNickname',
+            // Leaderboard, friend, social
+            '/GetFriendList', '/GetRankInfo', '/GetLeaderboard',
+            '/GetGuildInfo', '/GetClanInfo',
+            // Reward & daily
+            '/ClaimReward', '/ClaimDailyLogin',
+            '/GetSeasonInfo', '/GetEventInfo',
+            // Shop & inventory
+            '/GetShopInfo', '/GetInventory', '/GetBagInfo',
+            '/BuyItem', '/ExchangeItem',
         ];
         const isClientPath = CLIENT_PATHS.some(p => req.path === p || req.path.startsWith(p));
         if (isClientPath) {

@@ -90,7 +90,55 @@ function init(app) {
         }
     });
 
-    console.log('[CONFIG] Active → GET/POST /api/config');
+    // ── /api/device — return IP + geo info untuk dashboard ─────────────
+    app.get('/api/device', async (req, res) => {
+        const rawIp    = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        const clientIp = rawIp.split(',')[0].trim().replace('::ffff:', '');
+        const ua       = req.headers['user-agent'] || '';
+        const platform = /Android/i.test(ua) ? 'Android' : /iPhone|iPad/i.test(ua) ? 'iOS' : 'Other';
+
+        // Device name dari UA — coba ambil model HP
+        let device = platform;
+        const modelMatch = ua.match(/\(Linux;[^)]*;\s*([^;)]+Build)/i);
+        if (modelMatch) device = modelMatch[1].trim().replace(/\s+Build$/, '');
+        else if (/iPhone/i.test(ua)) device = 'iPhone';
+        else if (/iPad/i.test(ua))   device = 'iPad';
+
+        // Geo lookup — ip-api.com (gratis, no key)
+        let city = '—', region = '—', country = '—', isp = '—';
+        try {
+            if (clientIp && clientIp !== '127.0.0.1' && !clientIp.startsWith('192.168.') && !clientIp.startsWith('10.') && clientIp !== '::1') {
+                await new Promise((resolve) => {
+                    const https = require('https');
+                    const req2  = https.get(
+                        `https://ip-api.com/json/${clientIp}?fields=city,regionName,country,isp,status`,
+                        (r2) => {
+                            let raw = '';
+                            r2.on('data', d => raw += d);
+                            r2.on('end', () => {
+                                try {
+                                    const geo = JSON.parse(raw);
+                                    if (geo.status === 'success') {
+                                        city    = geo.city       || '—';
+                                        region  = geo.regionName || '—';
+                                        country = geo.country    || '—';
+                                        isp     = geo.isp        || '—';
+                                    }
+                                } catch (_) {}
+                                resolve();
+                            });
+                        }
+                    );
+                    req2.setTimeout(4000, () => { req2.destroy(); resolve(); });
+                    req2.on('error', () => resolve());
+                });
+            }
+        } catch (_) {}
+
+        res.json({ ip: clientIp, device, platform, city, region, country, isp });
+    });
+
+    console.log('[CONFIG] Active → GET/POST /api/config | GET /api/device');
 }
 
 module.exports = { load, save, init };

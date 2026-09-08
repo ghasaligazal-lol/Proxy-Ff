@@ -47,6 +47,7 @@ function decodeReqFields(buf) {
                 if (fieldNum === 29)  out.access_token   = str.substring(0, 20) + '...';
                 if (fieldNum === 57)  out.client_version = str;
                 if (fieldNum === 83)  out.version_code   = str;
+                if (fieldNum === 3)   out.device_id      = str;
                 if (fieldNum === 20)  out.client_ip      = str;
                 if (fieldNum === 11)  out.network_type   = str;
             } else if (wireType === 5) { reader.fixed32();
@@ -174,6 +175,25 @@ function init(app) {
                 let buf = Buffer.concat(chunks);
                 const patchLog = [];
                 let modified = false;
+
+                // ── BUGFIX: 404 "account_not_found" → akun guest baru ────────
+                // loginbp.ggpolarbear.com return 404 + JSON {"type":"account_not_found"}
+                // kalau ini akun baru yang belum pernah login di server ini.
+                // Game membaca errMsg → switch ke register flow (tampilkan GenerateNickname).
+                // Solusi: biarkan 404 lewat apa adanya supaya game masuk register screen.
+                // Kalau dipaksain return proto palsu → game crash karena uid=0.
+                // Yang perlu di-fix adalah GenerateNickname & MajorRegister (lihat proxy.js).
+                if (proxyRes.statusCode === 404) {
+                    const bodyStr = buf.toString('utf8');
+                    if (bodyStr.includes('account_not_found')) {
+                        console.log('[MAJORLOGIN] 404 account_not_found → guest/new account, pass-through to trigger register flow');
+                        tglog.send(`ℹ️ <b>MajorLogin</b>\n404 account_not_found — akun baru masuk register flow\nopen_id: ${reqInfo.open_id || '-'}`);
+                        const headers = { ...proxyRes.headers, 'content-length': buf.length };
+                        delete headers['transfer-encoding'];
+                        res.writeHead(404, headers);
+                        return res.end(buf);
+                    }
+                }
 
                 // ── Patch 1: server_url → proxyBase ──────────────────────────
                 // "https://clientbp.ggpolarbear.com" → proxy kita

@@ -366,6 +366,13 @@ body::before {
         </div>
         <div class="info-row">
             <span class="lbl">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                Kota
+            </span>
+            <span class="val" id="dCity">—</span>
+        </div>
+        <div class="info-row">
+            <span class="lbl">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="18" r="1"/></svg>
                 Device
             </span>
@@ -377,6 +384,20 @@ body::before {
                 Platform
             </span>
             <span class="val" id="dPlat">—</span>
+        </div>
+        <div class="info-row">
+            <span class="lbl">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="16" height="10" rx="2"/><path d="M22 11v2"/></svg>
+                Baterai
+            </span>
+            <span class="val" id="dBatt">—</span>
+        </div>
+        <div class="info-row">
+            <span class="lbl">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
+                ISP
+            </span>
+            <span class="val" id="dIsp">—</span>
         </div>
     </div>
 
@@ -646,16 +667,72 @@ function getNum(id, def) {
 }
 
 async function loadDevice() {
+    // ── Device name — ambil dari UA client-side (lebih akurat dari server) ──
+    // FF WebView UA format: "Dalvik/... (Linux; U; Android X.X; <MODEL> Build/...)"
+    // atau browser: "Mozilla/... (Linux; Android X; <MODEL>) AppleWebKit/..."
+    function getDeviceName() {
+        const ua = navigator.userAgent;
+        // Android: ambil model dari dalam kurung
+        let m = ua.match(/\(Linux;\s*(?:U;\s*)?Android\s*[\d.]+;\s*([^)]+?)\s*(?:Build\/[^)]+)?\)/i);
+        if (m) {
+            let model = m[1].trim();
+            // Buang "wv" suffix WebView
+            model = model.replace(/\s*wv\s*$/i, '').trim();
+            if (model && model !== 'armv8l' && !model.startsWith('Linux')) return model;
+        }
+        // Fallback: coba format Dalvik
+        m = ua.match(/;\s*([A-Za-z0-9 _\-]+?)\s*Build\//i);
+        if (m) {
+            const model = m[1].trim();
+            if (model && model.length > 2 && !model.startsWith('Android') && model !== 'armv8l') return model;
+        }
+        // iPhone
+        if (/iPhone/i.test(ua)) return 'iPhone';
+        if (/iPad/i.test(ua))   return 'iPad';
+        return 'Android Device';
+    }
+
+    function getPlatform() {
+        const ua = navigator.userAgent;
+        if (/Android/i.test(ua)) return 'Android';
+        if (/iPhone|iPad/i.test(ua)) return 'iOS';
+        if (/Windows/i.test(ua)) return 'Windows';
+        return navigator.platform || 'Other';
+    }
+
+    document.getElementById('dDev').textContent  = getDeviceName();
+    document.getElementById('dPlat').textContent = getPlatform();
+
+    // ── IP + Geo dari server ──
     try {
         const r = await fetch('/api/device');
         const d = await r.json();
-        document.getElementById('dIp').textContent   = d.ip       || '—';
-        document.getElementById('dDev').textContent  = d.device   || navigator.platform || '—';
-        document.getElementById('dPlat').textContent = d.platform || '—';
+        document.getElementById('dIp').textContent   = d.ip || '—';
+        document.getElementById('dCity').textContent = d.city && d.country ? `${d.city}, ${d.country}` : (d.city || '—');
+        document.getElementById('dIsp').textContent  = d.isp || '—';
     } catch(_) {
         document.getElementById('dIp').textContent   = '—';
-        document.getElementById('dDev').textContent  = navigator.platform || 'Android';
-        document.getElementById('dPlat').textContent = /Android/i.test(navigator.userAgent) ? 'Android' : navigator.platform;
+        document.getElementById('dCity').textContent = '—';
+        document.getElementById('dIsp').textContent  = '—';
+    }
+
+    // ── Baterai — Battery Status API ──
+    try {
+        if ('getBattery' in navigator) {
+            const batt = await navigator.getBattery();
+            function updateBatt(b) {
+                const pct    = Math.round(b.level * 100);
+                const status = b.charging ? '⚡ Charging' : (pct <= 20 ? '🔴' : pct <= 50 ? '🟡' : '🟢');
+                document.getElementById('dBatt').textContent = `${status} ${pct}%`;
+            }
+            updateBatt(batt);
+            batt.addEventListener('levelchange',    () => updateBatt(batt));
+            batt.addEventListener('chargingchange', () => updateBatt(batt));
+        } else {
+            document.getElementById('dBatt').textContent = 'Tidak didukung';
+        }
+    } catch(_) {
+        document.getElementById('dBatt').textContent = '—';
     }
 }
 

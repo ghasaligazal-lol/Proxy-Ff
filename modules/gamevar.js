@@ -189,6 +189,8 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
         "remote_option_version_astc":        "optionallocres:50|optionalavatarres:711|optionalclothres:1228|optionalfootballres:27|optionalfullscreencgres:306|optionalhuntinggroundres:178|optionalinfection:116|optionalingameres:438|optionallobbyres:640|optionallonewolfres:206|optionallonewolfstrikeoutres:155|optionalludores:175|optionalmap1res:385|optionalmap2res:159|optionalmap4res:175|optionalmaphippores:92|optionalmapres:374|optionalnewblast:162|optionalpetres:910|optionalrushb:241|optionalrushingpetsres:217|optionalsnowduelres:59|optionalsocialres:215|optionaltrainingres:267|optionalugcres:786|optionalvoiceres:379|optionalwerewolves:286|optionalwerunres:74|optionalmapponyres:200|optionalugcoldparadiseres:32|optionalmultiregionres:27",
         "remote_version":                    "2.131.22",
         "res_url":                           myDomain + "live/ABHotUpdates/",
+        // server_url HARUS ke proxy kita supaya MajorLogin lewat sini
+        // (bukan loginbp langsung — kalau langsung, proxy ga bisa intercept)
         "server_url":                        myDomain,
         "should_check_ab_exist":             true,
         "should_check_ab_load":              false,
