@@ -49,6 +49,27 @@ const gamevarLines = [
   "EnableFileCacherReadOpt_2022,EnableFileCacherReadOpt_2022,bool,false,,",
   "EnableGGPDecryptFailureProtection,EnableGGPDecryptFailureProtection,bool,false,,",
 
+  // ApplicationDetection bypass
+  "EnableApplicationDetection,EnableApplicationDetection,bool,false,,",
+  "ApplicationDetectionInterval,ApplicationDetectionInterval,int,0,,",
+  "EnableAndroidAppDetection,EnableAndroidAppDetection,bool,false,,",
+  "EnableAndroidAppDetectionReport,EnableAndroidAppDetectionReport,bool,false,,",
+  "MaxApplicationDetectionCount,MaxApplicationDetectionCount,int,0,,",
+  "EnableDetectionUpload,EnableDetectionUpload,bool,false,,",
+  "EnableDataUpload,EnableDataUpload,bool,false,,",
+  "EnableAnticheatUpload,EnableAnticheatUpload,bool,false,,",
+  "EnableClientDataForward,EnableClientDataForward,bool,false,,",
+  "ClientDataForwardInterval,ClientDataForwardInterval,int,0,,",
+  "EnableGinReport,EnableGinReport,bool,false,,",
+  "GinReportInterval,GinReportInterval,int,0,,",
+  "EnableGGPReport,EnableGGPReport,bool,false,,",
+
+  // Hacker group bypass
+  "EnableHackerGroup,EnableHackerGroup,bool,false,,",
+  "HackerGroupDetectionLevel,HackerGroupDetectionLevel,int,0,,",
+  "EnableJoinHackerGroup,EnableJoinHackerGroup,bool,false,,",
+  "HackerGroupReportInterval,HackerGroupReportInterval,int,0,,",
+
   "ReportInstantiateJank,ReportInstantiateJank,bool,false,,",
   "InstantiateJankTimeLimit,InstantiateJankTimeLimit,int,0,,",
   "BugReportIntervalOnLowMemory,BugReportIntervalOnLowMemory,int,0,,",

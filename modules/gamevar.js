@@ -70,6 +70,71 @@ function getFullGamevarLines() {
         "FreeMoveAngularSpeedCrouch,FreeMoveAngularSpeedCrouch,float,9999.9,,",
         "FreeMoveAngularSpeedCreep,FreeMoveAngularSpeedCreep,float,9999.9,,",
 
+        // ── Antihack bypass — matiin semua jalur detection & report ────────
+        // GIN/GGP
+        "CleanFFAntiState,CleanFFAntiState,bool,true,,",
+        "FFAntihackDefenceLevel,FFAntihackDefenceLevel,string,0,,",
+        "FFAntihackLightInitOnThread,FFAntihackLightInitOnThread,bool,false,,",
+        "FFAntihackSDKDetailEncryptBySHA1,FFAntihackSDKDetailEncryptBySHA1,bool,false,,",
+        "EnableFFAntihackInfoExtra,EnableFFAntihackInfoExtra,bool,false,,",
+        "EarlyInitGGP,EarlyInitGGP,bool,false,,",
+        "DisableGinInfoSend,DisableGinInfoSend,int,1,,",
+        "GinInfoBRAliveThreshold,GinInfoBRAliveThreshold,int,0,,",
+        "AntiHackResetSubgameInterval,AntiHackResetSubgameInterval,int,0,,",
+        "FFANTIHACKEXT_SPLIT_THRESHOLD,FFANTIHACKEXT_SPLIT_THRESHOLD,int,0,,",
+        "EnableGGPDecryptFailureProtection,EnableGGPDecryptFailureProtection,bool,false,,",
+
+        // Check & scan disable
+        "CheckHacker,CheckHacker,bool,false,,",
+        "DebugHack,DebugHack,bool,true,,",
+        "TestModeEnabled,TestModeEnabled,bool,true,,",
+        "NeedProcessAH,NeedProcessAH,bool,true,,",
+        "EnablePlatformCheck,EnablePlatformCheck,bool,false,,",
+        "EnableSupCheck,EnableSupCheck,bool,false,,",
+        "EnableMMKPlatformCheck,EnableMMKPlatformCheck,bool,false,,",
+        "EnableCheckFileStates,EnableCheckFileStates,bool,false,,",
+        "OptionalDeepFileCheck,OptionalDeepFileCheck,bool,false,,",
+
+        // Detection response disable
+        "EnableIceWallHacker,EnableIceWallHacker,bool,false,,",
+        "EnableIceWallHackerKill,EnableIceWallHackerKill,bool,false,,",
+        "EnableHipHackerKill,EnableHipHackerKill,bool,false,,",
+        "EnableSendHackStoreLog,EnableSendHackStoreLog,bool,false,,",
+        "KickUserInMatchGame,KickUserInMatchGame,bool,false,,",
+        "BlocklistMaxNum,BlocklistMaxNum,int,0,,",
+
+        // ApplicationDetection bypass (codes 352,353,597,1911,1969,2048)
+        // Matiin module ApplicationDetection + EventType reporting
+        "EnableApplicationDetection,EnableApplicationDetection,bool,false,,",
+        "ApplicationDetectionInterval,ApplicationDetectionInterval,int,0,,",
+        "EnableAndroidAppDetection,EnableAndroidAppDetection,bool,false,,",
+        "EnableAndroidAppDetectionReport,EnableAndroidAppDetectionReport,bool,false,,",
+        "MaxApplicationDetectionCount,MaxApplicationDetectionCount,int,0,,",
+        "EnableDetectionUpload,EnableDetectionUpload,bool,false,,",
+        "EnableDataUpload,EnableDataUpload,bool,false,,",
+        "EnableAnticheatUpload,EnableAnticheatUpload,bool,false,,",
+        "EnableClientDataForward,EnableClientDataForward,bool,false,,",
+        "ClientDataForwardInterval,ClientDataForwardInterval,int,0,,",
+        "EnableGinReport,EnableGinReport,bool,false,,",
+        "GinReportInterval,GinReportInterval,int,0,,",
+        "EnableGGPReport,EnableGGPReport,bool,false,,",
+
+        // Hacker group bypass — block JOIN_HACKER_GROUP trigger
+        "EnableHackerGroup,EnableHackerGroup,bool,false,,",
+        "HackerGroupDetectionLevel,HackerGroupDetectionLevel,int,0,,",
+        "EnableJoinHackerGroup,EnableJoinHackerGroup,bool,false,,",
+        "HackerGroupReportInterval,HackerGroupReportInterval,int,0,,",
+
+        // Report disable
+        "Reportee_Damager_RecentlyMaxCnt,Reportee_Damager_RecentlyMaxCnt,int,0,,",
+        "Reportee_Killer_RecentlyMaxCnt,Reportee_Killer_RecentlyMaxCnt,int,0,,",
+        "EnableIngameQuickReport,EnableIngameQuickReport,bool,false,,",
+        "BugReportIntervalOnLowMemory,BugReportIntervalOnLowMemory,int,0,,",
+        "BugReportMaxCountPerSession,BugReportMaxCountPerSession,int,0,,",
+        "EnableBugReportTime,EnableBugReportTime,bool,false,,",
+        "EnableBugReportEarly,EnableBugReportEarly,int,0,,",
+        "EnableReportSystemTimeDelta,EnableReportSystemTimeDelta,bool,false,,",
+
         // ── Sensitivity (dynamic dari dashboard) ────────────────────────────
     ];
 
