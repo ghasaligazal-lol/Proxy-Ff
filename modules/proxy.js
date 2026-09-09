@@ -98,9 +98,26 @@ function patchBanInfo(jsonObj) {
             obj.ban_type          = '';
             if (before) console.log(`[BAN-PATCH] blacklist.is_in_blacklist spoofed → false`);
         }
-        if ('matchmaking_blacklist' in obj && obj.matchmaking_blacklist !== 0) {
-            console.log(`[BAN-PATCH] matchmaking_blacklist ${obj.matchmaking_blacklist} → 0`);
-            obj.matchmaking_blacklist = 0;
+        // Gap 4 fix: matchmaking_blacklist bisa berupa int (0=clean, >0=blacklisted)
+        // atau nested object { is_in_blacklist, ban_time, ... } tergantung endpoint.
+        // Patch dua format sekaligus.
+        if ('matchmaking_blacklist' in obj) {
+            const mbl = obj.matchmaking_blacklist;
+            if (typeof mbl === 'number' && mbl !== 0) {
+                console.log(`[BAN-PATCH] matchmaking_blacklist (int) ${mbl} → 0`);
+                obj.matchmaking_blacklist = 0;
+            } else if (mbl && typeof mbl === 'object') {
+                // Format nested object
+                if (mbl.is_in_blacklist) {
+                    console.log(`[BAN-PATCH] matchmaking_blacklist.is_in_blacklist → false`);
+                    mbl.is_in_blacklist = false;
+                    if (mbl.ban_time        !== undefined) mbl.ban_time        = 0;
+                    if (mbl.ban_reason      !== undefined) mbl.ban_reason      = 0;
+                    if (mbl.ban_reason_detail !== undefined) mbl.ban_reason_detail = '';
+                    if (mbl.ban_expire_duration !== undefined) mbl.ban_expire_duration = 0;
+                    if (mbl.ban_type        !== undefined) mbl.ban_type        = '';
+                }
+            }
         }
         if ('championship_is_in_blacklist' in obj && obj.championship_is_in_blacklist) {
             obj.championship_is_in_blacklist = false;
@@ -804,7 +821,13 @@ function init(app) {
         // clientbp tidak handle endpoint ini; loginbp yang handle register flow.
         const CLIENT_PATHS = [
             // ── Data & patch ──
-            '/GetLoginData',           // ← PATCH: intercept GIN/GGP config → patchGinUrl
+            // CATATAN: '/GetLoginData' SENGAJA TIDAK ADA DI SINI.
+            // app.js register handler POST /GetLoginData sendiri (patchGetLoginData) → clientProxy
+            // tidak pernah lihat request ini. Kalau ditambahkan di sini, akan CONFLICT dengan
+            // handler di app.js (Express route pertama yang match yang dipakai).
+            // Jangan tambahkan /GetLoginData ke list ini. Gap 3 audit = by design, bukan bug.
+            // Risiko divergence dimitigasi dengan patchGetLoginData() di app.js mengimport
+            // patchGinUrl + patchStringLevelGin langsung dari proxy.js — satu source of truth.
             '/GetMatchmakingBlacklist', // ← PATCH: intercept BL status → patchBanInfo
             '/GetPlayerPersonalShow', '/GetMailList', '/GetCharacterRewardData',
             '/GetLoginReward', '/GetDailyLogin', '/GetAvatarInfo',
