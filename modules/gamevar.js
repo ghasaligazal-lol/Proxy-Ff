@@ -50,6 +50,14 @@ const gamevarNormalLines = [
     "NewPlayerGroupLimit,NewPlayerGroupLimit,int,0,,",
     "EnableTeamForNewAccount,EnableTeamForNewAccount,bool,true,,",
 
+    // === ANO (Antinomaly) DISABLE — dari referensi ver.php lain ===
+    // Matiin MTP (modifier tracking protocol) untuk semua region
+    "ANODisabledRegions,ANODisabledRegions,string,IND;NA;ID;BR;TH;SG;TW;VN;PK;EUROPE;ME;US;RU;SAC;ZA;BD,,",
+    "ANODisabledClientVariant,ANODisabledClientVariant,string,ClientUsingVersion_MAX_HPE;ClientUsingVersion_FFI;ClientUsingVersion_MAX;ClientUsingVersion_NORMAL,,",
+    "ANOEmulatorCheckDisbaledClientVariant,ANOEmulatorCheckDisbaledClientVariant,string,ClientUsingVersion_FFI;ClientUsingVersion_MAX;ClientUsingVersion_NORMAL,,",
+    // Matiin EnableMtpLite (versi ringan dari MTP yang masih bisa report)
+    "EnableMtpLiteDataRegion,EnableMtpLiteDataRegion,string,,,",
+
     // === GIN/GGP DISABLE — harus ada sebelum login ===
     // GIN connect lewat TCP langsung setelah game init.
     // Tanpa baris ini GIN SDK tetap jalan meski CECNLHCONMI di-delete dari GetLoginData,
@@ -273,10 +281,10 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
         "gamevar":                           isHsOnly
             ? gamevarNormalLines.join("\n")
             : getFullGamevarLines().join("\n"),
-        "garena_hint":                       true,
-        "garena_login":                      true,
+        "garena_hint":                       false,
+        "garena_login":                      false,
         "gdpr_version":                      1,
-        "ggp_url":                           "",
+        "ggp_url":                           "",  // GIN server — dikosongkan
         "gop_url":                           "",
         "grey_update_percent":               0,
         "guest_login":                       true,
@@ -284,7 +292,7 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
         "hotfile_force_update":              true,
         "hs_config":                         { "nome": "", "porta": 6072 },
         "img_cdn_url":                       myDomain + "cdn/common/",
-        "is_firewall_open":                  true,   // PATCH: blokir game dari connect TCP ke server luar
+        "is_firewall_open":                  false,  // false = game tidak buka koneksi firewall tambahan
         "is_review_server":                  false,
         "is_server_open":                    serverOpenStatus,
         "is_update_btn_show":                false,
@@ -302,9 +310,9 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
         "max_web":                           "",
         "min_hint_size":                     1,
         "multi_region":                      "",      // FIX: kosong agar tidak trigger BR region lock
-        "need_check_ip_list":                ["202.81.108.9"],
+        "need_check_ip_list":                [],
         "need_track_hotupdate":              true,
-        "network_log_server":                myDomain + "api/network_log",
+        "network_log_server":                myDomain + "api/network_log",  // intercept, jangan ke Garena
         "notice_url":                        myDomain,
         "patchnote_url":                     "https://whatsapp.com/channel/0029VbBnIVuCMY0POm5gqO1P",
         "quality_level":                     0,

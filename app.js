@@ -1,4 +1,6 @@
 'use strict';
+// Izinkan proxy forward ke loginbp/clientbp tanpa SSL cert mismatch error
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const express      = require('express');
 const path         = require('path');
 const fs           = require('fs');
@@ -57,9 +59,11 @@ const SPOOF_PATHS = [
     // ── Telemetry & log upload ──
     '/api/network_logNetworkLogEvent',
     '/api/network_log/NetworkLogEvent',
+    '/api/network_log',
     '/web_log/NetworkLogEvent',
+    '/web_log',
     '/LogEvent', '/ReportEventPushInfo',
-    '/CheckHackBehavior',           // ← KRITIS: intercept di app.js juga
+    '/CheckHackBehavior',
     '/CheckNeedUpdateGPToken',
     '/ReportAntiAddiction', '/anti_addiction/report', '/AntiAddiction',
     '/firebase/log', '/crashlytics/report', '/sentry',
@@ -90,8 +94,10 @@ const SPOOF_PATHS = [
     '/AndroidAppDetect', '/AppDetectionUpload',
     '/ModifierDetect', '/ReportModifier',
     '/HackLibReport', '/LibHashReport', '/AHLReport',
-    // ── GameSecurity (ban status query) ──
+    // ── GameSecurity ──
     '/gamesecurity/ban', '/ban',
+    // ── Network self-test ──
+    '/NetworkSelfTest', '/api/selftest', '/selftest',
 ];
 
 function spoofOK(req, res) {
@@ -105,9 +111,27 @@ function spoofOK(req, res) {
 
 for (const p of SPOOF_PATHS) {
     app.all(p, spoofOK);
+    // Wildcard: juga catch semua sub-path (misal /api/network_log/anything)
+    app.all(p + '/*', spoofOK);
 }
 
+// Catch-all wildcard untuk domain telemetry yang masuk ke proxy
+// Kalau game kirim ke /NetworkLogEvent, /GinReport, dll tanpa path prefix
 app.all('*', (req, res, next) => {
+    const p = req.path.toLowerCase();
+    const SPOOF_KEYWORDS = [
+        'report', 'logevent', 'anticheat', 'hackdata', 'modifier',
+        'ginreport', 'ggpreport', 'ffanti', 'detection', 'abnormal',
+        'network_log', 'web_log', 'dataupload', 'securityreport',
+        'clientdata', 'dataforward', 'uploaddata', 'sendhack',
+        'checkhack', 'libhash', 'ahlreport',
+    ];
+    if (SPOOF_KEYWORDS.some(k => p.includes(k))) {
+        console.log(`[SPOOF-WILDCARD] ${req.method} ${req.path} → blocked`);
+        return spoofOK(req, res);
+    }
+    next();
+});
     const lower = req.path.toLowerCase();
     const isUpload =
         lower.includes('logevent') ||
