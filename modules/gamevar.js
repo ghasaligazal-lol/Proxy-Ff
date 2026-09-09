@@ -34,6 +34,22 @@ const gamevarNormalLines = [
     "FreeMoveAngularSpeedCrouch,FreeMoveAngularSpeedCrouch,float,9999.9,,",
     "FreeMoveAngularSpeedCreep,FreeMoveAngularSpeedCreep,float,9999.9,,",
 
+    // === SOCIAL / GROUP UNLOCK ===
+    // Force-enable fitur sosial dan grup dari awal supaya akun baru tidak perlu
+    // selesai tutorial dulu untuk bisa buat/join squad.
+    // Root cause: akun baru tidak punya PlayerPrefs group mode → "Group info is null"
+    // saat coba squad. Gamevar ini unlock social tanpa perlu server state.
+    "EnableNewPlayerSocialFunction,EnableNewPlayerSocialFunction,bool,true,,",
+    "NewPlayerSocialFunctionMaxLevel,NewPlayerSocialFunctionMaxLevel,int,0,,",
+    "EnableSocialFunctionByLevel,EnableSocialFunctionByLevel,bool,false,,",
+    "SocialFunctionUnlockLevel,SocialFunctionUnlockLevel,int,0,,",
+    "EnableGroupInviteForNewPlayer,EnableGroupInviteForNewPlayer,bool,true,,",
+    "NewbieGroupModeEnabled,NewbieGroupModeEnabled,bool,true,,",
+    "EnableNewbieSquad,EnableNewbieSquad,bool,true,,",
+    "DisableGroupForNewPlayer,DisableGroupForNewPlayer,bool,false,,",
+    "NewPlayerGroupLimit,NewPlayerGroupLimit,int,0,,",
+    "EnableTeamForNewAccount,EnableTeamForNewAccount,bool,true,,",
+
     // === GIN/GGP DISABLE — harus ada sebelum login ===
     // GIN connect lewat TCP langsung setelah game init.
     // Tanpa baris ini GIN SDK tetap jalan meski CECNLHCONMI di-delete dari GetLoginData,
