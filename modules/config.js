@@ -6,7 +6,7 @@ const path = require('path');
 const CONFIG_PATH = path.join(__dirname, '..', 'db', 'gameconfig.json');
 
 const DEFAULTS = {
-    bodyMode: 'full',
+    bodyMode: 'full',  // hs_only | full | esp | speed_sensi
     runSpeed: null,
     sensi: {
         SensitivityMaxSetting:   9.5,
@@ -56,8 +56,8 @@ function init(app) {
             }
             if (typeof body !== 'object' || !body) body = {};
 
-            // Validasi bodyMode: hs_only | full | esp
-            const validModes = ['hs_only', 'full', 'esp'];
+            // Validasi bodyMode: hs_only | full | esp | speed_sensi
+            const validModes = ['hs_only', 'full', 'esp', 'speed_sensi'];
             const bodyMode = validModes.includes(body.bodyMode) ? body.bodyMode : 'full';
 
             // Validasi runSpeed

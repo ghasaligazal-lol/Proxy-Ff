@@ -3,19 +3,20 @@ package freefire;
 
 // Ban reason enum dari FreeFire_pb2
 enum BanReason {
-  BAN_REASON_UNKNOWN        = 0;
-  BAN_REASON_IN_GAME_AUTO   = 1;
-  BAN_REASON_REFUND         = 2;
-  BAN_REASON_OTHERS         = 3;
-  BAN_REASON_SKINMOD        = 4;
+  BAN_REASON_UNKNOWN          = 0;
+  BAN_REASON_IN_GAME_AUTO     = 1;
+  BAN_REASON_REFUND           = 2;
+  BAN_REASON_OTHERS           = 3;
+  BAN_REASON_SKINMOD          = 4;
   BAN_REASON_IN_GAME_AUTO_NEW = 1014;
 }
 
-// Blacklist/ban info
+// Blacklist/ban info — ditambah ban_type (string) yang muncul di response real
 message BlacklistInfoRes {
   BanReason ban_reason      = 1;
   uint32    expire_duration = 2;
   uint32    ban_time        = 3;
+  string    ban_type        = 4;   // "Modifiers", dll
 }
 
 // Login queue info
@@ -37,24 +38,30 @@ message MajorLoginRes {
   bytes  iv          = 23;  // aiv — AES IV
 }
 
-// Full login response (RAFIN) — dari FreeFire_pb2.py
+// Full login response (RAFIN)
+// Field numbers disesuaikan dengan response real dari BackendLog
 message RAFIN {
-  uint64           account_id         = 1;
-  string           lock_region        = 2;
-  string           noti_region        = 3;
-  string           ip_region          = 4;
-  string           agora_environment  = 5;
-  string           new_active_region  = 6;
-  repeated string  recommend_regions  = 7;
-  string           token              = 8;
-  uint32           ttl                = 9;
-  string           server_url         = 10;
-  uint32           emulator_score     = 11;
-  BlacklistInfoRes blacklist          = 12;
-  LoginQueueInfo   queue_info         = 13;
-  string           tp_url             = 14;
-  uint32           app_server_id      = 15;
-  string           ano_url            = 16;
-  string           ip_city            = 17;
-  string           ip_subdivision     = 18;
+  uint64           account_id          = 1;
+  string           lock_region         = 2;
+  string           noti_region         = 3;
+  string           ip_region           = 4;
+  string           agora_environment   = 5;
+  string           new_active_region   = 6;
+  repeated string  recommend_regions   = 7;
+  string           token               = 8;
+  uint32           ttl                 = 9;
+  string           server_url          = 10;
+  uint32           emulator_score      = 11;
+  BlacklistInfoRes blacklist           = 12;
+  LoginQueueInfo   queue_info          = 13;
+  string           tp_url              = 14;
+  uint32           app_server_id       = 15;
+  string           ano_url             = 16;
+  string           ip_city             = 17;
+  string           ip_subdivision      = 18;
+  int64            kts                 = 19;   // timestamp key
+  bytes            ak                  = 22;   // AES key
+  bytes            aiv                 = 23;   // AES IV
+  string           ffanti_url          = 24;
+  // ff_anti_config_desc biasanya nested, biarin unknown biar aman
 }

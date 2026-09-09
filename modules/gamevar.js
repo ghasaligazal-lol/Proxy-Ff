@@ -232,35 +232,102 @@ const isGlobalMaintenance = false;
 const MY_IP = process.env.PROXY_URL || "https://proxy-reza-kontolodon-memek-luu.up.railway.app/";
 const REDIRECT_URL = "https://whatsapp.com/channel/0029Vb8eX0Z1NCrYCXEXuu0K";
 
+
+// ── Gamevar SPEED + SENSI ONLY (light mode) ──────────────────────────────────
+// Hanya inject yang penting: RunSpeed, Sensitivity*, FreeMoveAngular*
+// + minimal anti-report biar nggak langsung kena GIN.
+// cache_res diambil dari official CDN (lihat getVerConfig).
+function getSpeedSensiGamevarLines() {
+    const cfg = getConfig();
+
+    const lines = [
+        "var_name,comment,var_type,var_value,var_region,var_platform",
+        "var_name,comment,var_type,var_value,var_region,var_platform",
+
+        // Minimal movement
+        "SwapWeaponCD,SwapWeaponCD,float,0,,",
+        "SwitchWeaponInterval,SwitchWeaponInterval,float,0,,",
+        "FreeMoveAngularSpeed,FreeMoveAngularSpeed,float,9999.9,,",
+        "FreeMoveAngularSpeedStand,FreeMoveAngularSpeedStand,float,9999.9,,",
+        "FreeMoveAngularSpeedCrouch,FreeMoveAngularSpeedCrouch,float,9999.9,,",
+        "FreeMoveAngularSpeedCreep,FreeMoveAngularSpeedCreep,float,9999.9,,",
+
+        // Minimal anti-report (biar GIN/GGP nggak langsung nyala)
+        "DisableGinReport,DisableGinReport,bool,true,,",
+        "DisableGGPReport,DisableGGPReport,bool,true,,",
+        "EnableGinReport,EnableGinReport,bool,false,,",
+        "EnableGGPReport,EnableGGPReport,bool,false,,",
+        "EnableGinConnect,EnableGinConnect,bool,false,,",
+        "EnableGGPConnect,EnableGGPConnect,bool,false,,",
+        "IsDisableDataReport,IsDisableDataReport,bool,true,,",
+        "DisableUploadData,DisableUploadData,bool,true,,",
+        "EnableAnticheatUpload,EnableAnticheatUpload,bool,false,,",
+        "CleanFFAntiState,CleanFFAntiState,bool,true,,",
+        "FFAntihackDefenceLevel,FFAntihackDefenceLevel,string,0,,",
+        "CheckHacker,CheckHacker,bool,false,,",
+        "TestModeEnabled,TestModeEnabled,bool,false,,",
+    ];
+
+    // Sensi dynamic
+    const s = cfg.sensi || {};
+    const sensiKeys = [
+        'SensitivityMaxSetting', 'Sensitivity1PMaxSetting',
+        'X1ScopeMaxSetting', 'X2ScopeMaxSetting',
+        'X4ScopeMaxSetting', 'X8ScopeMaxSetting', 'FreeLookMaxSetting'
+    ];
+    for (const k of sensiKeys) {
+        const v = (s[k] !== undefined && s[k] !== null) ? s[k] : 9.5;
+        lines.push(`${k},${k},float,${v},,`);
+    }
+
+    // RunSpeed dynamic
+    if (cfg.runSpeed !== null && cfg.runSpeed !== undefined) {
+        lines.push(`RunSpeed,,float,${cfg.runSpeed},,`);
+    } else {
+        lines.push(`RunSpeed,,float,4.2,,`);
+    }
+
+    return lines;
+}
+
 function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
     const isAllowedUser = ALLOWED_IPS.includes(clientIp);
     const serverOpenStatus = isGlobalMaintenance ? isAllowedUser : true;
 
     const cfg = getConfig();
-    const isHsOnly = cfg.bodyMode === 'hs_only';
-    const isEsp    = cfg.bodyMode === 'esp';
+    const isHsOnly     = cfg.bodyMode === 'hs_only';
+    const isEsp        = cfg.bodyMode === 'esp';
+    const isSpeedSensi = cfg.bodyMode === 'speed_sensi';
+
+    // Official CDN untuk mode speed_sensi (cache_res dari server resmi, bukan proxy)
+    const OFFICIAL_CDN = "https://dl.cdn.freefiremobile.com/";
+
+    // CDN yang dipakai
+    const useCdn = isSpeedSensi ? OFFICIAL_CDN : (myDomain + "live/ABHotUpdates/");
 
     return {
-        "abhotupdate_cdn_url":               myDomain + "live/ABHotUpdates/",
-        // Mode: esp = no cache_res (ILFix butuh game resources original, cache_res override bikin conflict)
-        //        hs_only = cache_res only
-        //        full    = cache_res + gameassetbundles
+        "abhotupdate_cdn_url":               useCdn,
+        // Mode:
+        //   esp         = no cache_res
+        //   hs_only     = cache_res only (proxy)
+        //   speed_sensi = cache_res from OFFICIAL CDN + only speed/sensi gamevar
+        //   full        = cache_res + gameassetbundles (proxy)
         "abhotupdate_check":                 isEsp
             ? ""
-            : isHsOnly
+            : (isHsOnly || isSpeedSensi)
                 ? "cache_res"
                 : "cache_res;gameassetbundles/cache_res.UOT0J6aDCaQjwD02QTKoB6TYVuU~3D",
         "anti_hack_open":                    false,
         "appstore_url":                      REDIRECT_URL,
         "backup_appstore_url":               "",
-        "backup_cdn_url":                    myDomain + "live/ABHotUpdates/",
+        "backup_cdn_url":                    useCdn,
         "billboard_bg_url":                  myDomain + "cdn/common/OB23/version/Patch_Bg.png",
         "billboard_cdn_url":                 REDIRECT_URL,
         "billboard_msg":                     "",
         "cdn_active":                        myDomain,
         "cdn_ip_list":                       [],
         "cdn_port":                          6072,
-        "cdn_url":                           myDomain + "live/ABHotUpdates/",
+        "cdn_url":                           useCdn,
         "client_ip":                         clientIp,
         "code":                              0,
         "core_ip_list":                      ["0.0.0.0","50.109.27.134","129.226.2.163","129.226.1.13","129.226.1.16"],
@@ -282,10 +349,15 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
         "force_to_restart_app":              false,
         "free_guest_login":                  true,
         "free_rematch":                      true,
-        // Gamevar: HS Only = normal (no mod), Full = mod + dynamic sensi/speed
+        // Gamevar:
+        //   hs_only     = normal (no mod)
+        //   speed_sensi = only RunSpeed + Sensitivity + FreeMoveAngular (light)
+        //   full / esp  = full mod
         "gamevar":                           isHsOnly
             ? gamevarNormalLines.join("\n")
-            : getFullGamevarLines().join("\n"),
+            : isSpeedSensi
+                ? getSpeedSensiGamevarLines().join("\n")
+                : getFullGamevarLines().join("\n"),
         "garena_hint":                       false,
         "garena_login":                      false,
         "gdpr_version":                      1,
@@ -380,4 +452,4 @@ function init(app) {
     console.log('[GAMEVAR] Active → /ver.php /api/gamevar /localconfig.json');
 }
 
-module.exports = { getVerConfig, getFullGamevarLines, gamevarNormalLines, ALLOWED_IPS, MY_IP, init };
+module.exports = { getVerConfig, getFullGamevarLines, getSpeedSensiGamevarLines, gamevarNormalLines, ALLOWED_IPS, MY_IP, init };

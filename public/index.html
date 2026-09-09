@@ -145,7 +145,7 @@ body::before {
 .info-row .val { color: var(--text); font-weight: 600; text-align: right; word-break: break-all; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 
 /* ── Mode selector ── */
-.mode-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 9px; }
+.mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 .mode-btn {
     padding: 14px 10px;
     background: var(--surface2);
@@ -430,6 +430,13 @@ body::before {
                 <span class="mode-name">Aimbot+ESP</span>
                 <span class="mode-desc">ESP Box · AimAssist · No cache_res</span>
             </button>
+            <button class="mode-btn" id="mode_speed_sensi" onclick="setMode('speed_sensi')">
+                <span class="mode-icon">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4e5f70" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="icon_speed_sensi"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/><circle cx="12" cy="12" r="2"/></svg>
+                </span>
+                <span class="mode-name">Speed + Sensi</span>
+                <span class="mode-desc">Only speed &amp; sensi · cache resmi</span>
+            </button>
         </div>
     </div>
 
@@ -569,22 +576,22 @@ function syncInput() {
 let _currentMode = 'full';
 function setMode(mode) {
     _currentMode = mode;
-    ['full','hs_only','esp'].forEach(m => {
+    ['full','hs_only','esp','speed_sensi'].forEach(m => {
         const btn = document.getElementById('mode_'+m);
         if (btn) btn.classList.toggle('active', m === mode);
     });
-    const iconMap = { full: 'icon_full', hs_only: 'icon_hs', esp: 'icon_esp' };
+    const iconMap = { full: 'icon_full', hs_only: 'icon_hs', esp: 'icon_esp', speed_sensi: 'icon_speed_sensi' };
     Object.entries(iconMap).forEach(([m, id]) => {
         const el = document.getElementById(id);
         if (el) el.setAttribute('stroke', m === mode ? 'var(--green)' : '#4e5f70');
     });
-    // Speed & sensi card: hanya aktif di mode full
-    const isFull = mode === 'full';
+    // Speed & sensi card aktif di mode full ATAU speed_sensi
+    const canEditSpeedSensi = (mode === 'full' || mode === 'speed_sensi');
     ['speedCard','sensiCard'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
-        el.style.opacity = isFull ? '1' : '0.45';
-        el.style.pointerEvents = isFull ? '' : 'none';
+        el.style.opacity = canEditSpeedSensi ? '1' : '0.45';
+        el.style.pointerEvents = canEditSpeedSensi ? '' : 'none';
     });
 }
 
