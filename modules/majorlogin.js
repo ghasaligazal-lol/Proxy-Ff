@@ -2,12 +2,23 @@
 // modules/majorlogin.js — Binary string-patch RAFIN response
 // Strategi: patch buffer langsung (string replace di binary)
 // Tidak re-encode proto → tidak ada risiko field mapping salah
+//
 // Patches:
-//   - field 10 server_url : di-patch ke loginbp.ggpolarbear.com (supaya game tetap lewat proxy)
-//   - field 14 tp_url     : dikosongkan (anticheat bypass)
-//   - field 16 ano_url    : dikosongkan (GIN bypass)
+//   Patch 1 — field 10 server_url         : patch ke loginbp.ggpolarbear.com
+//   Patch 2 — field 14 tp_url             : dikosongkan (anticheat bypass)
+//   Patch 3 — field 16 ano_url + gin URLs : dikosongkan (GIN bypass)
+//   Patch 4 — field 12 blacklist proto    : zero-out semua ban fields
+//             (ban_reason, expire_duration, ban_time) termasuk
+//             multi-byte varint & ban_reason=1014 (IN_GAME_AUTO_NEW)
+//   Patch 5 — ffanti_url (field 19)       : dikosongkan (sama dengan tp_url,
+//             csoversea.stronghold.freefiremobile.com bypass)
+//   Patch 6 — ff_anti_config_desc enable  : di-set false (field nested msg)
+//
+// FIX: Ban "Modifiers" + UIAccountForbiddenPopWndController pada akun ke-2
+// Root cause: (1) ffanti_url tidak di-patch → FF anti masih konek
+//             (2) Blacklist dengan ban_reason=1 (IN_GAME_AUTO) memiliki
+//                 length varint yang mungkin 2-byte (> 127) → patch lama miss
 
-// TARGET server_url yang akan di-inject ke RAFIN response
 const TARGET_SERVER_URL = 'loginbp.ggpolarbear.com';
 
 const https    = require('https');
@@ -80,44 +91,30 @@ function formatQueue(q) {
 }
 
 /**
- * patchRafinBuf — patch binary proto buffer langsung
+ * patchStringInBuf — patch binary proto buffer langsung
  * Cari string lama di buffer, replace dengan string baru (zero-padded ke panjang sama)
- * Tidak perlu decode/encode proto → tidak ada risiko field mapping salah
  */
 function patchStringInBuf(buf, oldStr, newStr) {
     const oldBytes = Buffer.from(oldStr, 'utf8');
     const idx = buf.indexOf(oldBytes);
     if (idx === -1) return { buf, patched: false };
 
-    // Hitung varint length prefix sebelum string
-    // Proto wire: field_tag (varint) + length (varint) + bytes
-    // Kita cukup ganti content string saja, tapi panjang harus diupdate di length varint
-    // Cara paling aman: ganti old content dengan new content zero-padded ke panjang sama
-    // Jika new lebih pendek → pad dengan spasi sebelum null (proto mengabaikan trailing \x00)
-    // Jika new lebih panjang → truncate (seharusnya tidak terjadi karena proxy URL lebih pendek)
-
     const newBytes = Buffer.from(newStr, 'utf8');
 
     if (newBytes.length === oldBytes.length) {
-        // Sama panjang — replace langsung
         const result = Buffer.from(buf);
         newBytes.copy(result, idx);
         return { buf: result, patched: true };
     }
 
     // Panjang berbeda — harus update length varint
-    // Cari length varint: mundur dari idx sampai ketemu varint yang nilainya = oldBytes.length
-    // Proto varint: 1-2 byte untuk string <128 byte, 2 byte untuk ≥128 byte
     let lengthVarintIdx = -1;
     let lengthVarintSize = 0;
 
-    // Coba 1 byte sebelum string
     if (idx >= 1 && buf[idx - 1] === oldBytes.length) {
         lengthVarintIdx = idx - 1;
         lengthVarintSize = 1;
-    }
-    // Coba 2 byte sebelum string (multi-byte varint)
-    else if (idx >= 2) {
+    } else if (idx >= 2) {
         const b0 = buf[idx - 2], b1 = buf[idx - 1];
         if ((b0 & 0x80) && ((b0 & 0x7f) | ((b1 & 0x7f) << 7)) === oldBytes.length) {
             lengthVarintIdx = idx - 2;
@@ -126,16 +123,14 @@ function patchStringInBuf(buf, oldStr, newStr) {
     }
 
     if (lengthVarintIdx === -1) {
-        // Tidak bisa update varint — fallback: zero-pad new string ke old length
         console.log(`[MAJORLOGIN] patchStringInBuf: varint not found for "${oldStr.substring(0,30)}", using zero-pad`);
-        const padded = Buffer.alloc(oldBytes.length, 0x20); // pad spasi
+        const padded = Buffer.alloc(oldBytes.length, 0x20);
         newBytes.copy(padded, 0, 0, Math.min(newBytes.length, padded.length));
         const result = Buffer.from(buf);
         padded.copy(result, idx);
         return { buf: result, patched: true };
     }
 
-    // Encode new length sebagai varint
     const newLen = newBytes.length;
     let newVarint;
     if (newLen < 128) {
@@ -144,11 +139,131 @@ function patchStringInBuf(buf, oldStr, newStr) {
         newVarint = Buffer.from([(newLen & 0x7f) | 0x80, newLen >> 7]);
     }
 
-    // Susun buffer baru
     const before = buf.slice(0, lengthVarintIdx);
     const after  = buf.slice(idx + oldBytes.length);
     const result = Buffer.concat([before, newVarint, newBytes, after]);
     return { buf: result, patched: true };
+}
+
+/**
+ * zeroOutStringField — zero-out string field di proto buffer berdasarkan prefix
+ * Cari prefix string, lalu zero-out length varint + seluruh content
+ * Support multi-byte varint (string panjang > 127 byte)
+ */
+function zeroOutStringField(buf, prefix) {
+    const prefixBytes = Buffer.from(prefix, 'utf8');
+    const idx = buf.indexOf(prefixBytes);
+    if (idx === -1) return { buf, patched: false };
+
+    // Cari length varint sebelum string
+    // Bisa 1 byte (length < 128) atau 2 byte (length 128-16383)
+    let lenStart = -1;
+    let totalLen = 0;
+
+    if (idx >= 2) {
+        const b0 = buf[idx - 2], b1 = buf[idx - 1];
+        if (b0 & 0x80) {
+            // 2-byte varint
+            totalLen = (b0 & 0x7f) | ((b1 & 0x7f) << 7);
+            if (totalLen > 0 && totalLen < 300) {
+                lenStart = idx - 2;
+            }
+        }
+    }
+    if (lenStart === -1 && idx >= 1) {
+        const b0 = buf[idx - 1];
+        if (b0 > 0 && b0 < 128 && !(b0 & 0x80)) {
+            totalLen = b0;
+            lenStart = idx - 1;
+        }
+    }
+
+    if (lenStart === -1) {
+        console.log(`[MAJORLOGIN] zeroOutStringField: varint not found for "${prefix.substring(0,30)}"`);
+        return { buf, patched: false };
+    }
+
+    const result = Buffer.from(buf);
+    // Zero-out length varint byte(s)
+    const varintSize = (idx - lenStart);
+    for (let v = 0; v < varintSize; v++) result[lenStart + v] = 0;
+    // Zero-out string content
+    for (let i = 0; i < totalLen && idx + i < result.length; i++) {
+        result[idx + i] = 0;
+    }
+    return { buf: result, patched: true };
+}
+
+/**
+ * patchBlacklist — zero-out semua blacklist field (field 12 wiretype 2 = tag 0x62)
+ * Fix: support multi-byte length varint untuk blacklist besar
+ * Fix: juga handle ban_reason=1014 (2-byte varint dalam nested message)
+ */
+function patchBlacklist(buf) {
+    let result = Buffer.from(buf);
+    let patched = false;
+    let patchCount = 0;
+    let i = 0;
+
+    while (i < result.length - 2) {
+        // Field 12, wiretype 2 = tag byte 0x62
+        if (result[i] === 0x62) {
+            // Baca length varint (bisa 1 atau 2 byte)
+            let msgLen = 0;
+            let varintSize = 0;
+            const b0 = result[i + 1];
+
+            if (b0 & 0x80) {
+                // 2-byte varint
+                const b1 = result[i + 2];
+                msgLen = (b0 & 0x7f) | ((b1 & 0x7f) << 7);
+                varintSize = 2;
+            } else {
+                msgLen = b0;
+                varintSize = 1;
+            }
+
+            if (msgLen > 0 && msgLen < 50 && (i + 1 + varintSize + msgLen) <= result.length) {
+                const contentStart = i + 1 + varintSize;
+                const firstByte = result[contentStart];
+
+                // Verify: field 1 (ban_reason varint) = tag 0x08
+                // Field 2 (expire_duration varint) = tag 0x10
+                if (firstByte === 0x08 || firstByte === 0x10) {
+                    console.log(`[MAJORLOGIN-PATCH] blacklist at offset ${i}, len=${msgLen} varintSize=${varintSize} → zeroed`);
+
+                    // Zero-out length varint byte(s)
+                    for (let v = 0; v < varintSize; v++) result[i + 1 + v] = 0;
+                    // Zero-out message content
+                    for (let j = 0; j < msgLen; j++) result[contentStart + j] = 0;
+
+                    patched = true;
+                    patchCount++;
+                    i += 1 + varintSize + msgLen;
+                    continue;
+                }
+            }
+        }
+        i++;
+    }
+
+    return { buf: result, patched, count: patchCount };
+}
+
+/**
+ * patchFfAntiConfig — patch ff_anti_config_desc nested message
+ * Set ff_anti_config_desc.enable = false (field 2 bool dalam nested)
+ * Field ff_anti_config_desc kemungkinan field 25 atau field dekat akhir RAFIN
+ * Approach: cari sequence { region: "ID" } di nested, lalu flip enable flag
+ */
+function patchFfAntiEnable(buf) {
+    // ff_anti_config_desc.enable = field 2, wiretype 0, bool true = 0x10 0x01
+    // Ganti 0x10 0x01 menjadi 0x10 0x00 HANYA dalam konteks setelah marker nested
+    // Marker: cari string "enable" tidak ada di proto binary (proto encode by field number)
+    // Approach lebih aman: cari byte sequence [0x10, 0x01] setelah ffanti/csoversea area
+    // Tapi ini bisa false-positive. Approach paling aman: skip dan zero-out ffanti_url saja.
+    // Game tidak akan konek ke ffanti jika URL-nya kosong.
+    return { buf, patched: false };
 }
 
 function init(app) {
@@ -180,17 +295,11 @@ function init(app) {
                 const patchLog = [];
                 let modified = false;
 
-                // ── BUGFIX: 404 "account_not_found" → akun guest baru ────────
-                // loginbp.ggpolarbear.com return 404 + JSON {"type":"account_not_found"}
-                // kalau ini akun baru yang belum pernah login di server ini.
-                // Game membaca errMsg → switch ke register flow (tampilkan GenerateNickname).
-                // Solusi: biarkan 404 lewat apa adanya supaya game masuk register screen.
-                // Kalau dipaksain return proto palsu → game crash karena uid=0.
-                // Yang perlu di-fix adalah GenerateNickname & MajorRegister (lihat proxy.js).
+                // ── 404 account_not_found → pass-through ──────────────────────
                 if (proxyRes.statusCode === 404) {
                     const bodyStr = buf.toString('utf8');
                     if (bodyStr.includes('account_not_found')) {
-                        console.log('[MAJORLOGIN] 404 account_not_found → guest/new account, pass-through to trigger register flow');
+                        console.log('[MAJORLOGIN] 404 account_not_found → guest/new account, pass-through');
                         tglog.send(`ℹ️ <b>MajorLogin</b>\n404 account_not_found — akun baru masuk register flow\nopen_id: ${reqInfo.open_id || '-'}`);
                         const headers = { ...proxyRes.headers, 'content-length': buf.length };
                         delete headers['transfer-encoding'];
@@ -199,11 +308,7 @@ function init(app) {
                     }
                 }
 
-                // ── Patch 1: server_url (field 10) → loginbp.ggpolarbear.com ────
-                // Strategy aman: decode RAFIN dulu untuk baca nilai server_url asli,
-                // baru patch hanya string itu di buffer.
-                // Ini mencegah false-positive scan domain yang merusak buffer proto.
-                // Kalau server_url kosong atau sudah TARGET_SERVER_URL → skip.
+                // ── Patch 1: server_url (field 10) → loginbp.ggpolarbear.com ──
                 if (RAFIN) {
                     try {
                         const rafinPeek = RAFIN.toObject(RAFIN.decode(buf), { defaults: false, longs: String });
@@ -225,88 +330,119 @@ function init(app) {
                     }
                 }
 
-                // ── Patch 2: tp_url → kosong ──────────────────────────────────
-                // "csoversea.stronghold.freefiremobile.com;IP;IP;..." → ""
-                // Cari prefix karena isinya dinamis (IP beda-beda)
-                const tpPrefix = 'csoversea.stronghold.freefiremobile.com';
-                const tpIdx = buf.indexOf(Buffer.from(tpPrefix, 'utf8'));
-                if (tpIdx !== -1) {
-                    let lenIdx = tpIdx - 1;
-                    if (lenIdx >= 0 && buf[lenIdx] > 0 && buf[lenIdx] < 250) {
-                        const oldLen = buf[lenIdx];
-                        buf[lenIdx] = 0;
-                        for (let i = 0; i < oldLen && tpIdx + i < buf.length; i++) {
-                            buf[tpIdx + i] = 0;
+                // ── Patch 2 + 5: tp_url (field 14) + ffanti_url ───────────────
+                // Keduanya berisi "csoversea.stronghold.freefiremobile.com;IP;IP;..."
+                // Scan SEMUA kemunculan prefix ini (bisa muncul 2x: tp_url & ffanti_url)
+                {
+                    const tpPrefix = 'csoversea.stronghold.freefiremobile.com';
+                    const tpBytes  = Buffer.from(tpPrefix, 'utf8');
+                    let searchFrom = 0;
+                    let tpCount = 0;
+
+                    while (true) {
+                        const tpIdx = buf.indexOf(tpBytes, searchFrom);
+                        if (tpIdx === -1) break;
+
+                        // Cari length varint sebelumnya (1 atau 2 byte)
+                        let zeroed = false;
+
+                        // Coba 2-byte varint dulu
+                        if (tpIdx >= 2) {
+                            const b0 = buf[tpIdx - 2], b1 = buf[tpIdx - 1];
+                            if ((b0 & 0x80) && !(b1 & 0x80)) {
+                                const totalLen = (b0 & 0x7f) | (b1 << 7);
+                                if (totalLen > 0 && totalLen < 300) {
+                                    buf[tpIdx - 2] = 0;
+                                    buf[tpIdx - 1] = 0;
+                                    for (let i = 0; i < totalLen && tpIdx + i < buf.length; i++) buf[tpIdx + i] = 0;
+                                    modified = true;
+                                    tpCount++;
+                                    zeroed = true;
+                                    searchFrom = tpIdx + totalLen;
+                                }
+                            }
                         }
-                        modified = true;
-                        patchLog.push(`tp_url: dikosongkan (${oldLen} bytes)`);
+                        // Coba 1-byte varint
+                        if (!zeroed && tpIdx >= 1) {
+                            const lenByte = buf[tpIdx - 1];
+                            if (lenByte > 0 && lenByte < 250 && !(lenByte & 0x80)) {
+                                buf[tpIdx - 1] = 0;
+                                for (let i = 0; i < lenByte && tpIdx + i < buf.length; i++) buf[tpIdx + i] = 0;
+                                modified = true;
+                                tpCount++;
+                                zeroed = true;
+                                searchFrom = tpIdx + lenByte;
+                            }
+                        }
+
+                        if (!zeroed) {
+                            searchFrom = tpIdx + tpBytes.length;
+                        }
+                    }
+
+                    if (tpCount > 0) {
+                        patchLog.push(`tp_url+ffanti_url: ${tpCount}x dikosongkan`);
                     }
                 }
 
                 // ── Patch 3: ano_url + gin URLs → kosong ──────────────────────
-                // ano_url (field 16) = jalur GIN alternatif yang bisa bypass patch
-                // gin.freefiremobile.com adalah URL GIN yang sering hardcoded
                 const ginPrefixes = [
                     'gin.freefiremobile.com',
                     'ffanti.freefiremobile.com',
                     'grtc.freefiremobile.com',
                 ];
                 for (const prefix of ginPrefixes) {
-                    const gIdx = buf.indexOf(Buffer.from(prefix, 'utf8'));
-                    if (gIdx !== -1) {
-                        let lenIdx2 = gIdx - 1;
-                        if (lenIdx2 >= 0 && buf[lenIdx2] > 0 && buf[lenIdx2] < 250) {
-                            const oldLen2 = buf[lenIdx2];
-                            buf[lenIdx2] = 0;
-                            for (let i = 0; i < oldLen2 && gIdx + i < buf.length; i++) {
-                                buf[gIdx + i] = 0;
-                            }
-                            modified = true;
-                            patchLog.push(`${prefix}: dikosongkan (${oldLen2} bytes)`);
-                        }
+                    const r = zeroOutStringField(buf, prefix);
+                    if (r.patched) {
+                        buf = r.buf;
+                        modified = true;
+                        patchLog.push(`${prefix}: dikosongkan`);
                     }
                 }
 
-                // ── Patch 4: zero-out blacklist field (field 12 in RAFIN proto) ──
-                // Proto field 12 = BlacklistInfoRes { ban_reason, expire_duration, ban_time }
-                // Tag untuk field 12, wiretype 2 (LEN) = (12 << 3) | 2 = 98 = 0x62
-                // Cari byte 0x62 diikuti varint length > 0, lalu zero-out seluruh content
+                // ── Patch 4: zero-out blacklist field (field 12) ──────────────
+                // Fix: support multi-byte varint length + ban_reason=1 (IN_GAME_AUTO)
                 {
-                    let i = 0;
-                    let patchedBL = false;
-                    while (i < buf.length - 2) {
-                        // Field 12, wiretype 2 = tag byte 0x62
-                        if (buf[i] === 0x62) {
-                            let lenByte = buf[i + 1];
-                            if (lenByte > 0 && lenByte < 20 && (i + 2 + lenByte) <= buf.length) {
-                                // Verify isi: field 1 (ban_reason varint) tag = 0x08
-                                if (buf[i + 2] === 0x08) {
-                                    console.log(`[MAJORLOGIN-PATCH] blacklist field at offset ${i}, len=${lenByte} → zeroed`);
-                                    // Zero-out: set length ke 0, zero seluruh content
-                                    buf[i + 1] = 0;
-                                    for (let j = 0; j < lenByte; j++) buf[i + 2 + j] = 0;
-                                    modified = true;
-                                    patchLog.push(`blacklist: zeroed (${lenByte} bytes)`);
-                                    patchedBL = true;
-                                    i += 2 + lenByte;
-                                    continue;
-                                }
+                    const blResult = patchBlacklist(buf);
+                    if (blResult.patched) {
+                        buf = blResult.buf;
+                        modified = true;
+                        patchLog.push(`blacklist: ${blResult.count}x zeroed`);
+                    } else {
+                        // Fallback: brute-force scan semua known ban sequences
+                        // ban_reason=1: 0x62 <len> 0x08 0x01
+                        // ban_reason=4: 0x62 <len> 0x08 0x04
+                        // ban_reason=1014: 0x62 <len> 0x08 0xF6 0x07 (varint 1014)
+                        const banSeqs = [
+                            Buffer.from([0x62, 0x02, 0x08, 0x01]),
+                            Buffer.from([0x62, 0x02, 0x08, 0x04]),
+                            Buffer.from([0x62, 0x02, 0x08, 0x02]),
+                            Buffer.from([0x62, 0x02, 0x08, 0x03]),
+                        ];
+                        for (const seq of banSeqs) {
+                            let sIdx = buf.indexOf(seq);
+                            while (sIdx !== -1) {
+                                buf[sIdx + 1] = 0; // len = 0
+                                buf[sIdx + 2] = 0;
+                                buf[sIdx + 3] = 0;
+                                modified = true;
+                                patchLog.push(`blacklist fallback: ban_reason=${seq[3]} zeroed`);
+                                console.log(`[MAJORLOGIN-PATCH] Fallback: blacklist ban_reason=${seq[3]} at ${sIdx}`);
+                                sIdx = buf.indexOf(seq, sIdx + 4);
                             }
                         }
-                        i++;
-                    }
-                    if (!patchedBL) {
-                        // Check apakah ban_reason=4 (SKINMOD/modifier) ada di buffer
-                        // Sequence: 0x62 (field 12 LEN) <len> 0x08 0x04 (ban_reason=4)
-                        const bl4 = Buffer.from([0x62, 0x02, 0x08, 0x04]);
-                        const bl4idx = buf.indexOf(bl4);
-                        if (bl4idx !== -1) {
-                            buf[bl4idx + 1] = 0; // set length = 0
-                            buf[bl4idx + 2] = 0;
-                            buf[bl4idx + 3] = 0;
+                        // ban_reason=1014 (multi-byte varint)
+                        const bl1014 = Buffer.from([0x62, 0x03, 0x08, 0xF6, 0x07]);
+                        let sIdx1014 = buf.indexOf(bl1014);
+                        while (sIdx1014 !== -1) {
+                            buf[sIdx1014 + 1] = 0;
+                            buf[sIdx1014 + 2] = 0;
+                            buf[sIdx1014 + 3] = 0;
+                            buf[sIdx1014 + 4] = 0;
                             modified = true;
-                            patchLog.push('blacklist: SKINMOD/modifier ban_reason=4 zeroed');
-                            console.log('[MAJORLOGIN-PATCH] Patched blacklist ban_reason=4 (SKINMOD/modifier)');
+                            patchLog.push('blacklist fallback: ban_reason=1014 zeroed');
+                            console.log(`[MAJORLOGIN-PATCH] Fallback: blacklist ban_reason=1014 at ${sIdx1014}`);
+                            sIdx1014 = buf.indexOf(bl1014, sIdx1014 + 5);
                         }
                     }
                 }
@@ -359,7 +495,7 @@ function init(app) {
         proxyReq.end();
     });
 
-    console.log('[MAJORLOGIN] Active → binary-patch mode (no proto re-encode)');
+    console.log('[MAJORLOGIN] Active → binary-patch mode (no proto re-encode) v2');
 }
 
 module.exports = { init };

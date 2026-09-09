@@ -202,6 +202,25 @@ app.post('/GetLoginData', (req, res) => {
                 if (sub.ban_reason  !== undefined) sub.ban_reason  = 0;
             }
         }
+
+        // ── Patch anti_hack_center_desc — kosongkan link + ban_list_url ──
+        // Game tidak auto-query ini, tapi dikosongkan supaya button Security Center
+        // di lobby tidak buka halaman ban Garena yang asli.
+        const ahcd = jsonObj && jsonObj['anti_hack_center_desc'];
+        if (ahcd && typeof ahcd === 'object') {
+            const inner = ahcd['anti_hack_center_desc'] || ahcd;
+            if (inner && typeof inner === 'object') {
+                if (inner['ban_list_url'] !== undefined) {
+                    inner['ban_list_url'] = '';
+                    console.log('[GetLoginData-PATCH] anti_hack_center_desc.ban_list_url → ""');
+                }
+                if (inner['link'] !== undefined) {
+                    inner['link'] = '';
+                    console.log('[GetLoginData-PATCH] anti_hack_center_desc.link → ""');
+                }
+            }
+        }
+
         return jsonObj;
     }
 
