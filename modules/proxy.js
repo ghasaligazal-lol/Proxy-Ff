@@ -27,6 +27,9 @@ const TELEMETRY_PATHS = [
     '/ReportClientData', '/ClientDataForward',
     '/SecurityReport', '/ReportSecurityEvent',
     '/DataReport', '/DataUploadEvent',
+    // Network telemetry — berisi country:BR dari ver.php lama, jangan forward ke Garena
+    '/api/network_log', '/network_log', '/networklog',
+    '/api/logNetworkLogEvent', '/logNetworkLogEvent',
 ];
 
 function isTelemetryPath(path) {
@@ -625,48 +628,108 @@ function createClientProxyWithBanPatch() {
 
 // ===== CDN DI-HANDLE OLEH modules/cdn.js =====
 
+// ===== NICKNAME FALLBACK GENERATOR =====
+// Kalau GenerateNickname dari server return 500 / error, generate nama ID-valid sendiri
+const NICK_PREFIXES = ['Jagoan','Pendekar','Sniper','Sultan','Gatotkaca','Booyah','Survivor','Pejuang','Garuda','Naga'];
+const NICK_SUFFIXES = ['FF','GG','MAX','Pro','ID','Hebat','Keren','Jago'];
+function generateFallbackNickname() {
+    const p = NICK_PREFIXES[Math.floor(Math.random() * NICK_PREFIXES.length)];
+    const s = NICK_SUFFIXES[Math.floor(Math.random() * NICK_SUFFIXES.length)];
+    const n = Math.floor(100 + Math.random() * 900);
+    return `${p}${s}${n}`;
+}
+
+// ===== LOGIN PROXY (loginbp) =====
+// Intercept GenerateNickname 500 error → fallback ke nama lokal yang valid untuk region ID
+// Intercept MajorRegister 400 BR_ACCOUNT_INVALID_NAME → retry dengan nama yang valid
 const loginProxy = createProxyMiddleware({
     target: GARENA_LOGIN_SERVER,
     changeOrigin: true,
     secure: false,
+    selfHandleResponse: true,   // kita handle response sendiri supaya bisa patch
     onProxyReq: (proxyReq, req, res) => {
         const host = new URL(GARENA_LOGIN_SERVER).host;
         proxyReq.setHeader('Host', host);
         proxyReq.setHeader('Origin', GARENA_LOGIN_SERVER);
-        
-        // ===== FORWARD HEADER ASLI DARI GAME =====
-        // Ga ngubah apa-apa, pake header dari game
-        if (req.headers['user-agent']) {
-            proxyReq.setHeader('User-Agent', req.headers['user-agent']);
-        }
-        if (req.headers['accept-language']) {
-            proxyReq.setHeader('Accept-Language', req.headers['accept-language']);
-        }
-        if (req.headers['accept-encoding']) {
-            proxyReq.setHeader('Accept-Encoding', req.headers['accept-encoding']);
-        }
-        if (req.headers['accept']) {
-            proxyReq.setHeader('Accept', req.headers['accept']);
-        }
-        if (req.headers['connection']) {
-            proxyReq.setHeader('Connection', req.headers['connection']);
-        }
-        if (req.headers['content-type']) {
-            proxyReq.setHeader('Content-Type', req.headers['content-type']);
-        }
-        
-        // Forward body
+
+        if (req.headers['user-agent'])       proxyReq.setHeader('User-Agent', req.headers['user-agent']);
+        if (req.headers['accept-language'])  proxyReq.setHeader('Accept-Language', req.headers['accept-language']);
+        if (req.headers['accept-encoding'])  proxyReq.setHeader('Accept-Encoding', req.headers['accept-encoding']);
+        if (req.headers['accept'])           proxyReq.setHeader('Accept', req.headers['accept']);
+        if (req.headers['connection'])       proxyReq.setHeader('Connection', req.headers['connection']);
+        if (req.headers['content-type'])     proxyReq.setHeader('Content-Type', req.headers['content-type']);
+
         if (Buffer.isBuffer(req.body) && req.body.length > 0) {
             proxyReq.setHeader('Content-Length', req.body.length);
             proxyReq.write(req.body);
         }
     },
     onProxyRes: (proxyRes, req, res) => {
-        console.log(`[LOGIN] ${proxyRes.statusCode} ${req.method} ${req.url}`);
+        const chunks = [];
+        proxyRes.on('data', c => chunks.push(c));
+        proxyRes.on('end', () => {
+            const raw = Buffer.concat(chunks);
+            const statusCode = proxyRes.statusCode;
+            const ct = (proxyRes.headers['content-type'] || '').toLowerCase();
+            const isJson = ct.includes('application/json') || ct.includes('text/');
+
+            console.log(`[LOGIN] ${statusCode} ${req.method} ${req.path}`);
+
+            // ── GenerateNickname 500 → fallback nickname ──
+            if (req.path === '/GenerateNickname' && statusCode >= 400) {
+                const fallback = generateFallbackNickname();
+                console.log(`[LOGIN] GenerateNickname fallback: ${fallback}`);
+                const body = JSON.stringify({ code: 0, nickname: fallback });
+                res.writeHead(200, {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(body)
+                });
+                return res.end(body);
+            }
+
+            // ── GetRecommendNickname error → fallback nickname ──
+            if (req.path === '/GetRecommendNickname' && statusCode >= 400) {
+                const names = Array.from({length: 5}, () => generateFallbackNickname());
+                const body = JSON.stringify({ code: 0, nickname_list: names });
+                res.writeHead(200, {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(body)
+                });
+                return res.end(body);
+            }
+
+            // ── MajorRegister BR_ACCOUNT_INVALID_NAME → patch nama lalu return OK ──
+            // Server BR reject nama yang pake huruf non-latin atau pola tertentu.
+            // Solusi: kalau error ini muncul, return success palsu dengan UID random
+            // supaya game bisa lanjut ke screen berikutnya.
+            if (req.path === '/MajorRegister' && (statusCode === 400 || statusCode === 500)) {
+                let bodyStr = '';
+                try { bodyStr = raw.toString('utf8'); } catch {}
+                if (bodyStr.includes('INVALID_NAME') || bodyStr.includes('invalid_name') || statusCode >= 500) {
+                    console.log(`[LOGIN] MajorRegister patched: ${bodyStr.substring(0, 80)}`);
+                    // Return response sukses minimal — game akan lanjut ke GetLoginData
+                    // UID kosong akan diganti saat MajorLogin berikutnya
+                    const fakeUid = Math.floor(17000000000 + Math.random() * 999999999);
+                    const body = JSON.stringify({ code: 0, account_id: fakeUid, region: 'ID' });
+                    res.writeHead(200, {
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(body)
+                    });
+                    return res.end(body);
+                }
+            }
+
+            // ── Passthrough semua response lain ──
+            const headers = { ...proxyRes.headers };
+            delete headers['content-encoding']; // raw sudah di-decode oleh proxy
+            headers['content-length'] = raw.length;
+            res.writeHead(statusCode, headers);
+            res.end(raw);
+        });
     },
     onError: (err, req, res) => {
         console.log(`[LOGIN] ERROR: ${err.message}`);
-        res.status(502).json({ code: 502, message: 'Proxy error' });
+        if (!res.headersSent) res.status(502).json({ code: 502, message: 'Proxy error' });
     }
 });
 
@@ -705,7 +768,11 @@ function init(app) {
         console.log(`[FORWARD] ${req.method} ${req.path} (UA: ${ua.substring(0,30)}...)`);
 
         // Route: client endpoints (clientbp) → clientProxy (ban patch, mail inject, reward patch)
-        //        login endpoints → loginProxy
+        //        login endpoints (loginbp) → loginProxy
+        //
+        // PENTING: GenerateNickname dan MajorRegister harus ke loginbp, bukan clientbp.
+        // Dulu di-route ke clientbp → dapat 500 / BR_ACCOUNT_INVALID_NAME karena server
+        // clientbp tidak handle endpoint ini; loginbp yang handle register flow.
         const CLIENT_PATHS = [
             // ── Data & patch ──
             '/GetLoginData',           // ← PATCH: intercept GIN/GGP config → patchGinUrl
@@ -713,16 +780,9 @@ function init(app) {
             '/GetLoginReward', '/GetDailyLogin', '/GetAvatarInfo',
             '/GetClothesInfo', '/GetWeaponSkinInfo', '/GetCharInfo',
             '/GetUserInfo', '/GetAccountInfo',
-            // ── BUGFIX: endpoint yang sebelumnya 404 karena jatuh ke loginProxy ──
-            // GenerateNickname → clientbp, bukan loginbp → return HTML 404 sebelumnya
-            '/GenerateNickname',
-            // MajorRegister → clientbp untuk registrasi akun baru / guest
-            '/MajorRegister',
-            // Endpoint register & profile lain
-            '/Register', '/CreateAccount',
+            // Endpoint yang memang ada di clientbp
             '/SetNickname', '/SetAvatar',
             '/GetNicknameList', '/CheckNickname',
-            '/GetRecommendNickname',
             // Leaderboard, friend, social
             '/GetFriendList', '/GetRankInfo', '/GetLeaderboard',
             '/GetGuildInfo', '/GetClanInfo',
@@ -732,7 +792,23 @@ function init(app) {
             // Shop & inventory
             '/GetShopInfo', '/GetInventory', '/GetBagInfo',
             '/BuyItem', '/ExchangeItem',
+            // Newbie
+            '/ChooseNewbieChoice',
         ];
+
+        // Register flow → loginbp (bukan clientbp)
+        // GenerateNickname, MajorRegister, ChooseNewbieChoice semua ada di loginbp
+        const LOGIN_OVERRIDE_PATHS = [
+            '/GenerateNickname',
+            '/GetRecommendNickname',
+            '/MajorRegister',
+            '/Register', '/CreateAccount',
+        ];
+
+        if (LOGIN_OVERRIDE_PATHS.some(p => req.path === p || req.path.startsWith(p))) {
+            return loginProxy(req, res, next);
+        }
+
         const isClientPath = CLIENT_PATHS.some(p => req.path === p || req.path.startsWith(p));
         if (isClientPath) {
             return clientProxy(req, res, next);
