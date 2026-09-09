@@ -82,50 +82,99 @@ function patchBanInfo(jsonObj) {
         console.log(`[BAN-PATCH] AEBBNFBNIDB patched: ${JSON.stringify(before)} → ban_mode:0 unban_time:0 hint_string:""`);
     }
 
+    // ===== MATCHMAKING BLACKLIST PATCH =====
+    // Dari BackendLog: GetMatchmakingBlacklist response punya format:
+    //   { "blacklist": [], "blacklist_info": null }
+    // BL bisa datang dari dua arah:
+    //   1. blacklist[] array → berisi list player yang di-BL
+    //   2. blacklist_info object → info BL user sendiri
+    // Keduanya harus di-zero-out supaya game tidak enforce BL.
+    if (jsonObj && Array.isArray(jsonObj.blacklist)) {
+        if (jsonObj.blacklist.length > 0) {
+            console.log(`[BL-PATCH] blacklist[] cleared: ${jsonObj.blacklist.length} entries`);
+        }
+        jsonObj.blacklist = [];
+    }
+    if (jsonObj && jsonObj.blacklist_info !== undefined && jsonObj.blacklist_info !== null) {
+        console.log('[BL-PATCH] blacklist_info cleared');
+        jsonObj.blacklist_info = null;
+    }
+
     // PATCH: spoof matchmaking blacklist (GetMatchmakingBlacklist response)
     // Struktur: { blacklist_list: [{ blacklist: { is_in_blacklist, ban_time, ban_reason, ... } }] }
     // dan nested blacklist di tiap player entry di GetLoginData response
     function zapBlacklist(obj, depth) {
-        if (!obj || typeof obj !== 'object' || depth > 8) return;
+        if (!obj || typeof obj !== 'object' || depth > 10) return;
         if (Array.isArray(obj)) { obj.forEach(i => zapBlacklist(i, depth + 1)); return; }
+        // is_in_blacklist: bool field
         if ('is_in_blacklist' in obj) {
             const before = obj.is_in_blacklist;
-            obj.is_in_blacklist   = false;
-            obj.ban_time          = 0;
-            obj.ban_reason        = 0;
-            obj.ban_reason_detail = '';
+            obj.is_in_blacklist     = false;
+            obj.ban_time            = 0;
+            obj.ban_reason          = 0;
+            obj.ban_reason_detail   = '';
             obj.ban_expire_duration = 0;
-            obj.ban_type          = '';
-            if (before) console.log(`[BAN-PATCH] blacklist.is_in_blacklist spoofed → false`);
+            obj.ban_type            = '';
+            if (before) console.log(`[BL-PATCH] is_in_blacklist → false`);
         }
-        // Gap 4 fix: matchmaking_blacklist bisa berupa int (0=clean, >0=blacklisted)
-        // atau nested object { is_in_blacklist, ban_time, ... } tergantung endpoint.
-        // Patch dua format sekaligus.
+        // matchmaking_blacklist: int (0=clean, >0=blacklisted) ATAU nested object
         if ('matchmaking_blacklist' in obj) {
             const mbl = obj.matchmaking_blacklist;
             if (typeof mbl === 'number' && mbl !== 0) {
-                console.log(`[BAN-PATCH] matchmaking_blacklist (int) ${mbl} → 0`);
+                console.log(`[BL-PATCH] matchmaking_blacklist (int) ${mbl} → 0`);
                 obj.matchmaking_blacklist = 0;
             } else if (mbl && typeof mbl === 'object') {
-                // Format nested object
                 if (mbl.is_in_blacklist) {
-                    console.log(`[BAN-PATCH] matchmaking_blacklist.is_in_blacklist → false`);
+                    console.log(`[BL-PATCH] matchmaking_blacklist.is_in_blacklist → false`);
                     mbl.is_in_blacklist = false;
-                    if (mbl.ban_time        !== undefined) mbl.ban_time        = 0;
-                    if (mbl.ban_reason      !== undefined) mbl.ban_reason      = 0;
-                    if (mbl.ban_reason_detail !== undefined) mbl.ban_reason_detail = '';
+                    if (mbl.ban_time            !== undefined) mbl.ban_time            = 0;
+                    if (mbl.ban_reason          !== undefined) mbl.ban_reason          = 0;
+                    if (mbl.ban_reason_detail   !== undefined) mbl.ban_reason_detail   = '';
                     if (mbl.ban_expire_duration !== undefined) mbl.ban_expire_duration = 0;
-                    if (mbl.ban_type        !== undefined) mbl.ban_type        = '';
+                    if (mbl.ban_type            !== undefined) mbl.ban_type            = '';
                 }
             }
         }
+        // championship BL
         if ('championship_is_in_blacklist' in obj && obj.championship_is_in_blacklist) {
             obj.championship_is_in_blacklist = false;
+            console.log('[BL-PATCH] championship_is_in_blacklist → false');
+        }
+        // ban_time standalone field
+        if ('ban_time' in obj && typeof obj.ban_time === 'number' && obj.ban_time > 0) {
+            // Hanya zero-out kalau ada BL indicator di object yang sama
+            if ('ban_reason' in obj || 'is_in_blacklist' in obj) {
+                console.log(`[BL-PATCH] ban_time ${obj.ban_time} → 0`);
+                obj.ban_time = 0;
+                if (obj.ban_reason !== undefined) obj.ban_reason = 0;
+            }
         }
         for (const k of Object.keys(obj)) zapBlacklist(obj[k], depth + 1);
     }
     zapBlacklist(jsonObj, 0);
 
+    return jsonObj;
+}
+
+// ===== DEDICATED GetMatchmakingBlacklist PATCH =====
+// Intercept response sebelum dikirim ke game dan pastikan selalu bersih
+function patchMatchmakingBL(jsonObj, urlPath) {
+    if (!urlPath.includes('GetMatchmakingBlacklist')) return jsonObj;
+    if (!jsonObj || typeof jsonObj !== 'object') return jsonObj;
+
+    const before = { bl_len: (jsonObj.blacklist || []).length, info: jsonObj.blacklist_info };
+
+    // Zero-out semua format BL yang mungkin
+    jsonObj.blacklist      = [];
+    jsonObj.blacklist_info = null;
+
+    // Kalau ada format lain (blacklist_list, bl_list, dll)
+    if (jsonObj.blacklist_list !== undefined) jsonObj.blacklist_list = [];
+    if (jsonObj.bl_list        !== undefined) jsonObj.bl_list        = [];
+
+    if (before.bl_len > 0 || before.info !== null) {
+        console.log(`[BL-PATCH] GetMatchmakingBlacklist cleared: ${JSON.stringify(before)} → clean`);
+    }
     return jsonObj;
 }
 
@@ -617,6 +666,7 @@ function createClientProxyWithBanPatch() {
 
                     if (parsed && typeof parsed === 'object') {
                         patchBanInfo(parsed);
+                        patchMatchmakingBL(parsed, req.url || '');   // ← dedicated BL patch
                         patchGinUrl(parsed);
                         patchMailList(parsed, req.url || '');
                         if (isLoginRewardEndpoint(req.url || '')) {

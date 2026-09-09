@@ -125,6 +125,12 @@ app.all('*', (req, res, next) => {
 });
 
 // ============ PROXY /GetLoginData (GIN + BAN PATCH) ============
+// Flow: MajorLogin RAFIN.server_url = proxy URL → game kirim GetLoginData ke proxy.
+// Handler ini intercept, forward ke loginbp.ggpolarbear.com, patch CECNLHCONMI di response.
+// GetLoginData response body sudah punya server_url = clientbp → game langsung pakai
+// clientbp untuk semua request berikutnya (BYPASS proxy). Hanya 1 request yang lewat
+// proxy → tidak ada traffic anomaly yang bisa dideteksi Garena.
+//
 // Require proxy module dengan lazy-init + guard.
 // Bug lama: require('./modules/proxy') dipanggil DI DALAM handler tiap request.
 // Masalah: kalau proxy.js gagal load (circular dep / crash saat init), require()
@@ -224,13 +230,19 @@ app.post('/GetLoginData', (req, res) => {
         return jsonObj;
     }
 
+    // Forward GetLoginData ke LOGINBP (bukan clientbp).
+    // Alasan: server_url di RAFIN (MajorLogin) = proxy → game kirim GetLoginData ke proxy.
+    // Proxy intercept, patch CECNLHCONMI di response, lalu kirim balik.
+    // GetLoginData response sendiri sudah punya server_url = clientbp → game langsung
+    // pakai clientbp untuk semua request berikutnya (bypass proxy). Jadi hanya
+    // 1 request yang lewat proxy = minimal exposure, tidak ada traffic anomaly.
     const options = {
-        hostname: 'clientbp.ggpolarbear.com',
+        hostname: 'loginbp.ggpolarbear.com',
         path:     '/GetLoginData',
         method:   'POST',
         headers: {
             ...req.headers,
-            'Host':           'clientbp.ggpolarbear.com',
+            'Host':           'loginbp.ggpolarbear.com',
             'Content-Length': Buffer.isBuffer(body) ? body.length : 0
         }
     };

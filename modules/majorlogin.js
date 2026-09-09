@@ -4,8 +4,9 @@
 // Tidak re-encode proto → tidak ada risiko field mapping salah
 //
 // Patches:
-//   Patch 1 — field 10 server_url         : DINONAKTIFKAN — server_url dibiarkan apa adanya
-//             dari Garena (loginbp.ggpolarbear.com). Request post-login langsung ke loginbp.
+//   Patch 1 — field 10 server_url         : redirect ke domain PROXY (MY_IP)
+//             WAJIB — tanpa ini GetLoginData bypass proxy → CECNLHCONMI tidak ter-patch
+//             → GIN aktif → matchmaking BL terus terjadi (dibuktikan dari BackendLog)
 //   Patch 2 — field 14 tp_url             : dikosongkan (anticheat bypass)
 //   Patch 3 — field 16 ano_url + gin URLs : dikosongkan (GIN bypass)
 //   Patch 4 — field 12 blacklist proto    : zero-out semua ban fields
@@ -305,18 +306,29 @@ function init(app) {
                     }
                 }
 
-                // ── Patch 1: server_url — DINONAKTIFKAN ──────────────────────
-                // server_url dibiarkan apa adanya dari Garena (loginbp.ggpolarbear.com).
-                // Tidak di-redirect ke proxy — request post-login langsung ke loginbp.
+                // ── Patch 1: server_url (field 10) → proxy domain ───────────
+                // WAJIB: tanpa ini GetLoginData bypass proxy → CECNLHCONMI tidak ter-patch
+                // → GIN/anticheat aktif → akun terus di-report → matchmaking BL terus terjadi.
+                // Dibuktikan dari BackendLog: CECNLHCONMI masih full aktif ketika server_url = loginbp.
+                // GetLoginData di app.js tetap di-forward ke clientbp.ggpolarbear.com (bukan loginbp).
                 if (RAFIN) {
                     try {
                         const rafinPeek = RAFIN.toObject(RAFIN.decode(buf), { defaults: false, longs: String });
                         const currentServerUrl = (rafinPeek.server_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
-                        if (currentServerUrl) {
-                            console.log(`[MAJORLOGIN] server_url dari Garena: "${currentServerUrl}" — dibiarkan apa adanya`);
+                        if (currentServerUrl && currentServerUrl !== TARGET_SERVER_URL) {
+                            const r = patchStringInBuf(buf, currentServerUrl, TARGET_SERVER_URL);
+                            if (r.patched) {
+                                buf = r.buf;
+                                modified = true;
+                                patchLog.push(`server_url: "${currentServerUrl}" → "${TARGET_SERVER_URL}"`);
+                            } else {
+                                console.log(`[MAJORLOGIN] server_url patch skip: "${currentServerUrl}" tidak ditemukan di buffer`);
+                            }
+                        } else if (!currentServerUrl) {
+                            console.log('[MAJORLOGIN] server_url kosong dari Garena → skip patch');
                         }
                     } catch (peekErr) {
-                        console.log(`[MAJORLOGIN] server_url peek: ${peekErr.message}`);
+                        console.log(`[MAJORLOGIN] server_url peek failed: ${peekErr.message} → skip patch`);
                     }
                 }
 
