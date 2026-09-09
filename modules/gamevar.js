@@ -238,13 +238,18 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
 
     const cfg = getConfig();
     const isHsOnly = cfg.bodyMode === 'hs_only';
+    const isEsp    = cfg.bodyMode === 'esp';
 
     return {
         "abhotupdate_cdn_url":               myDomain + "live/ABHotUpdates/",
-        // PATCH: selalu include gameassetbundles — UGC system butuh ini untuk validate
-        // map resource sebelum join group. hs_only yang skip ini → NullRef di
-        // ResUpdateDownloadContext.AddTagFilesPair → group join gagal (mode 25 unavailable).
-        "abhotupdate_check":                 "cache_res;gameassetbundles/cache_res.UOT0J6aDCaQjwD02QTKoB6TYVuU~3D",
+        // Mode: esp = no cache_res (ILFix butuh game resources original, cache_res override bikin conflict)
+        //        hs_only = cache_res only
+        //        full    = cache_res + gameassetbundles
+        "abhotupdate_check":                 isEsp
+            ? ""
+            : isHsOnly
+                ? "cache_res"
+                : "cache_res;gameassetbundles/cache_res.UOT0J6aDCaQjwD02QTKoB6TYVuU~3D",
         "anti_hack_open":                    false,
         "appstore_url":                      REDIRECT_URL,
         "backup_appstore_url":               "",
@@ -260,7 +265,7 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
         "code":                              0,
         "core_ip_list":                      ["0.0.0.0","50.109.27.134","129.226.2.163","129.226.1.13","129.226.1.16"],
         "core_url":                          "csoversea.castle.freefiremobile.com",
-        "country_code":                      "",      // FIX: kosong agar tidak trigger LBS block
+        "country_code":                      "BR",
         "device_whitelist_sp_version":       "1.0.0",
         "device_whitelist_version":          "",
         "whitelist_mask":                    0,
@@ -309,7 +314,7 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
         "max_video":                         "",
         "max_web":                           "",
         "min_hint_size":                     1,
-        "multi_region":                      "",      // FIX: kosong agar tidak trigger BR region lock
+        "multi_region":                      "BR",
         "need_check_ip_list":                [],
         "need_track_hotupdate":              true,
         "network_log_server":                myDomain + "api/network_log",  // intercept, jangan ke Garena
@@ -322,8 +327,8 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
         "remote_option_version_astc":        "optionallocres:50|optionalavatarres:711|optionalclothres:1228|optionalfootballres:27|optionalfullscreencgres:306|optionalhuntinggroundres:178|optionalinfection:116|optionalingameres:438|optionallobbyres:640|optionallonewolfres:206|optionallonewolfstrikeoutres:155|optionalludores:175|optionalmap1res:385|optionalmap2res:159|optionalmap4res:175|optionalmaphippores:92|optionalmapres:374|optionalnewblast:162|optionalpetres:910|optionalrushb:241|optionalrushingpetsres:217|optionalsnowduelres:59|optionalsocialres:215|optionaltrainingres:267|optionalugcres:786|optionalvoiceres:379|optionalwerewolves:286|optionalwerunres:74|optionalmapponyres:200|optionalugcoldparadiseres:32|optionalmultiregionres:27",
         "remote_version":                    "2.131.22",
         "res_url":                           myDomain + "live/ABHotUpdates/",
-        // server_url = loginbp langsung (game connect langsung ke Garena setelah MajorLogin)
-        "server_url":                        "https://loginbp.ggpolarbear.com/",
+        // server_url = proxy (WAJIB supaya MajorLogin lewat proxy untuk di-patch anticheat)
+        "server_url":                        myDomain,
         "should_check_ab_exist":             true,
         "should_check_ab_load":              false,
         "should_check_ab_size":              true,
@@ -360,11 +365,16 @@ function init(app) {
     });
 
     app.get('/localconfig.json', (req, res) => {
-        const path = require('path');
-        const fs   = require('fs');
-        const fp   = path.join(__dirname, '..', 'public', 'cdn', 'localconfig.json');
-        if (fs.existsSync(fp)) return res.sendFile(fp);
-        res.json({ code: 0 });
+        // Dynamic: verAddr selalu pakai MY_IP supaya ga hardcode URL lama
+        // testCodePatch = true HANYA mode esp — mode lain tidak load Assembly-CSharp-patch.bytes
+        const cfgMode = getConfig();
+        const cfg = {
+            verAddr:       MY_IP,
+            resetGuest:    true,
+            testCodePatch: cfgMode.bodyMode === 'esp'   // esp → load Assembly (aimbot+ESPbox), lainnya tidak
+        };
+        res.setHeader('Content-Type', 'application/json');
+        res.json(cfg);
     });
 
     console.log('[GAMEVAR] Active → /ver.php /api/gamevar /localconfig.json');

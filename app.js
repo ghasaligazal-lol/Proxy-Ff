@@ -1,6 +1,4 @@
 'use strict';
-// Izinkan proxy forward ke loginbp/clientbp tanpa SSL cert mismatch error
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const express      = require('express');
 const path         = require('path');
 const fs           = require('fs');
@@ -130,40 +128,9 @@ app.all('*', (req, res, next) => {
         console.log(`[SPOOF-WILDCARD] ${req.method} ${req.path} → blocked`);
         return spoofOK(req, res);
     }
-
-    const lower = req.path.toLowerCase();
-    const isUpload =
-        lower.includes('logevent') ||
-        lower.includes('networklog') ||
-        lower.includes('datareport') ||
-        lower.includes('sendlog') ||
-        lower.includes('reportlog') ||
-        lower.includes('anticheat') ||
-        lower.includes('antiaddiction') ||
-        lower.includes('crashlytics') ||
-        lower.includes('securityreport') ||
-        lower.includes('hackdata') ||
-        lower.includes('clientdata') ||
-        lower.includes('dataforward') ||
-        lower.includes('checkhack') ||
-        lower.includes('/gin/') ||
-        lower.includes('/ggp/') ||
-        lower.includes('ginreport') ||
-        lower.includes('ggpreport') ||
-        lower.includes('ggpupload') ||
-        lower.includes('ginupload') ||
-        lower.includes('ffanti') ||
-        lower.includes('abnormal') ||
-        lower.includes('detection') ||
-        lower.includes('libhash') ||
-        lower.includes('ahlreport') ||
-        lower.includes('modifier') ||
-        (lower.includes('report') && lower.includes('event')) ||
-        (lower.includes('upload') && !lower.includes('cdn'));
-    if (isUpload) return spoofOK(req, res);
-
     next();
 });
+
 
 // ============ PROXY /GetLoginData (GIN + BAN PATCH) ============
 // Flow: MajorLogin RAFIN.server_url = proxy URL → game kirim GetLoginData ke proxy.

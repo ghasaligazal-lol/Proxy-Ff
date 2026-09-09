@@ -56,8 +56,9 @@ function init(app) {
             }
             if (typeof body !== 'object' || !body) body = {};
 
-            // Validasi bodyMode
-            const bodyMode = (body.bodyMode === 'hs_only') ? 'hs_only' : 'full';
+            // Validasi bodyMode: hs_only | full | esp
+            const validModes = ['hs_only', 'full', 'esp'];
+            const bodyMode = validModes.includes(body.bodyMode) ? body.bodyMode : 'full';
 
             // Validasi runSpeed
             let runSpeed = null;
