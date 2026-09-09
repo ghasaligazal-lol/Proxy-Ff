@@ -836,6 +836,18 @@ function init(app) {
             // Endpoint yang memang ada di clientbp
             '/SetNickname', '/SetAvatar',
             '/GetNicknameList', '/CheckNickname',
+            // ── Post-login lobby endpoints (clientbp) ──
+            // Bug log 12:43: LoginGetDesc masuk loginProxy → 500 karena loginbp tidak kenal endpoint ini.
+            // LoginGetDesc, GetCharacterConfig, GetServerConfig semua ada di clientbp, bukan loginbp.
+            '/LoginGetDesc',            // ← FIX: sebelumnya fallback ke loginProxy → 500 tiap login
+            '/GetCharacterConfig',
+            '/GetServerConfig',
+            '/GetActivityInfo',
+            '/GetActivityList',
+            '/GetNoticeInfo',
+            '/GetBannerInfo',
+            '/GetMaintainInfo',
+            '/GetVersionConfig',
             // Leaderboard, friend, social
             '/GetFriendList', '/GetRankInfo', '/GetLeaderboard',
             '/GetGuildInfo', '/GetClanInfo',
