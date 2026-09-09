@@ -267,6 +267,50 @@ function init(app) {
                     }
                 }
 
+                // ── Patch 4: zero-out blacklist field (field 12 in RAFIN proto) ──
+                // Proto field 12 = BlacklistInfoRes { ban_reason, expire_duration, ban_time }
+                // Tag untuk field 12, wiretype 2 (LEN) = (12 << 3) | 2 = 98 = 0x62
+                // Cari byte 0x62 diikuti varint length > 0, lalu zero-out seluruh content
+                {
+                    let i = 0;
+                    let patchedBL = false;
+                    while (i < buf.length - 2) {
+                        // Field 12, wiretype 2 = tag byte 0x62
+                        if (buf[i] === 0x62) {
+                            let lenByte = buf[i + 1];
+                            if (lenByte > 0 && lenByte < 20 && (i + 2 + lenByte) <= buf.length) {
+                                // Verify isi: field 1 (ban_reason varint) tag = 0x08
+                                if (buf[i + 2] === 0x08) {
+                                    console.log(`[MAJORLOGIN-PATCH] blacklist field at offset ${i}, len=${lenByte} → zeroed`);
+                                    // Zero-out: set length ke 0, zero seluruh content
+                                    buf[i + 1] = 0;
+                                    for (let j = 0; j < lenByte; j++) buf[i + 2 + j] = 0;
+                                    modified = true;
+                                    patchLog.push(`blacklist: zeroed (${lenByte} bytes)`);
+                                    patchedBL = true;
+                                    i += 2 + lenByte;
+                                    continue;
+                                }
+                            }
+                        }
+                        i++;
+                    }
+                    if (!patchedBL) {
+                        // Check apakah ban_reason=4 (SKINMOD/modifier) ada di buffer
+                        // Sequence: 0x62 (field 12 LEN) <len> 0x08 0x04 (ban_reason=4)
+                        const bl4 = Buffer.from([0x62, 0x02, 0x08, 0x04]);
+                        const bl4idx = buf.indexOf(bl4);
+                        if (bl4idx !== -1) {
+                            buf[bl4idx + 1] = 0; // set length = 0
+                            buf[bl4idx + 2] = 0;
+                            buf[bl4idx + 3] = 0;
+                            modified = true;
+                            patchLog.push('blacklist: SKINMOD/modifier ban_reason=4 zeroed');
+                            console.log('[MAJORLOGIN-PATCH] Patched blacklist ban_reason=4 (SKINMOD/modifier)');
+                        }
+                    }
+                }
+
                 // ── Logging & TG ──────────────────────────────────────────────
                 let uid = '?', region = '?', token = '?', ttl = 0;
                 let banStr = null, queueStr = null;
