@@ -4,22 +4,24 @@
 // Tidak re-encode proto → tidak ada risiko field mapping salah
 //
 // Patches:
-//   Patch 1 — field 10 server_url         : patch ke loginbp.ggpolarbear.com
+//   Patch 1 — field 10 server_url         : patch ke domain PROXY (MY_IP)
+//             → wajib supaya GetLoginData + semua clientbp request lewat proxy
+//             → kalau server_url = loginbp/clientbp, game bypass proxy & CECNLHCONMI tidak ter-patch
 //   Patch 2 — field 14 tp_url             : dikosongkan (anticheat bypass)
 //   Patch 3 — field 16 ano_url + gin URLs : dikosongkan (GIN bypass)
 //   Patch 4 — field 12 blacklist proto    : zero-out semua ban fields
 //             (ban_reason, expire_duration, ban_time) termasuk
 //             multi-byte varint & ban_reason=1014 (IN_GAME_AUTO_NEW)
-//   Patch 5 — ffanti_url (field 19)       : dikosongkan (sama dengan tp_url,
-//             csoversea.stronghold.freefiremobile.com bypass)
-//   Patch 6 — ff_anti_config_desc enable  : di-set false (field nested msg)
+//   Patch 5 — ffanti_url (field 19)       : dikosongkan (sama dengan tp_url)
 //
-// FIX: Ban "Modifiers" + UIAccountForbiddenPopWndController pada akun ke-2
-// Root cause: (1) ffanti_url tidak di-patch → FF anti masih konek
-//             (2) Blacklist dengan ban_reason=1 (IN_GAME_AUTO) memiliki
-//                 length varint yang mungkin 2-byte (> 127) → patch lama miss
+// FIX SESSION 2: GetLoginData bypass proxy karena server_url = loginbp/clientbp
+// Root cause: game gunakan server_url untuk semua request post-login termasuk GetLoginData.
+// server_url HARUS = domain proxy sendiri bukan loginbp/clientbp.
 
-const TARGET_SERVER_URL = 'loginbp.ggpolarbear.com';
+// Ambil domain proxy dari env (sama dengan gamevar.js MY_IP)
+// Strip trailing slash + https:// → jadi bare hostname untuk proto string patch
+const _PROXY_FULL_URL = process.env.PROXY_URL || 'https://proxy-reza-kontolodon-memek-luu.up.railway.app/';
+const TARGET_SERVER_URL = _PROXY_FULL_URL.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
 const https    = require('https');
 const protobuf = require('protobufjs');
