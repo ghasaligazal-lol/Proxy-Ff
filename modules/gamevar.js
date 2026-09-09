@@ -236,7 +236,7 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
         "code":                              0,
         "core_ip_list":                      ["0.0.0.0","50.109.27.134","129.226.2.163","129.226.1.13","129.226.1.16"],
         "core_url":                          "csoversea.castle.freefiremobile.com",
-        "country_code":                      ""       // FIX: kosong agar tidak trigger LBS block,
+        "country_code":                      "",      // FIX: kosong agar tidak trigger LBS block
         "device_whitelist_sp_version":       "1.0.0",
         "device_whitelist_version":          "",
         "whitelist_mask":                    0,
@@ -285,7 +285,7 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
         "max_video":                         "",
         "max_web":                           "",
         "min_hint_size":                     1,
-        "multi_region":                      ""       // FIX: kosong agar tidak trigger BR region lock,
+        "multi_region":                      "",      // FIX: kosong agar tidak trigger BR region lock
         "need_check_ip_list":                ["202.81.108.9"],
         "need_track_hotupdate":              true,
         "network_log_server":                myDomain + "api/network_log",
