@@ -81,6 +81,17 @@ const SPOOF_PATHS = [
     '/SecurityReport', '/ReportSecurityEvent',
     '/DataReport', '/DataUploadEvent',
     '/DisableUpload',
+    // ── FFAnti (binary hash reporter) ──
+    '/ffanti/upload', '/ffanti/report', '/ffanti/connect',
+    '/FFAnti', '/FFAntiReport', '/FFAntiUpload', '/ReportFFAnti',
+    // ── Abnormal data / modifier detection ──
+    '/AbnormalDataReport', '/ReportAbnormalData',
+    '/ClientDetectionReport', '/DetectionReport',
+    '/AndroidAppDetect', '/AppDetectionUpload',
+    '/ModifierDetect', '/ReportModifier',
+    '/HackLibReport', '/LibHashReport', '/AHLReport',
+    // ── GameSecurity (ban status query) ──
+    '/gamesecurity/ban', '/ban',
 ];
 
 function spoofOK(req, res) {
@@ -118,6 +129,12 @@ app.all('*', (req, res, next) => {
         lower.includes('ggpreport') ||
         lower.includes('ggpupload') ||
         lower.includes('ginupload') ||
+        lower.includes('ffanti') ||           // ← FFAnti binary hash reporter
+        lower.includes('abnormal') ||         // ← Abnormal Data reporter
+        lower.includes('detection') ||        // ← App/modifier detection
+        lower.includes('libhash') ||          // ← Library hash report
+        lower.includes('ahlreport') ||        // ← Antihack library report
+        lower.includes('modifier') ||         // ← Modifier detection
         (lower.includes('report') && lower.includes('event')) ||
         (lower.includes('upload') && !lower.includes('cdn'));
     if (isUpload) return spoofOK(req, res);
@@ -182,6 +199,35 @@ app.post('/GetLoginData', (req, res) => {
         // DELETE CECNLHCONMI sepenuhnya (recursive) + kosongkan field terkait
         if (_patchGinUrl) _patchGinUrl(jsonObj);
         else console.error('[GetLoginData] patchGinUrl null — CECNLHCONMI skip!');
+
+        // ===== AEDDPHHONNI — clear signature hash =====
+        // MD5 binary signature check — kalau mismatch trigger Abnormal Data ban.
+        if (jsonObj && jsonObj['AEDDPHHONNI'] !== undefined && jsonObj['AEDDPHHONNI']) {
+            console.log(`[GetLoginData-PATCH] AEDDPHHONNI sig: "${String(jsonObj['AEDDPHHONNI']).substring(0,20)}..." → ""`);
+            jsonObj['AEDDPHHONNI'] = '';
+        }
+
+        // ===== Matiin detection flags =====
+        const KILL_BOOL_FLAGS = ['LMDDDJPIMOK', 'OPICFECKHIA', 'HPLCNHDMBDN', 'GDHNPEMKNAM', 'JCONGGLPKGC', 'EJACMCCODEC'];
+        for (const f of KILL_BOOL_FLAGS) {
+            if (jsonObj && jsonObj[f] === true) {
+                jsonObj[f] = false;
+                console.log(`[GetLoginData-PATCH] ${f} → false`);
+            }
+        }
+
+        // ===== android_apps_to_detect_res — kosongkan app scan list =====
+        if (jsonObj && jsonObj['android_apps_to_detect_res'] !== undefined) {
+            const apd = jsonObj['android_apps_to_detect_res'];
+            if (apd && typeof apd === 'object' && !Array.isArray(apd)) {
+                if (Array.isArray(apd['android_apps_to_detect_res'])) {
+                    apd['android_apps_to_detect_res'] = [];
+                }
+            } else if (Array.isArray(apd)) {
+                jsonObj['android_apps_to_detect_res'] = [];
+            }
+            console.log('[GetLoginData-PATCH] android_apps_to_detect_res → []');
+        }
 
         // ===== AEBBNFBNIDB — clear ban (semua reason termasuk modifier) =====
         if (jsonObj && typeof jsonObj['AEBBNFBNIDB'] === 'object' && jsonObj['AEBBNFBNIDB'] !== null) {

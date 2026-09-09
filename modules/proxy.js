@@ -30,6 +30,17 @@ const TELEMETRY_PATHS = [
     // Network telemetry — berisi country:BR dari ver.php lama, jangan forward ke Garena
     '/api/network_log', '/network_log', '/networklog',
     '/api/logNetworkLogEvent', '/logNetworkLogEvent',
+    // ── FFAnti binary hash reporter ──
+    '/ffanti/upload', '/ffanti/report', '/ffanti/connect',
+    '/FFAnti', '/FFAntiReport', '/FFAntiUpload', '/ReportFFAnti', '/CheckFFAnti',
+    // ── Abnormal data / modifier detection ──
+    '/AbnormalDataReport', '/ReportAbnormalData', '/AbnormalData',
+    '/ClientDetectionReport', '/DetectionReport', '/ReportDetection',
+    '/AndroidAppDetect', '/AppDetectionUpload',
+    '/ModifierDetect', '/ModDetect', '/ReportModifier',
+    '/HackLibReport', '/LibHashReport', '/AHLReport',
+    // ── GameSecurity ban check ──
+    '/gamesecurity/ban', '/ban',
 ];
 
 function isTelemetryPath(path) {
@@ -51,6 +62,12 @@ function isTelemetryPath(path) {
         lower.includes('ggpupload') ||
         lower.includes('/gin/') ||
         lower.includes('/ggp/') ||
+        lower.includes('ffanti') ||
+        lower.includes('abnormal') ||
+        lower.includes('detection') ||
+        lower.includes('libhash') ||
+        lower.includes('ahlreport') ||
+        lower.includes('modifie') ||
         (lower.includes('report') && lower.includes('event'))
     );
 }
@@ -234,6 +251,68 @@ function removeKeyRecursive(obj, key, depth) {
         const val = obj[k];
         if (val && typeof val === 'object') removeKeyRecursive(val, key, depth + 1);
     }
+}
+
+// ===== ABNORMAL DATA PATCH =====
+// "Abnormal Data" ban dipicu ketika server detect data yang tidak konsisten:
+//   1. gamevar memiliki nilai yang tidak pernah di-set oleh server (tapi dikirim client)
+//   2. file hash mismatch di MTHASH / ResFileLoader
+//   3. app list detection mengirim package yang ter-flag
+//   4. data fields yang tidak valid/di-luar range normal
+// Fix: null-kan field yang bisa trigger Abnormal Data check di GetLoginData response
+function patchAbnormalData(jsonObj) {
+    if (!jsonObj || typeof jsonObj !== 'object') return jsonObj;
+
+    // AEDDPHHONNI — MD5 signature verification token
+    // Server pakai ini untuk verify game binary tidak dimodifikasi.
+    // Kalau nilai tidak cocok dengan binary yang dimodif → Abnormal Data.
+    // Kosongkan supaya skip signature check.
+    if (jsonObj['AEDDPHHONNI'] !== undefined && jsonObj['AEDDPHHONNI']) {
+        console.log(`[ABNORMAL-PATCH] AEDDPHHONNI (sig): "${jsonObj['AEDDPHHONNI'].substring(0,20)}..." → ""`);
+        jsonObj['AEDDPHHONNI'] = '';
+    }
+
+    // android_apps_to_detect_res — SUDAH di-handle di patchGinUrl, tapi double-check
+    if (jsonObj['android_apps_to_detect_res'] !== undefined) {
+        const apd = jsonObj['android_apps_to_detect_res'];
+        if (apd && typeof apd === 'object' && !Array.isArray(apd)) {
+            if (Array.isArray(apd['android_apps_to_detect_res'])) {
+                if (apd['android_apps_to_detect_res'].length > 0) {
+                    apd['android_apps_to_detect_res'] = [];
+                    console.log('[ABNORMAL-PATCH] android_apps_to_detect_res inner → []');
+                }
+            }
+        } else if (Array.isArray(apd) && apd.length > 0) {
+            jsonObj['android_apps_to_detect_res'] = [];
+            console.log('[ABNORMAL-PATCH] android_apps_to_detect_res root → []');
+        }
+    }
+
+    // LMDDDJPIMOK — boolean flag, kalau true bisa trigger additional verification
+    if (jsonObj['LMDDDJPIMOK'] === true) {
+        jsonObj['LMDDDJPIMOK'] = false;
+        console.log('[ABNORMAL-PATCH] LMDDDJPIMOK → false');
+    }
+
+    // OPICFECKHIA — additional check flag
+    if (jsonObj['OPICFECKHIA'] === true) {
+        jsonObj['OPICFECKHIA'] = false;
+        console.log('[ABNORMAL-PATCH] OPICFECKHIA → false');
+    }
+
+    // HPLCNHDMBDN — another platform check flag
+    if (jsonObj['HPLCNHDMBDN'] === true) {
+        jsonObj['HPLCNHDMBDN'] = false;
+        console.log('[ABNORMAL-PATCH] HPLCNHDMBDN → false');
+    }
+
+    // GDHNPEMKNAM — debug/dev flag yang kalau false harusnya normal
+    if (jsonObj['GDHNPEMKNAM'] === true) {
+        jsonObj['GDHNPEMKNAM'] = false;
+        console.log('[ABNORMAL-PATCH] GDHNPEMKNAM → false');
+    }
+
+    return jsonObj;
 }
 
 function patchGinUrl(jsonObj) {
@@ -668,6 +747,7 @@ function createClientProxyWithBanPatch() {
                         patchBanInfo(parsed);
                         patchMatchmakingBL(parsed, req.url || '');   // ← dedicated BL patch
                         patchGinUrl(parsed);
+                        patchAbnormalData(parsed);                   // ← Abnormal Data patch
                         patchMailList(parsed, req.url || '');
                         if (isLoginRewardEndpoint(req.url || '')) {
                             patchLoginReward(parsed, req.url || '');

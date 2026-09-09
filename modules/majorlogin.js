@@ -307,28 +307,85 @@ function init(app) {
                 }
 
                 // ── Patch 1: server_url (field 10) → proxy domain ───────────
-                // WAJIB: tanpa ini GetLoginData bypass proxy → CECNLHCONMI tidak ter-patch
-                // → GIN/anticheat aktif → akun terus di-report → matchmaking BL terus terjadi.
-                // Dibuktikan dari BackendLog: CECNLHCONMI masih full aktif ketika server_url = loginbp.
-                // GetLoginData di app.js tetap di-forward ke clientbp.ggpolarbear.com (bukan loginbp).
-                if (RAFIN) {
-                    try {
-                        const rafinPeek = RAFIN.toObject(RAFIN.decode(buf), { defaults: false, longs: String });
-                        const currentServerUrl = (rafinPeek.server_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
-                        if (currentServerUrl && currentServerUrl !== TARGET_SERVER_URL) {
-                            const r = patchStringInBuf(buf, currentServerUrl, TARGET_SERVER_URL);
-                            if (r.patched) {
-                                buf = r.buf;
-                                modified = true;
-                                patchLog.push(`server_url: "${currentServerUrl}" → "${TARGET_SERVER_URL}"`);
-                            } else {
-                                console.log(`[MAJORLOGIN] server_url patch skip: "${currentServerUrl}" tidak ditemukan di buffer`);
-                            }
-                        } else if (!currentServerUrl) {
-                            console.log('[MAJORLOGIN] server_url kosong dari Garena → skip patch');
+                // Fix: scan SEMUA Garena hostname yang mungkin muncul sebagai server_url.
+                // Root cause bug lama: hanya replace currentServerUrl dari proto-decode,
+                // tapi kadang server return "loginbp.ggpolarbear.com" (bukan clientbp)
+                // sehingga patchStringInBuf cari string yang ada tapi replace ke proxy.
+                // Sekarang: brute-force replace SEMUA known Garena server hostnames.
+                {
+                    const GARENA_SERVER_HOSTS = [
+                        'loginbp.ggpolarbear.com',
+                        'clientbp.ggpolarbear.com',
+                        'loginbp.ggpolarbear.com/',
+                        'clientbp.ggpolarbear.com/',
+                    ];
+                    let serverUrlPatched = false;
+                    for (const garenaHost of GARENA_SERVER_HOSTS) {
+                        // Coba dengan https://
+                        const withHttps = 'https://' + garenaHost.replace(/\/$/, '');
+                        let r = patchStringInBuf(buf, withHttps, 'https://' + TARGET_SERVER_URL);
+                        if (r.patched) {
+                            buf = r.buf; modified = true; serverUrlPatched = true;
+                            patchLog.push(`server_url: "${withHttps}" → "https://${TARGET_SERVER_URL}"`);
                         }
-                    } catch (peekErr) {
-                        console.log(`[MAJORLOGIN] server_url peek failed: ${peekErr.message} → skip patch`);
+                        // Coba tanpa scheme (bare hostname)
+                        const bareHost = garenaHost.replace(/\/$/, '');
+                        r = patchStringInBuf(buf, bareHost, TARGET_SERVER_URL);
+                        if (r.patched) {
+                            buf = r.buf; modified = true; serverUrlPatched = true;
+                            patchLog.push(`server_url bare: "${bareHost}" → "${TARGET_SERVER_URL}"`);
+                        }
+                    }
+                    // Fallback: decode RAFIN dan replace apapun yang ada di server_url field
+                    if (!serverUrlPatched && RAFIN) {
+                        try {
+                            const rafinPeek = RAFIN.toObject(RAFIN.decode(buf), { defaults: false, longs: String });
+                            const cur = (rafinPeek.server_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
+                            if (cur && cur !== TARGET_SERVER_URL) {
+                                const r2 = patchStringInBuf(buf, cur, TARGET_SERVER_URL);
+                                if (r2.patched) {
+                                    buf = r2.buf; modified = true;
+                                    patchLog.push(`server_url fallback: "${cur}" → "${TARGET_SERVER_URL}"`);
+                                } else {
+                                    console.log(`[MAJORLOGIN] server_url fallback MISS: "${cur}" tidak ada di buffer`);
+                                }
+                            }
+                        } catch (e) { console.log('[MAJORLOGIN] server_url fallback decode err:', e.message); }
+                    }
+                }
+
+                // ── Patch 1b: ff_anti_config_desc.enable → false ──────────────
+                // Field ini enable/disable FFAnti SDK sepenuhnya. Kalau true,
+                // FFAnti scan memory + kirim AHLR ke Garena → trigger modifier ban.
+                // Cari string "enable" di buffer DALAM context ff_anti_config_desc.
+                // Proto RAFIN tidak include ff_anti_config_desc (field >= 20 = extra),
+                // jadi cara paling aman: cari byte sequence enable=true (0x08 0x01)
+                // yang ada setelah string "ID" (region) di buffer akhir.
+                // Fix terbaik: zero-out seluruh ff_anti_config_desc field (field 21).
+                // Field 21 wire type 2 → tag = (21<<3)|2 = 0xAA 0x01
+                {
+                    const TAG_FFANTI = Buffer.from([0xAA, 0x01]);
+                    let ffIdx = buf.indexOf(TAG_FFANTI);
+                    while (ffIdx !== -1 && ffIdx < buf.length - 4) {
+                        // Baca length varint
+                        let pos = ffIdx + 2;
+                        let msgLen = 0, shift = 0;
+                        while (pos < buf.length) {
+                            const b = buf[pos++];
+                            msgLen |= (b & 0x7f) << shift;
+                            shift += 7;
+                            if (!(b & 0x80)) break;
+                        }
+                        if (msgLen > 0 && msgLen < 100 && pos + msgLen <= buf.length) {
+                            // Zero-out entire ff_anti_config_desc sub-message
+                            const newBuf = Buffer.from(buf);
+                            for (let i = ffIdx; i < pos + msgLen; i++) newBuf[i] = 0;
+                            buf = newBuf; modified = true;
+                            patchLog.push('ff_anti_config_desc: cleared');
+                            console.log(`[MAJORLOGIN-PATCH] ff_anti_config_desc at ${ffIdx}, len=${msgLen} → zeroed`);
+                            break;
+                        }
+                        ffIdx = buf.indexOf(TAG_FFANTI, ffIdx + 2);
                     }
                 }
 
