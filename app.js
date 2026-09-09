@@ -125,29 +125,57 @@ app.all('*', (req, res, next) => {
 });
 
 // ============ PROXY /GetLoginData (GIN + BAN PATCH) ============
+// Require proxy module dengan lazy-init + guard.
+// Bug lama: require('./modules/proxy') dipanggil DI DALAM handler tiap request.
+// Masalah: kalau proxy.js gagal load (circular dep / crash saat init), require()
+// balik module cache kosong {} → _patchGinUrl = undefined → CECNLHCONMI tidak
+// di-patch TANPA error/warning apapun → GIN tembus ke TCP langsung.
+// Fix: resolve sekali saat handler pertama hit, cache permanen, log FATAL kalau null.
+const _zlib = require('zlib');
+const { MY_IP: _MY_IP } = require('./gamevar');
+
+const _GARENA_IMG_DOMAINS = [
+    'https://dl.bs.freefiremobile.com',
+    'https://dl.dir.freefiremobile.com',
+    'https://dl.cdn.freefiremobile.com',
+    'https://dl.ak.freefiremobile.com',
+    'https://dl.gmc.freefiremobile.com',
+    'https://core-bs.freefiremobile.com',
+    'https://core-gmc.freefiremobile.com',
+];
+
+// Lazy-init: proxy.js harus di-require SETELAH modules.proxy.init() dipanggil di bawah.
+// Kalau di-require sekarang (saat app.js load pertama kali), circular dep bisa
+// kembalikan modul yang belum selesai init → exports kosong → fungsi undefined.
+let _patchGinUrl       = null;
+let _patchStrGin       = null;
+let _proxyFnsResolved  = false;
+
+function _resolveProxyFns() {
+    if (_proxyFnsResolved) return;
+    _proxyFnsResolved = true;
+    try {
+        const proxyMod = require('./modules/proxy');
+        _patchGinUrl = typeof proxyMod.patchGinUrl         === 'function' ? proxyMod.patchGinUrl         : null;
+        _patchStrGin = typeof proxyMod.patchStringLevelGin === 'function' ? proxyMod.patchStringLevelGin : null;
+        if (!_patchGinUrl) console.error('[GetLoginData] FATAL: patchGinUrl undefined — CECNLHCONMI TIDAK di-patch! Cek proxy.js exports.');
+        if (!_patchStrGin) console.error('[GetLoginData] FATAL: patchStringLevelGin undefined — string-level GIN domain bisa lolos!');
+        else console.log('[GetLoginData] proxy patch functions resolved OK');
+    } catch (e) {
+        console.error('[GetLoginData] FATAL: require(proxy) crash:', e.message, '— semua GIN patch SKIP!');
+    }
+}
+
 app.post('/GetLoginData', (req, res) => {
-    const body = req.body;
-    const zlib = require('zlib');
-    const { MY_IP } = require('./gamevar');
+    _resolveProxyFns();  // idempoten, run sekali lalu noop
 
-    const GARENA_IMG_DOMAINS = [
-        'https://dl.bs.freefiremobile.com',
-        'https://dl.dir.freefiremobile.com',
-        'https://dl.cdn.freefiremobile.com',
-        'https://dl.ak.freefiremobile.com',
-        'https://dl.gmc.freefiremobile.com',
-        'https://core-bs.freefiremobile.com',
-        'https://core-gmc.freefiremobile.com',
-    ];
-    const proxyBase = MY_IP.replace(/\/$/, '');
-    const proxyHost = proxyBase.replace(/^https?:\/\//, '').replace(/\/$/, '');
-
-    // Pakai patchGinUrl + patchStringLevelGin dari proxy.js (DELETE method — paling aman)
-    const { patchGinUrl: _patchGinUrl, patchStringLevelGin: _patchStrGin } = require('./modules/proxy');
+    const body      = req.body;
+    const proxyBase = _MY_IP.replace(/\/$/, '');
 
     function patchGetLoginData(jsonObj) {
         // DELETE CECNLHCONMI sepenuhnya (recursive) + kosongkan field terkait
-        if (typeof _patchGinUrl === 'function') _patchGinUrl(jsonObj);
+        if (_patchGinUrl) _patchGinUrl(jsonObj);
+        else console.error('[GetLoginData] patchGinUrl null — CECNLHCONMI skip!');
 
         // ===== AEBBNFBNIDB — clear ban (semua reason termasuk modifier) =====
         if (jsonObj && typeof jsonObj['AEBBNFBNIDB'] === 'object' && jsonObj['AEBBNFBNIDB'] !== null) {
@@ -192,9 +220,9 @@ app.post('/GetLoginData', (req, res) => {
         const encoding = proxyRes.headers['content-encoding'];
         const chunks = [];
         let stream = proxyRes;
-        if (encoding === 'gzip')    stream = proxyRes.pipe(zlib.createGunzip());
-        else if (encoding === 'deflate') stream = proxyRes.pipe(zlib.createInflate());
-        else if (encoding === 'br') stream = proxyRes.pipe(zlib.createBrotliDecompress());
+        if (encoding === 'gzip')    stream = proxyRes.pipe(_zlib.createGunzip());
+        else if (encoding === 'deflate') stream = proxyRes.pipe(_zlib.createInflate());
+        else if (encoding === 'br') stream = proxyRes.pipe(_zlib.createBrotliDecompress());
 
         stream.on('data', c => chunks.push(c));
         stream.on('end', () => {
@@ -212,11 +240,11 @@ app.post('/GetLoginData', (req, res) => {
                     patchGetLoginData(parsed);
                     // Patch image URLs
                     let jsonStr = JSON.stringify(parsed);
-                    for (const domain of GARENA_IMG_DOMAINS) {
+                    for (const domain of _GARENA_IMG_DOMAINS) {
                         jsonStr = jsonStr.split(domain).join(proxyBase + '/cdn');
                     }
                     // String-level fallback — catch domain GIN yang mungkin masih tersisa di nested field
-                    if (typeof _patchStrGin === 'function') jsonStr = _patchStrGin(jsonStr);
+                    if (_patchStrGin) jsonStr = _patchStrGin(jsonStr);
                     const patched = Buffer.from(jsonStr, 'utf8');
                     headers['content-length'] = String(patched.length);
                     res.writeHead(proxyRes.statusCode, headers);
