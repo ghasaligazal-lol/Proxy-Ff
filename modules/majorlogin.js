@@ -200,27 +200,28 @@ function init(app) {
                 }
 
                 // ── Patch 1: server_url (field 10) → loginbp.ggpolarbear.com ────
-                // Garena kadang return server_url yang berbeda (clientbp, regional, dll).
-                // Paksa ke loginbp.ggpolarbear.com supaya game tetap connect lewat proxy kita.
-                // Strategy: scan buffer cari semua kandidat domain di field 10,
-                // ganti dengan TARGET_SERVER_URL menggunakan patchStringInBuf().
-                const SERVER_URL_CANDIDATES = [
-                    'clientbp.ggpolarbear.com',
-                    'loginbp.ggpolarbear.com',          // bisa jadi sudah benar, skip (lihat bawah)
-                    'ff.garena.com',
-                    'freefire.garena.com',
-                    'loginbp.garena.com',
-                    'clientbp.garena.com',
-                ];
-                for (const candidate of SERVER_URL_CANDIDATES) {
-                    if (candidate === TARGET_SERVER_URL) continue;  // sudah benar, skip
-                    if (buf.indexOf(Buffer.from(candidate, 'utf8')) !== -1) {
-                        const r = patchStringInBuf(buf, candidate, TARGET_SERVER_URL);
-                        if (r.patched) {
-                            buf = r.buf;
-                            modified = true;
-                            patchLog.push(`server_url: "${candidate}" → "${TARGET_SERVER_URL}"`);
+                // Strategy aman: decode RAFIN dulu untuk baca nilai server_url asli,
+                // baru patch hanya string itu di buffer.
+                // Ini mencegah false-positive scan domain yang merusak buffer proto.
+                // Kalau server_url kosong atau sudah TARGET_SERVER_URL → skip.
+                if (RAFIN) {
+                    try {
+                        const rafinPeek = RAFIN.toObject(RAFIN.decode(buf), { defaults: false, longs: String });
+                        const currentServerUrl = (rafinPeek.server_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
+                        if (currentServerUrl && currentServerUrl !== TARGET_SERVER_URL) {
+                            const r = patchStringInBuf(buf, currentServerUrl, TARGET_SERVER_URL);
+                            if (r.patched) {
+                                buf = r.buf;
+                                modified = true;
+                                patchLog.push(`server_url: "${currentServerUrl}" → "${TARGET_SERVER_URL}"`);
+                            } else {
+                                console.log(`[MAJORLOGIN] server_url patch skip: "${currentServerUrl}" tidak ditemukan di buffer`);
+                            }
+                        } else if (!currentServerUrl) {
+                            console.log('[MAJORLOGIN] server_url kosong dari Garena → skip patch');
                         }
+                    } catch (peekErr) {
+                        console.log(`[MAJORLOGIN] server_url peek failed: ${peekErr.message} → skip patch`);
                     }
                 }
 

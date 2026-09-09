@@ -298,18 +298,8 @@ function getVerConfig(clientIp = "74.125.24.139", myDomain = MY_IP) {
         "remote_option_version_astc":        "optionallocres:50|optionalavatarres:711|optionalclothres:1228|optionalfootballres:27|optionalfullscreencgres:306|optionalhuntinggroundres:178|optionalinfection:116|optionalingameres:438|optionallobbyres:640|optionallonewolfres:206|optionallonewolfstrikeoutres:155|optionalludores:175|optionalmap1res:385|optionalmap2res:159|optionalmap4res:175|optionalmaphippores:92|optionalmapres:374|optionalnewblast:162|optionalpetres:910|optionalrushb:241|optionalrushingpetsres:217|optionalsnowduelres:59|optionalsocialres:215|optionaltrainingres:267|optionalugcres:786|optionalvoiceres:379|optionalwerewolves:286|optionalwerunres:74|optionalmapponyres:200|optionalugcoldparadiseres:32|optionalmultiregionres:27",
         "remote_version":                    "2.131.22",
         "res_url":                           myDomain + "live/ABHotUpdates/",
-        // server_url = proxy domain (WAJIB, jangan diganti ke loginbp).
-        //
-        // Alur yang benar:
-        // 1. game baca ver.php → server_url = proxy
-        // 2. game konek proxy/MajorLogin → majorlogin.js intercept (registered sebelum catch-all)
-        // 3. majorlogin.js forward ke loginbp → dapat MajorLoginRes binary
-        // 4. MajorLoginRes binary di-patch: "clientbp.ggpolarbear.com" → proxy domain
-        // 5. game konek proxy/GetLoginData → CECNLHCONMI deleted → GIN blind
-        //
-        // Kalau server_url = loginbp → game bypass proxy → MajorLoginRes tidak di-patch
-        // → game konek clientbp langsung untuk GetLoginData → CECNLHCONMI TIDAK di-patch → GIN detect!
-        "server_url":                        myDomain,
+        // server_url = loginbp langsung (game connect langsung ke Garena setelah MajorLogin)
+        "server_url":                        "https://loginbp.ggpolarbear.com/",
         "should_check_ab_exist":             true,
         "should_check_ab_load":              false,
         "should_check_ab_size":              true,

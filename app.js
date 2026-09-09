@@ -233,24 +233,26 @@ app.post('/GetLoginData', (req, res) => {
             delete headers['content-length'];
             delete headers['transfer-encoding'];
 
-            if (ct.includes('application/json')) {
-                let parsed;
-                try { parsed = JSON.parse(rawBody.toString('utf8')); } catch(_) { parsed = null; }
-                if (parsed && typeof parsed === 'object') {
-                    patchGetLoginData(parsed);
-                    // Patch image URLs
-                    let jsonStr = JSON.stringify(parsed);
-                    for (const domain of _GARENA_IMG_DOMAINS) {
-                        jsonStr = jsonStr.split(domain).join(proxyBase + '/cdn');
-                    }
-                    // String-level fallback — catch domain GIN yang mungkin masih tersisa di nested field
-                    if (_patchStrGin) jsonStr = _patchStrGin(jsonStr);
-                    const patched = Buffer.from(jsonStr, 'utf8');
-                    headers['content-length'] = String(patched.length);
-                    res.writeHead(proxyRes.statusCode, headers);
-                    return res.end(patched);
+            // Selalu coba parse JSON — patch CECNLHCONMI harus jalan regardless of content-type
+            // Garena kadang return content-type: octet-stream padahal isinya JSON
+            let parsed = null;
+            try { parsed = JSON.parse(rawBody.toString('utf8')); } catch(_) {}
+            if (parsed && typeof parsed === 'object') {
+                patchGetLoginData(parsed);
+                // Patch image URLs
+                let jsonStr = JSON.stringify(parsed);
+                for (const domain of _GARENA_IMG_DOMAINS) {
+                    jsonStr = jsonStr.split(domain).join(proxyBase + '/cdn');
                 }
+                // String-level fallback — catch domain GIN yang mungkin masih tersisa di nested field
+                if (_patchStrGin) jsonStr = _patchStrGin(jsonStr);
+                const patched = Buffer.from(jsonStr, 'utf8');
+                // Pertahankan content-type asli kalau ada, tapi update length
+                headers['content-length'] = String(patched.length);
+                res.writeHead(proxyRes.statusCode, headers);
+                return res.end(patched);
             }
+            // Fallback: bukan JSON, kirim raw
             headers['content-length'] = String(rawBody.length);
             res.writeHead(proxyRes.statusCode, headers);
             res.end(rawBody);

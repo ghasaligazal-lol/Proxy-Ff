@@ -859,6 +859,23 @@ function init(app) {
             '/BuyItem', '/ExchangeItem',
             // Newbie
             '/ChooseNewbieChoice',
+            // ── Account & profile (clientbp) ──
+            '/LoginGetAccountInfo', '/LoginGetSplash', '/LoginGetProfile',
+            '/GetFriend', '/GetFriendListV2',
+            '/GetPetList', '/GetPetInfo',
+            '/GetLoadoutSchemeDesc', '/GetPresetLoadoutInfo',
+            '/GetWorkshopSwitch', '/GetWorkshopInfo',
+            '/GetBRRankingInfo', '/GetCSRankingInfo',
+            '/GetAccountFreshInfo', '/GetAttendance',
+            '/GetPlayerHippoRankingInfo',
+            '/GetRankingMatchGrandmasterPositions', '/GetCSRankingMatchGrandmasterPositions',
+            '/GetRankMasterLevel', '/GetCSRankMasterLevel',
+            '/GetPrimeAccountInfo', '/GetAccountTeamTopUpInfo',
+            '/GetStore', '/GetBackpack',
+            '/GetOptCdnDesc',
+            '/GetLimitedEventOpenInfo', '/GetCustomEventOpenInfo',
+            '/GetGooglePlayAchievements',
+            '/GetPlatformProfile',
         ];
 
         // Register flow → loginbp (bukan clientbp)
