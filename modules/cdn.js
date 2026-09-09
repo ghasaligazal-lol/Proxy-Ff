@@ -484,6 +484,55 @@ function init(app) {
             return res.status(404).send('cache_res not found locally');
         }
 
+        // PATCH: UGC resource miss → passthrough ke origin CDN, jangan 404 langsung.
+        // UGC map resource (ugcres, UGC map bundle) divalidasi oleh ResUpdateDownloadContext
+        // sebelum group join. Kalau file ini 404 → NullRef di AddTagFilesPair → mode 25 masuk
+        // unavailableModes → tidak bisa join team/group.
+        // Spoof 200-empty kalau upstream juga gagal (sama seperti handler optional di atas).
+        if (reqPath.includes('ugcres') || reqPath.includes('ugc') || reqPath.includes('optionalugc')) {
+            const ugcTarget = upstreamTarget(reqPath);
+            console.log(`[CDN] UGC MISS → upstream passthrough ${ugcTarget}`);
+            const u = new URL(ugcTarget);
+            const ugcHeaders = {
+                'User-Agent':      req.headers['user-agent'] || 'Dalvik/2.1.0',
+                'Accept':          req.headers.accept || '*/*',
+                'Connection':      'keep-alive',
+                'Host':            u.host,
+            };
+            if (req.headers.range) ugcHeaders.Range = req.headers.range;
+            const r = https.get({ hostname: u.hostname, path: u.pathname + u.search, headers: ugcHeaders, agent: AGENT }, upstreamRes => {
+                const status = upstreamRes.statusCode || 502;
+                if (status === 200 || status === 206) {
+                    res.statusCode = status;
+                    for (const h of ['content-type','content-length','content-range','accept-ranges','etag','cache-control']) {
+                        if (upstreamRes.headers[h] !== undefined) res.setHeader(h, upstreamRes.headers[h]);
+                    }
+                    upstreamRes.pipe(res);
+                    upstreamRes.on('error', () => { if (!res.headersSent) res.status(502).end(); else res.destroy(); });
+                } else {
+                    console.log(`[CDN] UGC upstream ${status} ${reqPath} → spoof 200 empty`);
+                    upstreamRes.resume();
+                    if (!res.headersSent) {
+                        res.setHeader('Content-Type', 'application/octet-stream');
+                        res.setHeader('Content-Length', '0');
+                        res.setHeader('Accept-Ranges', 'bytes');
+                        res.status(200).end();
+                    }
+                }
+            });
+            r.setTimeout(15000, () => { r.destroy(new Error('ugc upstream timeout')); });
+            r.on('error', err => {
+                console.log(`[CDN] UGC upstream error: ${err.message} → spoof 200 empty`);
+                if (!res.headersSent) {
+                    res.setHeader('Content-Type', 'application/octet-stream');
+                    res.setHeader('Content-Length', '0');
+                    res.setHeader('Accept-Ranges', 'bytes');
+                    res.status(200).end();
+                }
+            });
+            return;
+        }
+
         return proxyUpstream(req, res, upstreamTarget(reqPath));
     });
 

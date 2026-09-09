@@ -72,6 +72,7 @@ function sendSpoofOK(res, isBinary) {
 const BAN_INFO_KEY = 'AEBBNFBNIDB';
 
 function patchBanInfo(jsonObj) {
+    // Patch AEBBNFBNIDB (GetLoginData ban_mode)
     if (jsonObj && typeof jsonObj[BAN_INFO_KEY] === 'object' && jsonObj[BAN_INFO_KEY] !== null) {
         const banInfo = jsonObj[BAN_INFO_KEY];
         const before = { ban_mode: banInfo.ban_mode, unban_time: banInfo.unban_time, hint_string: banInfo.hint_string };
@@ -80,6 +81,34 @@ function patchBanInfo(jsonObj) {
         banInfo.hint_string = '';
         console.log(`[BAN-PATCH] AEBBNFBNIDB patched: ${JSON.stringify(before)} → ban_mode:0 unban_time:0 hint_string:""`);
     }
+
+    // PATCH: spoof matchmaking blacklist (GetMatchmakingBlacklist response)
+    // Struktur: { blacklist_list: [{ blacklist: { is_in_blacklist, ban_time, ban_reason, ... } }] }
+    // dan nested blacklist di tiap player entry di GetLoginData response
+    function zapBlacklist(obj, depth) {
+        if (!obj || typeof obj !== 'object' || depth > 8) return;
+        if (Array.isArray(obj)) { obj.forEach(i => zapBlacklist(i, depth + 1)); return; }
+        if ('is_in_blacklist' in obj) {
+            const before = obj.is_in_blacklist;
+            obj.is_in_blacklist   = false;
+            obj.ban_time          = 0;
+            obj.ban_reason        = 0;
+            obj.ban_reason_detail = '';
+            obj.ban_expire_duration = 0;
+            obj.ban_type          = '';
+            if (before) console.log(`[BAN-PATCH] blacklist.is_in_blacklist spoofed → false`);
+        }
+        if ('matchmaking_blacklist' in obj && obj.matchmaking_blacklist !== 0) {
+            console.log(`[BAN-PATCH] matchmaking_blacklist ${obj.matchmaking_blacklist} → 0`);
+            obj.matchmaking_blacklist = 0;
+        }
+        if ('championship_is_in_blacklist' in obj && obj.championship_is_in_blacklist) {
+            obj.championship_is_in_blacklist = false;
+        }
+        for (const k of Object.keys(obj)) zapBlacklist(obj[k], depth + 1);
+    }
+    zapBlacklist(jsonObj, 0);
+
     return jsonObj;
 }
 
@@ -776,6 +805,7 @@ function init(app) {
         const CLIENT_PATHS = [
             // ── Data & patch ──
             '/GetLoginData',           // ← PATCH: intercept GIN/GGP config → patchGinUrl
+            '/GetMatchmakingBlacklist', // ← PATCH: intercept BL status → patchBanInfo
             '/GetPlayerPersonalShow', '/GetMailList', '/GetCharacterRewardData',
             '/GetLoginReward', '/GetDailyLogin', '/GetAvatarInfo',
             '/GetClothesInfo', '/GetWeaponSkinInfo', '/GetCharInfo',
