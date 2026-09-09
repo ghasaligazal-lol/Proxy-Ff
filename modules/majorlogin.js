@@ -4,19 +4,14 @@
 // Tidak re-encode proto → tidak ada risiko field mapping salah
 //
 // Patches:
-//   Patch 1 — field 10 server_url         : patch ke domain PROXY (MY_IP)
-//             → wajib supaya GetLoginData + semua clientbp request lewat proxy
-//             → kalau server_url = loginbp/clientbp, game bypass proxy & CECNLHCONMI tidak ter-patch
+//   Patch 1 — field 10 server_url         : DINONAKTIFKAN — server_url dibiarkan apa adanya
+//             dari Garena (loginbp.ggpolarbear.com). Request post-login langsung ke loginbp.
 //   Patch 2 — field 14 tp_url             : dikosongkan (anticheat bypass)
 //   Patch 3 — field 16 ano_url + gin URLs : dikosongkan (GIN bypass)
 //   Patch 4 — field 12 blacklist proto    : zero-out semua ban fields
 //             (ban_reason, expire_duration, ban_time) termasuk
 //             multi-byte varint & ban_reason=1014 (IN_GAME_AUTO_NEW)
 //   Patch 5 — ffanti_url (field 19)       : dikosongkan (sama dengan tp_url)
-//
-// FIX SESSION 2: GetLoginData bypass proxy karena server_url = loginbp/clientbp
-// Root cause: game gunakan server_url untuk semua request post-login termasuk GetLoginData.
-// server_url HARUS = domain proxy sendiri bukan loginbp/clientbp.
 
 // Ambil domain proxy dari env (sama dengan gamevar.js MY_IP)
 // Strip trailing slash + https:// → jadi bare hostname untuk proto string patch
@@ -310,25 +305,18 @@ function init(app) {
                     }
                 }
 
-                // ── Patch 1: server_url (field 10) → loginbp.ggpolarbear.com ──
+                // ── Patch 1: server_url — DINONAKTIFKAN ──────────────────────
+                // server_url dibiarkan apa adanya dari Garena (loginbp.ggpolarbear.com).
+                // Tidak di-redirect ke proxy — request post-login langsung ke loginbp.
                 if (RAFIN) {
                     try {
                         const rafinPeek = RAFIN.toObject(RAFIN.decode(buf), { defaults: false, longs: String });
                         const currentServerUrl = (rafinPeek.server_url || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
-                        if (currentServerUrl && currentServerUrl !== TARGET_SERVER_URL) {
-                            const r = patchStringInBuf(buf, currentServerUrl, TARGET_SERVER_URL);
-                            if (r.patched) {
-                                buf = r.buf;
-                                modified = true;
-                                patchLog.push(`server_url: "${currentServerUrl}" → "${TARGET_SERVER_URL}"`);
-                            } else {
-                                console.log(`[MAJORLOGIN] server_url patch skip: "${currentServerUrl}" tidak ditemukan di buffer`);
-                            }
-                        } else if (!currentServerUrl) {
-                            console.log('[MAJORLOGIN] server_url kosong dari Garena → skip patch');
+                        if (currentServerUrl) {
+                            console.log(`[MAJORLOGIN] server_url dari Garena: "${currentServerUrl}" — dibiarkan apa adanya`);
                         }
                     } catch (peekErr) {
-                        console.log(`[MAJORLOGIN] server_url peek failed: ${peekErr.message} → skip patch`);
+                        console.log(`[MAJORLOGIN] server_url peek: ${peekErr.message}`);
                     }
                 }
 
