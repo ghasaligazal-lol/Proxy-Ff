@@ -1,19 +1,17 @@
-// modules/proxy.js - FORWARD + TELEMETRY SPOOF v3.0
-// FIX: GIN patch diperkuat - hapus CECNLHCONMI sepenuhnya, string-level fallback,
-//      plus recursive scan untuk field nested apapun strukturnya.
+// modules/proxy.js - FORWARD + TELEMETRY SPOOF
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const { MY_IP } = require('../gamevar');
 const zlib   = require('zlib');
 const tglog  = require('./tglog');
 const pb     = require('./protobuf');
 const skin   = require('./skin');
-const http   = require('http');
-const https  = require('https');
 
 const GARENA_LOGIN_SERVER  = 'https://loginbp.ggpolarbear.com';
 const GARENA_CLIENT_SERVER = 'https://clientbp.ggpolarbear.com';
 
 // Path yang tidak boleh di-forward ke upstream — harus di-spoof di sini
+// (endpoint ini kadang datang lewat catch-all proxy bukan route spesifik)
+// PATCH: Ditambahkan semua GIN/GGP TCP endpoints + anticheat data paths.
 const TELEMETRY_PATHS = [
     '/LogEvent',
     '/ReportEventPushInfo',
@@ -29,13 +27,6 @@ const TELEMETRY_PATHS = [
     '/ReportClientData', '/ClientDataForward',
     '/SecurityReport', '/ReportSecurityEvent',
     '/DataReport', '/DataUploadEvent',
-    '/LogEvent', '/logevent', '/SendEventLog',
-    '/SendEvent', '/EventLog', '/ClientEvent',
-    '/grtc/report', '/grtc/validate', '/grtc/sdk',
-    '/sdk/validate', '/sdk/report', '/sdk/check',
-    '/noop',
-    '/vodka', '/vodka/report', '/vodka/upload',
-    '/report', '/Report',
 ];
 
 function isTelemetryPath(path) {
@@ -57,11 +48,6 @@ function isTelemetryPath(path) {
         lower.includes('ggpupload') ||
         lower.includes('/gin/') ||
         lower.includes('/ggp/') ||
-        lower.includes('/grtc/') ||
-        lower.includes('/sdk/') ||
-        lower.includes('/vodka') ||
-        lower.includes('validate') ||
-        lower.includes('noop') ||
         (lower.includes('report') && lower.includes('event'))
     );
 }
@@ -78,162 +64,190 @@ function sendSpoofOK(res, isBinary) {
 }
 
 // ===== BAN PATCH =====
+// Patch field AEBBNFBNIDB di JSON response clientbp
+// Supaya ban_mode=0, unban_time=0, hint_string="" → game ga nge-ban user
 const BAN_INFO_KEY = 'AEBBNFBNIDB';
 
 function patchBanInfo(jsonObj) {
-    // Cari rekursif — field bisa di root atau nested
-    findAndPatchKey(jsonObj, BAN_INFO_KEY, (banInfo) => {
-        if (typeof banInfo === 'object' && banInfo !== null) {
-            banInfo.ban_mode    = 0;
-            banInfo.unban_time  = 0;
-            banInfo.hint_string = '';
-            console.log(`[BAN-PATCH] ${BAN_INFO_KEY} patched → ban_mode:0`);
-        }
-    });
+    if (jsonObj && typeof jsonObj[BAN_INFO_KEY] === 'object' && jsonObj[BAN_INFO_KEY] !== null) {
+        const banInfo = jsonObj[BAN_INFO_KEY];
+        const before = { ban_mode: banInfo.ban_mode, unban_time: banInfo.unban_time, hint_string: banInfo.hint_string };
+        banInfo.ban_mode    = 0;
+        banInfo.unban_time  = 0;
+        banInfo.hint_string = '';
+        console.log(`[BAN-PATCH] AEBBNFBNIDB patched: ${JSON.stringify(before)} → ban_mode:0 unban_time:0 hint_string:""`);
+    }
     return jsonObj;
 }
 
-// ===== HELPER: cari key di tree JSON secara rekursif =====
-function findAndPatchKey(obj, targetKey, patchFn, depth) {
-    if (!obj || typeof obj !== 'object' || (depth || 0) > 8) return;
-    if (Object.prototype.hasOwnProperty.call(obj, targetKey)) {
-        patchFn(obj[targetKey], obj, targetKey);
-    }
-    for (const key of Object.keys(obj)) {
-        const val = obj[key];
-        if (val && typeof val === 'object' && !Array.isArray(val)) {
-            findAndPatchKey(val, targetKey, patchFn, (depth || 0) + 1);
-        }
-    }
-}
+// ===== GIN/GGP URL PATCH =====
+// CECNLHCONMI adalah config GIN/GGP yang di-pass ke SDK setelah GetLoginData.
+// GIN connect via TCP langsung ke gin.freefiremobile.com — tidak lewat HTTP proxy.
+// Metode lama (edit field) masih bisa ter-bypass karena game mungkin ignore partial patch.
+// Metode baru: DELETE field CECNLHCONMI sepenuhnya + recursive scan + string-level regex.
+const GIN_CONFIG_KEY = 'CECNLHCONMI';
+const GRTC_URL_KEY   = 'LJAPOJNBOFE'; // GRTC/SDK URL
+const TRACEROUTE_KEY = 'FOGGNIHIBPG'; // IP traceroute list → matiin
+const SERVERNODE_KEY = 'HDNAPFEGDGG'; // Server node list → matiin
 
-// ===== GIN/GGP PATCH — HAPUS CECNLHCONMI SEPENUHNYA =====
-// Strategy: daripada set flag ke false (yang mungkin diabaikan SDK),
-// kita DELETE field CECNLHCONMI dari response JSON.
-// GIN SDK tidak akan punya config → tidak init → tidak connect TCP.
-const GIN_CONFIG_KEY  = 'CECNLHCONMI';
-const GRTC_URL_KEY    = 'LJAPOJNBOFE';
+// Regex untuk string-level fallback — match value JSON yang mengandung domain GIN
+const _ginDomainPattern = new RegExp(
+    '("(?:[^"\\\\]|\\\\.)*(?:' + [
+        'gin\\.freefiremobile\\.com',
+        'grtc\\.garenanow\\.com',
+        'ggblueshark\\.com',
+        'ffanti\\.',
+        'ggpolarbear\\.com/gin',
+        'ggpolarbear\\.com/ggp',
+        '124\\.158\\.134\\.7',
+        '124\\.158\\.135\\.168',
+        'stronghold\\.freefiremobile\\.com',
+        'vodka\\.freefiremobile\\.com',
+        'idevent\\.gg',
+        'idnetwork\\.gg',
+        'sggigateway\\.gg',
+        'gamesecurity\\.sea\\.freefiremobile\\.com',  // ban check URL — jangan sampai client hit ini
+    ].join('|') + ')(?:[^"\\\\]|\\\\.)*")',
+    'gi'
+);
 
-function patchGinUrl(jsonObj) {
-    // Hapus rekursif dari mana pun CECNLHCONMI berada
-    removeKeyRecursive(jsonObj, GIN_CONFIG_KEY, 0);
-    return jsonObj;
+function patchStringLevelGin(jsonStr) {
+    const result = jsonStr.replace(_ginDomainPattern, '""');
+    if (result !== jsonStr) {
+        console.log('[STRING-PATCH] GIN/anticheat domain ditemukan dan dihapus di level string');
+    }
+    return result;
 }
 
 function removeKeyRecursive(obj, key, depth) {
-    if (!obj || typeof obj !== 'object' || depth > 8) return;
+    if (!obj || typeof obj !== 'object' || depth > 10) return;
+    if (Array.isArray(obj)) {
+        // Masuk ke setiap elemen array
+        for (const item of obj) {
+            if (item && typeof item === 'object') removeKeyRecursive(item, key, depth + 1);
+        }
+        return;
+    }
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        const orig = obj[key];
-        const urlPreview = (orig && orig.ggp_url) ? orig.ggp_url : '(set)';
         delete obj[key];
-        console.log(`[GIN-PATCH] ${key} DIHAPUS dari response (was: ${urlPreview})`);
+        console.log(`[GIN-PATCH] ${key} DELETED (depth ${depth})`);
     }
     for (const k of Object.keys(obj)) {
         const val = obj[k];
-        if (val && typeof val === 'object' && !Array.isArray(val)) {
-            removeKeyRecursive(val, key, depth + 1);
-        }
+        if (val && typeof val === 'object') removeKeyRecursive(val, key, depth + 1);
     }
 }
 
-// ===== EVENT/TELEMETRY URL PATCH =====
-const EVENT_URL_KEY    = 'POEPGJPHCMJ';
-const NETWORK_URL_KEY  = 'EMFPDECPCDG';
-const GATEWAY_URL_KEY  = 'PDJHKBDIHGL';
-const VODKA_URL_KEY    = 'IIPKMIOFCJP';
+function patchGinUrl(jsonObj) {
+    // Hapus CECNLHCONMI sepenuhnya — lebih aman dari edit partial
+    removeKeyRecursive(jsonObj, GIN_CONFIG_KEY, 0);
 
-function patchEventUrls(jsonObj) {
-    if (!jsonObj || typeof jsonObj !== 'object') return jsonObj;
+    // Kosongkan LJAPOJNBOFE (GRTC SDK URL)
+    removeKeyRecursive(jsonObj, GRTC_URL_KEY, 0);
 
-    const noopUrl = MY_IP.replace(/\/$/, '') + '/noop';
-
-    const urlKillMap = {
-        [EVENT_URL_KEY]:   noopUrl,
-        [NETWORK_URL_KEY]: noopUrl,
-        [GATEWAY_URL_KEY]: noopUrl,
-        [VODKA_URL_KEY]:   noopUrl,
-    };
-
-    // Patch rekursif — field bisa nested
-    patchUrlMapRecursive(jsonObj, urlKillMap, 0);
-    return jsonObj;
-}
-
-function patchUrlMapRecursive(obj, urlKillMap, depth) {
-    if (!obj || typeof obj !== 'object' || depth > 8) return;
-    for (const [key, replacement] of Object.entries(urlKillMap)) {
-        if (Object.prototype.hasOwnProperty.call(obj, key) && obj[key] !== undefined && obj[key] !== '') {
-            const orig = obj[key];
-            obj[key] = replacement;
-            console.log(`[EVENT-PATCH] ${key}: ${String(orig).substring(0,50)} → ${replacement}`);
-        }
+    // Hapus traceroute IP list (dipakai GIN untuk scan network)
+    if (jsonObj && Array.isArray(jsonObj[TRACEROUTE_KEY])) {
+        jsonObj[TRACEROUTE_KEY] = [];
+        console.log('[GIN-PATCH] FOGGNIHIBPG (traceroute list) dikosongkan');
     }
-    for (const k of Object.keys(obj)) {
-        const val = obj[k];
-        if (val && typeof val === 'object' && !Array.isArray(val)) {
-            patchUrlMapRecursive(val, urlKillMap, depth + 1);
-        }
+
+    // Kosongkan server node list
+    if (jsonObj && Array.isArray(jsonObj[SERVERNODE_KEY])) {
+        jsonObj[SERVERNODE_KEY] = [];
+        console.log('[GIN-PATCH] HDNAPFEGDGG (server node list) dikosongkan');
     }
-}
 
-// ===== GRTC/SDK URL PATCH =====
-function patchGrtcUrl(jsonObj) {
-    if (!jsonObj || typeof jsonObj !== 'object') return jsonObj;
-
-    // Hapus/kosongkan LJAPOJNBOFE rekursif
-    findAndPatchKey(jsonObj, GRTC_URL_KEY, (val, parent, key) => {
-        if (val !== undefined && val !== '') {
-            console.log(`[GRTC-PATCH] ${key}: "${String(val).substring(0,60)}" → ""`);
-            parent[key] = '';
-        }
-    });
-
-    // Kill SDK fallback fields
-    const SDK_KILL_FIELDS = [
-        'FFANTIHACK_URL', 'ffanti_url', 'grtc_url', 'tp_url',
-        'sdk_url', 'report_url', 'validate_url',
-        'HEHLKDAFIGA', 'NFIKKKDGKKG',
+    // Matiin field report lain yang mungkin ada di root level
+    const KILL_FLAGS = [
+        'POEPGJPHCMJ', // event URL
+        'EMFPDECPCDG', // network URL
+        'PDJHKBDIHGL', // gateway URL
+        'IIPKMIOFCJP', // vodka URL
     ];
-    for (const f of SDK_KILL_FIELDS) {
-        findAndPatchKey(jsonObj, f, (val, parent, key) => {
-            if (val !== undefined && val !== '') {
-                console.log(`[GRTC-PATCH] ${key}: "${String(val).substring(0,30)}" → ""`);
-                parent[key] = '';
-            }
-        });
+    for (const f of KILL_FLAGS) {
+        if (jsonObj && jsonObj[f] !== undefined) {
+            const old = jsonObj[f];
+            jsonObj[f] = '';
+            if (old) console.log(`[GIN-PATCH] ${f}: "${String(old).substring(0,40)}" → ""`);
+        }
     }
-    return jsonObj;
-}
 
-// ===== TRACEROUTE LIST PATCH =====
-const TRACEROUTE_KEY = 'FOGGNIHIBPG';
+    // Null-kan "hacker_protection" recursive — nilai 10 = full anticheat, 0 = disabled
+    // FIX: sebelumnya lolos karena ada di dalam array protections[] — sekarang sudah handle array
+    _zeroField(jsonObj, 'hacker_protection', 0, 0);
+    // Null-kan "ut_flag" (GIN token flag) jika masih ada di nested field
+    _zeroField(jsonObj, 'ut_flag', 0, 0);
 
-function patchTracerouteList(jsonObj) {
-    if (!jsonObj || typeof jsonObj !== 'object') return jsonObj;
-    findAndPatchKey(jsonObj, TRACEROUTE_KEY, (val, parent, key) => {
-        if (Array.isArray(val) && val.length > 0) {
-            console.log(`[TRACE-PATCH] ${key}: cleared ${val.length} entries`);
-            parent[key] = [];
+    // ── Hapus android_apps_to_detect_res — list app scanner buat deteksi trainer/hack tools ──
+    // Kalau dibiarkan, game scan package list device → bisa trigger "Abnormal Data" ban
+    if (jsonObj && jsonObj['android_apps_to_detect_res'] !== undefined) {
+        const apd = jsonObj['android_apps_to_detect_res'];
+        if (apd && typeof apd === 'object' && !Array.isArray(apd)) {
+            if (Array.isArray(apd['android_apps_to_detect_res'])) {
+                apd['android_apps_to_detect_res'] = [];
+            }
+        } else if (Array.isArray(apd)) {
+            jsonObj['android_apps_to_detect_res'] = [];
         }
-    });
-    return jsonObj;
-}
+        console.log('[GIN-PATCH] android_apps_to_detect_res dikosongkan');
+    }
 
-// ===== SERVER NODE LIST PATCH =====
-const SERVER_NODE_KEY = 'HDNAPFEGDGG';
+    // ── Matiin GGP/GIN flags di semua level nested ──
+    _zeroField(jsonObj, 'is_report_to_ggp',   false, 0);
+    _zeroField(jsonObj, 'is_enable_ggp',       false, 0);
+    _zeroField(jsonObj, 'is_enable_tcp',       false, 0);
+    _zeroField(jsonObj, 'is_transfer_report',  false, 0);
+    _zeroField(jsonObj, 'is_get_feature',      false, 0);
+    _zeroField(jsonObj, 'is_get_flag',         false, 0);
+    _zeroField(jsonObj, 'ggp_url',             '',    0);
 
-function patchServerNodeList(jsonObj) {
-    if (!jsonObj || typeof jsonObj !== 'object') return jsonObj;
-    findAndPatchKey(jsonObj, SERVER_NODE_KEY, (val, parent, key) => {
-        if (Array.isArray(val) && val.length > 0) {
-            console.log(`[NODE-PATCH] ${key}: cleared ${val.length} entries`);
-            parent[key] = [];
+    // ── Patch anti_hack_center_desc — kosongkan ban_list_url + link gamesecurity ──
+    // URL ini dipakai game buat nampilin halaman ban dan query status ban langsung ke Garena.
+    // Kalau dibiarkan, client bisa tau status ban sebelum proxy sempat spoof AEBBNFBNIDB.
+    const ahcd = jsonObj && jsonObj['anti_hack_center_desc'];
+    if (ahcd && typeof ahcd === 'object') {
+        // Struktur dari server: { anti_hack_center_desc: { link, ban_list_url, ... } }
+        const inner = ahcd['anti_hack_center_desc'] || ahcd;
+        if (inner && typeof inner === 'object') {
+            if (inner['ban_list_url'] !== undefined) {
+                console.log(`[GIN-PATCH] ban_list_url: "${inner['ban_list_url'].substring(0,50)}..." → ""`);
+                inner['ban_list_url'] = '';
+            }
+            if (inner['link'] !== undefined) {
+                console.log(`[GIN-PATCH] anti_hack link: "${String(inner['link']).substring(0,50)}..." → ""`);
+                inner['link'] = '';
+            }
         }
-    });
+    }
+    // Fallback: zero recursive kalau strukturnya beda di respons lain
+    _zeroField(jsonObj, 'ban_list_url', '', 0);
+
     return jsonObj;
 }
+
+function _zeroField(obj, field, replacement, depth) {
+    if (!obj || typeof obj !== 'object' || depth > 10) return;
+    if (Array.isArray(obj)) {
+        // Masuk ke setiap elemen array (fix: Object.keys array hanya return index, bukan key objek di dalamnya)
+        for (const item of obj) {
+            if (item && typeof item === 'object') _zeroField(item, field, replacement, depth + 1);
+        }
+        return;
+    }
+    if (obj[field] !== undefined && obj[field] !== replacement) {
+        console.log(`[GIN-PATCH] ${field}: ${JSON.stringify(obj[field])} → ${replacement}`);
+        obj[field] = replacement;
+    }
+    for (const k of Object.keys(obj)) {
+        const val = obj[k];
+        if (val && typeof val === 'object') _zeroField(val, field, replacement, depth + 1);
+    }
+}
+
 
 // ===== LOGIN REWARD PATCH =====
+// Intercept GetCharacterRewardData & GetLoginReward response
+// Tambahin diamonds + login reward supaya user dapet hadiah setiap login
 const LOGIN_REWARD_ENDPOINTS = ['GetCharacterRewardData', 'GetLoginReward', 'GetDailyLogin'];
 
 function isLoginRewardEndpoint(path) {
@@ -242,14 +256,23 @@ function isLoginRewardEndpoint(path) {
 
 function patchLoginReward(jsonObj, path) {
     if (!jsonObj || typeof jsonObj !== 'object') return jsonObj;
+
+    // GetCharacterRewardData — tambahin diamonds ke coin_type 2 (diamonds)
     if (path.includes('GetCharacterRewardData')) {
         if (!Array.isArray(jsonObj.reward_list)) jsonObj.reward_list = [];
         const alreadyHasDiamond = jsonObj.reward_list.some(r => r.item_id === 800000303);
         if (!alreadyHasDiamond) {
-            jsonObj.reward_list.unshift({ item_id: 800000303, item_num: 100, item_type: 1, expire_time: 0 });
+            jsonObj.reward_list.unshift({
+                item_id:   800000303,   // Diamond
+                item_num:  100,
+                item_type: 1,
+                expire_time: 0
+            });
             console.log(`[REWARD-PATCH] Injected 100 diamonds ke GetCharacterRewardData`);
         }
     }
+
+    // GetLoginReward — force claimed = false supaya reward bisa diklaim
     if (path.includes('GetLoginReward')) {
         if (Array.isArray(jsonObj.reward_list)) {
             jsonObj.reward_list.forEach(r => {
@@ -261,17 +284,25 @@ function patchLoginReward(jsonObj, path) {
         if (jsonObj.can_claim !== undefined) jsonObj.can_claim = true;
         console.log(`[REWARD-PATCH] GetLoginReward forced claimable`);
     }
+
     return jsonObj;
 }
 
 // ===== MAIL INJECTION =====
+// Inject mail custom ke GetMailList response supaya muncul di inbox pas login
 const PROXY_HOST_URL = MY_IP.replace(/\/$/, '');
 
 function buildFakeMail(id, title, content, gems = 0, coins = 0, items = []) {
     const now = Math.floor(Date.now() / 1000);
     return {
-        HasRead: false, NeedHideLine: false, SubType: 0,
-        Assist_Id: id, mail_id: id, type: 0, title, content,
+        HasRead: false,
+        NeedHideLine: false,
+        SubType: 0,
+        Assist_Id: id,
+        mail_id: id,
+        type: 0,
+        title,
+        content,
         sender_info: {
             sender_id: 0, sender_nick: 'System', clan_id: 0, clan_name: '',
             clan_captain_id: 0, clan_captain_nick: '', season_id: 0, season_rank: 0,
@@ -293,38 +324,87 @@ function buildFakeMail(id, title, content, gems = 0, coins = 0, items = []) {
             guild_war_hacker_punishment: null, esports_mail_info: null,
             workshop_short_code: '', ugc_token_amount: 0
         },
-        attachment: { rewards: { items, coins, gems, exps: 0, activeness: 0, accelerators: 0, like_items: [], active_points: 0, hippo_items: [], hippo_money: 0 } },
-        receive_time: now, status: 0, source: 1, action_type: 0,
-        release_version: 'OB54', cdn_url: '', go_pos: 0, sub_go_pos: '',
-        expire_time: now + 604800, local_mail_id: null, HasAddDataToRead: false
+        attachment: {
+            rewards: {
+                items,
+                coins,
+                gems,
+                exps: 0,
+                activeness: 0,
+                accelerators: 0,
+                like_items: [],
+                active_points: 0,
+                hippo_items: [],
+                hippo_money: 0
+            }
+        },
+        receive_time: now,
+        status: 0,
+        source: 1,
+        action_type: 0,
+        release_version: 'OB54',
+        cdn_url: '',
+        go_pos: 0,
+        sub_go_pos: '',
+        expire_time: now + 604800,  // 7 hari
+        local_mail_id: null,
+        HasAddDataToRead: false
     };
 }
 
+// Mail-mail yang diinject setiap login
 const INJECTED_MAILS = [
-    buildFakeMail(9000000001, '🎁 Hadiah Login Harian', 'Hai Survivor!\n\nIni hadiah login harian spesial untukmu.\n\nSalam Booyah! 🔥', 50, 5000, [
-        { item_id: 800000303, item_num: 50, item_type: 1, expire_time: 0 },
-        { item_id: 500000003, item_num: 1, item_type: 1, expire_time: 0 },
-    ]),
-    buildFakeMail(9000000002, '⚡ Notifikasi Sistem Proxy', `[B22222]Proxy aktif![/B22222]\n\nSemua request sudah diproteksi.\nVersi proxy: v3.0 | GIN: BLOCKED\nIP Proxy: ${PROXY_HOST_URL}\n\nEnjoy gaming! 🎮`, 0, 0, []),
-    buildFakeMail(9000000003, '🛡️ Anti-Ban Protection Active', 'Sistem anti-ban sudah aktif.\n\n✅ CECNLHCONMI dihapus (GIN blind)\n✅ LJAPOJNBOFE dikosongkan\n✅ CheckHack blocked\n✅ Telemetry blocked\n✅ Ban mode = 0\n\nHave fun!', 0, 0, [
-        { item_id: 800000301, item_num: 100, item_type: 1, expire_time: 0 },
-    ]),
+    buildFakeMail(
+        9000000001,
+        '🎁 Selamat Datang! Hadiah Login Harian',
+        'Hai Survivor!\n\nIni hadiah login harian spesial untukmu. Semangat main ya! 💪\n\nSalam Booyah! 🔥',
+        50,    // 50 gems/diamond
+        5000,  // 5000 coins
+        [
+            { item_id: 800000303, item_num: 50,  item_type: 1, expire_time: 0 },  // 50 diamonds
+            { item_id: 500000003, item_num: 1,   item_type: 1, expire_time: 0 },  // skin item
+        ]
+    ),
+    buildFakeMail(
+        9000000002,
+        '⚡ Notifikasi Sistem Proxy',
+        `[B22222]Proxy aktif dan berjalan![/B22222]\n\nSemua request sudah diproteksi.\nVersi proxy: v2.0 | Status: Online\nIP Proxy: ${PROXY_HOST_URL}\n\nEnjoy gaming! 🎮`,
+        0, 0, []
+    ),
+    buildFakeMail(
+        9000000003,
+        '🛡️ Anti-Ban Protection Active',
+        'Sistem anti-ban sudah aktif.\n\n✅ GGP/Gin disabled\n✅ CheckHack blocked\n✅ Telemetry blocked\n✅ Ban mode = 0\n\nHave fun!',
+        0, 0,
+        [
+            { item_id: 800000301, item_num: 100, item_type: 1, expire_time: 0 }, // coins
+        ]
+    ),
 ];
 
 function patchMailList(jsonObj, path) {
     if (!path.includes('GetMailList')) return jsonObj;
     if (!jsonObj || typeof jsonObj !== 'object') return jsonObj;
+
     if (!Array.isArray(jsonObj.mails)) jsonObj.mails = [];
+
+    // Inject hanya jika belum ada (cek by mail_id)
     const existingIds = new Set(jsonObj.mails.map(m => m.mail_id));
     let injected = 0;
     for (const mail of INJECTED_MAILS) {
-        if (!existingIds.has(mail.mail_id)) { jsonObj.mails.unshift(mail); injected++; }
+        if (!existingIds.has(mail.mail_id)) {
+            jsonObj.mails.unshift(mail);
+            injected++;
+        }
     }
-    if (injected > 0) console.log(`[MAIL-PATCH] Injected ${injected} mail(s)`);
+
+    if (injected > 0) console.log(`[MAIL-PATCH] Injected ${injected} mail(s) ke GetMailList`);
     return jsonObj;
 }
 
 // ===== IMAGE URL PATCH =====
+// Replace semua URL gambar Garena ke proxy kita sendiri
+// supaya asset di-serve dari proxy dan ga ada leak ke server Garena
 const GARENA_IMG_DOMAINS = [
     'https://dl.bs.freefiremobile.com',
     'https://dl.dir.freefiremobile.com',
@@ -338,42 +418,10 @@ const GARENA_IMG_DOMAINS = [
 function patchImageUrls(jsonStr) {
     let patched = jsonStr;
     for (const domain of GARENA_IMG_DOMAINS) {
+        // Replace domain ke proxy CDN path
         patched = patched.split(domain).join(`${PROXY_HOST_URL}/cdn`);
     }
     return patched;
-}
-
-// ===== DEEP URL SCAN — STRING LEVEL FALLBACK =====
-// Safety net: setelah JSON patch, scan string JSON yang sudah di-serialize
-// dan hapus domain GIN/anticheat yang masih tersisa.
-// Ini catch semua kasus: field nested, obfuscated, atau yang terlewat JSON patch.
-const GIN_DOMAINS_REGEX = [
-    'gin\\.freefiremobile\\.com',
-    'grtc\\.garenanow\\.com',
-    'ggblueshark\\.com',
-    'ffanti\\.',
-    'ggpolarbear\\.com/gin',
-    'ggpolarbear\\.com/ggp',
-    '124\\.158\\.134\\.7',
-    '124\\.158\\.135\\.168',
-    'stronghold\\.freefiremobile\\.com',
-    'vodka\\.freefiremobile\\.com',
-];
-
-// Build regex untuk match value string JSON yang mengandung domain target
-// Hanya match VALUE dalam JSON string (setelah ":"), bukan key nama field
-const _ginDomainPattern = new RegExp(
-    '("(?:[^"\\\\]|\\\\.)*(?:' + GIN_DOMAINS_REGEX.join('|') + ')(?:[^"\\\\]|\\\\.)*")',
-    'gi'
-);
-
-function patchStringLevelGin(jsonStr) {
-    // Replace semua string value yang mengandung domain GIN dengan string kosong
-    const result = jsonStr.replace(_ginDomainPattern, '""');
-    if (result !== jsonStr) {
-        console.log('[STRING-PATCH] GIN/anticheat domain ditemukan dan dihapus di string level');
-    }
-    return result;
 }
 
 // ===== ACCOUNT INFO → TELEGRAM =====
@@ -394,6 +442,7 @@ function sendAccountInfoToTG(obj, clientIp) {
         const social = obj.socialInfo || obj.social_info || {};
         const pet    = obj.petInfo    || obj.pet_info    || {};
         const credit = obj.creditScoreInfo || obj.credit_score_info || {};
+
         const nick     = basic.nickname  || '?';
         const uid      = basic.accountId || basic.account_id || '?';
         const level    = basic.level     || 0;
@@ -403,32 +452,50 @@ function sendAccountInfoToTG(obj, clientIp) {
         const brRank   = rankName(basic.rank   || 0);
         const csRank   = rankName(basic.csRank || basic.cs_rank || 0);
         const badgeCnt = basic.badgeCnt  || basic.badge_cnt || 0;
+
         const sig      = social.signature || '-';
         const lang     = social.language  || '-';
         const gender   = social.gender === 1 ? 'Male' : social.gender === 2 ? 'Female' : '-';
         const mode     = social.modePrefer || social.mode_prefer || '-';
+
         const clanName = clan.clanName  || clan.clan_name  || '-';
         const clanId   = clan.clanId    || clan.clan_id    || '-';
         const clanLvl  = clan.clanLevel || clan.clan_level || '-';
+
         const petName  = pet.name  || '-';
         const petLevel = pet.level || 0;
+
         const creditScore = credit.creditScore || credit.credit_score || '-';
+
         const lastLogin = basic.lastLoginAt || basic.last_login_at;
         const createdAt = basic.createAt    || basic.create_at;
-        const lastLoginStr = lastLogin ? new Date(Number(lastLogin)*1000).toISOString().replace('T',' ').slice(0,16)+' UTC' : '-';
-        const createdStr   = createdAt  ? new Date(Number(createdAt) *1000).toISOString().replace('T',' ').slice(0,16)+' UTC' : '-';
+        const lastLoginStr = lastLogin ? new Date(Number(lastLogin) * 1000).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : '-';
+        const createdStr   = createdAt  ? new Date(Number(createdAt)  * 1000).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : '-';
+
         const lines = [
-            `👤 <b>Account Info</b>`, ``,
-            `🏷 Nama: <b>${nick}</b>`, `🆔 UID: <code>${uid}</code>`,
-            `🌏 Region: ${region}`, `⭐ Level: ${level} (EXP: ${exp})`,
-            `❤️ Likes: ${liked}`, `🏅 BR Rank: ${brRank}`,
-            `🎯 CS Rank: ${csRank}`, `🏆 BP Badges: ${badgeCnt}`,
-            `💳 Credit Score: ${creditScore}`, ``,
-            `👤 Gender: ${gender}`, `🗣 Bahasa: ${lang}`,
-            `🎮 Mode Favorit: ${mode}`, `✏️ Signature: ${sig}`, ``,
-            `🐾 Pet: ${petName} (Lv.${petLevel})`, ``,
-            `🏰 Guild: ${clanName} (ID: ${clanId}, Lv.${clanLvl})`, ``,
-            `📅 Dibuat: ${createdStr}`, `🕐 Last Login: ${lastLoginStr}`,
+            `👤 <b>Account Info</b>`,
+            ``,
+            `🏷 Nama: <b>${nick}</b>`,
+            `🆔 UID: <code>${uid}</code>`,
+            `🌏 Region: ${region}`,
+            `⭐ Level: ${level} (EXP: ${exp})`,
+            `❤️ Likes: ${liked}`,
+            `🏅 BR Rank: ${brRank}`,
+            `🎯 CS Rank: ${csRank}`,
+            `🏆 BP Badges: ${badgeCnt}`,
+            `💳 Credit Score: ${creditScore}`,
+            ``,
+            `👤 Gender: ${gender}`,
+            `🗣 Bahasa: ${lang}`,
+            `🎮 Mode Favorit: ${mode}`,
+            `✏️ Signature: ${sig}`,
+            ``,
+            `🐾 Pet: ${petName} (Lv.${petLevel})`,
+            ``,
+            `🏰 Guild: ${clanName} (ID: ${clanId}, Lv.${clanLvl})`,
+            ``,
+            `📅 Dibuat: ${createdStr}`,
+            `🕐 Last Login: ${lastLoginStr}`,
             `🌐 IP: ${clientIp}`,
         ];
         tglog.send(lines.join('\n'));
@@ -457,36 +524,24 @@ function collectResponseBody(proxyRes) {
     });
 }
 
-// ===== FUNGSI PATCH JSON TERPUSAT =====
-function applyAllJsonPatches(parsed, urlPath) {
-    patchBanInfo(parsed);
-    patchGinUrl(parsed);          // DELETE CECNLHCONMI (rekursif)
-    patchEventUrls(parsed);       // Redirect idevent/idnetwork/gateway (rekursif)
-    patchGrtcUrl(parsed);         // Kosongkan LJAPOJNBOFE (rekursif)
-    patchTracerouteList(parsed);  // Clear FOGGNIHIBPG (rekursif)
-    patchServerNodeList(parsed);  // Clear HDNAPFEGDGG (rekursif)
-    patchMailList(parsed, urlPath);
-    if (isLoginRewardEndpoint(urlPath)) patchLoginReward(parsed, urlPath);
-    skin.patchSkinData(parsed, urlPath);
-    return parsed;
-}
-
-// ===== clientProxy: selfHandleResponse untuk patch JSON =====
+// Intercept response clientbp dan patch ban info sebelum dikirim ke game
 function createClientProxyWithBanPatch() {
     return createProxyMiddleware({
         target: GARENA_CLIENT_SERVER,
         changeOrigin: true,
         secure: false,
-        selfHandleResponse: true,
+        selfHandleResponse: true,   // kita handle sendiri responsenya
         onProxyReq: (proxyReq, req, res) => {
             const host = new URL(GARENA_CLIENT_SERVER).host;
             proxyReq.setHeader('Host', host);
             proxyReq.setHeader('Origin', GARENA_CLIENT_SERVER);
+
             if (req.headers['user-agent'])       proxyReq.setHeader('User-Agent',       req.headers['user-agent']);
             if (req.headers['accept-language'])  proxyReq.setHeader('Accept-Language',  req.headers['accept-language']);
             if (req.headers['accept-encoding'])  proxyReq.setHeader('Accept-Encoding',  req.headers['accept-encoding']);
             if (req.headers['accept'])           proxyReq.setHeader('Accept',           req.headers['accept']);
             if (req.headers['content-type'])     proxyReq.setHeader('Content-Type',     req.headers['content-type']);
+
             if (Buffer.isBuffer(req.body) && req.body.length > 0) {
                 proxyReq.setHeader('Content-Length', req.body.length);
                 proxyReq.write(req.body);
@@ -495,19 +550,35 @@ function createClientProxyWithBanPatch() {
         onProxyRes: async (proxyRes, req, res) => {
             const statusCode  = proxyRes.statusCode;
             const contentType = proxyRes.headers['content-type'] || '';
+
+            // Kopi semua header dari upstream ke response, minus content-encoding & content-length
+            // (kita bakal set ulang content-length setelah patch)
             const headers = Object.assign({}, proxyRes.headers);
             delete headers['content-encoding'];
             delete headers['content-length'];
             delete headers['transfer-encoding'];
+
             try {
                 const rawBody = await collectResponseBody(proxyRes);
+
+                // Coba patch kalau JSON
                 if (contentType.includes('application/json')) {
                     let parsed;
                     try { parsed = JSON.parse(rawBody.toString('utf8')); } catch (_) { parsed = null; }
+
                     if (parsed && typeof parsed === 'object') {
-                        applyAllJsonPatches(parsed, req.url || '');
+                        patchBanInfo(parsed);
+                        patchGinUrl(parsed);
+                        patchMailList(parsed, req.url || '');
+                        if (isLoginRewardEndpoint(req.url || '')) {
+                            patchLoginReward(parsed, req.url || '');
+                        }
+                        // Inject skin/emote/avatar/clothes/weapon IDs
+                        skin.patchSkinData(parsed, req.url || '');
+                        // Patch URL gambar di JSON string setelah semua object patch
                         let jsonStr = patchImageUrls(JSON.stringify(parsed));
-                        jsonStr = patchStringLevelGin(jsonStr); // String-level fallback
+                        // String-level fallback — catch domain GIN yang mungkin masih tersisa
+                        jsonStr = patchStringLevelGin(jsonStr);
                         const patched = Buffer.from(jsonStr, 'utf8');
                         headers['content-length'] = String(patched.length);
                         res.writeHead(statusCode, headers);
@@ -517,23 +588,28 @@ function createClientProxyWithBanPatch() {
                     }
                 }
 
+                // Intercept GetPlayerPersonalShow — decode protobuf → TG
                 const urlPath = req.url || '';
                 if (urlPath.includes('GetPlayerPersonalShow') && pb.isLoaded && rawBody.length > 0) {
                     try {
                         const rawIp    = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
                         const clientIp = rawIp.split(',')[0].trim().replace('::ffff:', '');
                         const decoded  = pb.AccountPersonalShowInfo.decode(rawBody);
-                        const obj      = pb.AccountPersonalShowInfo.toObject(decoded, { longs: String, enums: String, bytes: String, defaults: true });
+                        const obj      = pb.AccountPersonalShowInfo.toObject(decoded, {
+                            longs: String, enums: String, bytes: String, defaults: true
+                        });
                         sendAccountInfoToTG(obj, clientIp);
                     } catch (e) {
                         console.log('[PROXY] PersonalShow decode error:', e.message);
                     }
                 }
 
+                // Bukan JSON atau parse gagal — kirim apa adanya
                 headers['content-length'] = String(rawBody.length);
                 res.writeHead(statusCode, headers);
                 res.end(rawBody);
                 console.log(`[CLIENT] ${statusCode} ${req.method} ${req.url}`);
+
             } catch (err) {
                 console.log(`[CLIENT] body collect error: ${err.message}`);
                 if (!res.headersSent) res.writeHead(502);
@@ -547,117 +623,140 @@ function createClientProxyWithBanPatch() {
     });
 }
 
-// ===== loginProxy: selfHandleResponse =====
-function createLoginProxyWithPatch() {
-    return createProxyMiddleware({
-        target: GARENA_LOGIN_SERVER,
-        changeOrigin: true,
-        secure: false,
-        selfHandleResponse: true,
-        onProxyReq: (proxyReq, req, res) => {
-            const host = new URL(GARENA_LOGIN_SERVER).host;
-            proxyReq.setHeader('Host', host);
-            proxyReq.setHeader('Origin', GARENA_LOGIN_SERVER);
-            if (req.headers['user-agent'])      proxyReq.setHeader('User-Agent', req.headers['user-agent']);
-            if (req.headers['accept-language']) proxyReq.setHeader('Accept-Language', req.headers['accept-language']);
-            if (req.headers['accept-encoding']) proxyReq.setHeader('Accept-Encoding', req.headers['accept-encoding']);
-            if (req.headers['accept'])          proxyReq.setHeader('Accept', req.headers['accept']);
-            if (req.headers['connection'])      proxyReq.setHeader('Connection', req.headers['connection']);
-            if (req.headers['content-type'])    proxyReq.setHeader('Content-Type', req.headers['content-type']);
-            if (Buffer.isBuffer(req.body) && req.body.length > 0) {
-                proxyReq.setHeader('Content-Length', req.body.length);
-                proxyReq.write(req.body);
-            }
-        },
-        onProxyRes: async (proxyRes, req, res) => {
-            const statusCode  = proxyRes.statusCode;
-            const contentType = proxyRes.headers['content-type'] || '';
-            const headers = Object.assign({}, proxyRes.headers);
-            delete headers['content-encoding'];
-            delete headers['content-length'];
-            delete headers['transfer-encoding'];
-            try {
-                const rawBody = await collectResponseBody(proxyRes);
-                if (contentType.includes('application/json')) {
-                    let parsed;
-                    try { parsed = JSON.parse(rawBody.toString('utf8')); } catch (_) { parsed = null; }
-                    if (parsed && typeof parsed === 'object') {
-                        applyAllJsonPatches(parsed, req.url || '');
-                        let jsonStr = patchImageUrls(JSON.stringify(parsed));
-                        jsonStr = patchStringLevelGin(jsonStr);
-                        const patched = Buffer.from(jsonStr, 'utf8');
-                        headers['content-length'] = String(patched.length);
-                        res.writeHead(statusCode, headers);
-                        res.end(patched);
-                        console.log(`[LOGIN-PATCH] ${statusCode} ${req.method} ${req.url}`);
-                        return;
-                    }
-                }
-                headers['content-length'] = String(rawBody.length);
-                res.writeHead(statusCode, headers);
-                res.end(rawBody);
-                console.log(`[LOGIN] ${statusCode} ${req.method} ${req.url}`);
-            } catch (err) {
-                console.log(`[LOGIN] body collect error: ${err.message}`);
-                if (!res.headersSent) res.writeHead(502);
-                res.end();
-            }
-        },
-        onError: (err, req, res) => {
-            console.log(`[LOGIN] ERROR: ${err.message}`);
-            if (!res.headersSent) res.status(502).json({ code: 502, message: 'Proxy error' });
-        }
-    });
-}
+// ===== CDN DI-HANDLE OLEH modules/cdn.js =====
 
-const loginProxy  = createLoginProxyWithPatch();
+const loginProxy = createProxyMiddleware({
+    target: GARENA_LOGIN_SERVER,
+    changeOrigin: true,
+    secure: false,
+    onProxyReq: (proxyReq, req, res) => {
+        const host = new URL(GARENA_LOGIN_SERVER).host;
+        proxyReq.setHeader('Host', host);
+        proxyReq.setHeader('Origin', GARENA_LOGIN_SERVER);
+        
+        // ===== FORWARD HEADER ASLI DARI GAME =====
+        // Ga ngubah apa-apa, pake header dari game
+        if (req.headers['user-agent']) {
+            proxyReq.setHeader('User-Agent', req.headers['user-agent']);
+        }
+        if (req.headers['accept-language']) {
+            proxyReq.setHeader('Accept-Language', req.headers['accept-language']);
+        }
+        if (req.headers['accept-encoding']) {
+            proxyReq.setHeader('Accept-Encoding', req.headers['accept-encoding']);
+        }
+        if (req.headers['accept']) {
+            proxyReq.setHeader('Accept', req.headers['accept']);
+        }
+        if (req.headers['connection']) {
+            proxyReq.setHeader('Connection', req.headers['connection']);
+        }
+        if (req.headers['content-type']) {
+            proxyReq.setHeader('Content-Type', req.headers['content-type']);
+        }
+        
+        // Forward body
+        if (Buffer.isBuffer(req.body) && req.body.length > 0) {
+            proxyReq.setHeader('Content-Length', req.body.length);
+            proxyReq.write(req.body);
+        }
+    },
+    onProxyRes: (proxyRes, req, res) => {
+        console.log(`[LOGIN] ${proxyRes.statusCode} ${req.method} ${req.url}`);
+    },
+    onError: (err, req, res) => {
+        console.log(`[LOGIN] ERROR: ${err.message}`);
+        res.status(502).json({ code: 502, message: 'Proxy error' });
+    }
+});
+
 const clientProxy = createClientProxyWithBanPatch();
 
 function init(app) {
+    // ===== FORWARD SEMUA KE GARENA =====
+    // Ga pilih-pilih endpoint, semua di-forward
     app.all('*', (req, res, next) => {
-        if (req.path.startsWith('/cdn/')) return next();
-        if (req.path === '/ver.php' || req.path === '/api/gamevar' || req.path === '/localconfig.json') return next();
-        if (req.path.startsWith('/api/') || req.path.startsWith('/telegram')) return next();
-        if (req.path.match(/\.(jpg|png|gif|css|js|html?)$/i)) return next();
-
+        // Skip CDN (dihandle modules/cdn.js)
+        if (req.path.startsWith('/cdn/')) {
+            return next();
+        }
+        // Skip ver.php & gamevar (dihandle modules/gamevar)
+        if (req.path === '/ver.php' || req.path === '/api/gamevar' || req.path === '/localconfig.json') {
+            return next();
+        }
+        // Skip internal API routes
+        if (req.path.startsWith('/api/') || req.path.startsWith('/telegram')) {
+            return next();
+        }
+        // Skip asset (images, dll)
+        if (req.path.match(/\.(jpg|png|gif|css|js|html?)$/i)) {
+            return next();
+        }
+        
+        // ── Spoof telemetry/upload sebelum di-forward ──
         if (isTelemetryPath(req.path)) {
             const isBin = (req.headers['content-type'] || '').includes('octet-stream');
             console.log(`[SPOOF] ${req.method} ${req.path} → 200 OK (telemetry blocked)`);
             return sendSpoofOK(res, isBin);
         }
 
+        // Log request (pake user-agent asli dari game)
         const ua = req.headers['user-agent'] || 'unknown';
         console.log(`[FORWARD] ${req.method} ${req.path} (UA: ${ua.substring(0,30)}...)`);
 
-        const LOGIN_ONLY_PATHS = ['/MajorLogin', '/ChooseNewbieChoice'];
-        const isLoginOnly = LOGIN_ONLY_PATHS.some(p => req.path === p || req.path.startsWith(p));
-        if (isLoginOnly) return loginProxy(req, res, next);
+        // Route: client endpoints (clientbp) → clientProxy (ban patch, mail inject, reward patch)
+        //        login endpoints → loginProxy
+        const CLIENT_PATHS = [
+            // ── Data & patch ──
+            '/GetLoginData',           // ← PATCH: intercept GIN/GGP config → patchGinUrl
+            '/GetPlayerPersonalShow', '/GetMailList', '/GetCharacterRewardData',
+            '/GetLoginReward', '/GetDailyLogin', '/GetAvatarInfo',
+            '/GetClothesInfo', '/GetWeaponSkinInfo', '/GetCharInfo',
+            '/GetUserInfo', '/GetAccountInfo',
+            // ── BUGFIX: endpoint yang sebelumnya 404 karena jatuh ke loginProxy ──
+            // GenerateNickname → clientbp, bukan loginbp → return HTML 404 sebelumnya
+            '/GenerateNickname',
+            // MajorRegister → clientbp untuk registrasi akun baru / guest
+            '/MajorRegister',
+            // Endpoint register & profile lain
+            '/Register', '/CreateAccount',
+            '/SetNickname', '/SetAvatar',
+            '/GetNicknameList', '/CheckNickname',
+            '/GetRecommendNickname',
+            // Leaderboard, friend, social
+            '/GetFriendList', '/GetRankInfo', '/GetLeaderboard',
+            '/GetGuildInfo', '/GetClanInfo',
+            // Reward & daily
+            '/ClaimReward', '/ClaimDailyLogin',
+            '/GetSeasonInfo', '/GetEventInfo',
+            // Shop & inventory
+            '/GetShopInfo', '/GetInventory', '/GetBagInfo',
+            '/BuyItem', '/ExchangeItem',
+        ];
+        const isClientPath = CLIENT_PATHS.some(p => req.path === p || req.path.startsWith(p));
+        if (isClientPath) {
+            return clientProxy(req, res, next);
+        }
 
-        clientProxy(req, res, next);
+        loginProxy(req, res, next);
     });
 
     app.get('/api/proxy/status', (req, res) => {
         res.json({
             status: 'online',
-            mode: 'forward_patched_v3.0',
-            patches: [
-                'CECNLHCONMI DELETED (GIN config removed entirely)',
-                'LJAPOJNBOFE cleared (GRTC/SDK blind)',
-                'patchEventUrls recursive (POEPGJPHCMJ/EMFPDECPCDG/PDJHKBDIHGL/IIPKMIOFCJP)',
-                'patchBanInfo recursive (AEBBNFBNIDB ban_mode=0)',
-                'patchTracerouteList recursive (FOGGNIHIBPG cleared)',
-                'string-level GIN domain fallback (post-serialize scan)',
-                'telemetry_blocked + CheckNeedUpdateGPToken blocked',
-                'loginProxy selfHandle ON',
-            ],
-            targets: { login: GARENA_LOGIN_SERVER, client: GARENA_CLIENT_SERVER, cdn: 'handled_by_cdn_module' },
+            mode: 'forward_original',
+            targets: {
+                login: GARENA_LOGIN_SERVER,
+                client: GARENA_CLIENT_SERVER,
+                cdn: 'handled_by_cdn_module'
+            },
             timestamp: Date.now()
         });
     });
 
-    console.log('[PROXY] v3.0 — CECNLHCONMI DELETED, string-level GIN fallback, recursive patch');
+    console.log('[PROXY] Forward mode (original headers from game)');
     console.log('[PROXY] Login: ' + GARENA_LOGIN_SERVER);
     console.log('[PROXY] Client: ' + GARENA_CLIENT_SERVER);
 }
 
-module.exports = { init, loginProxy, clientProxy, applyAllJsonPatches, patchImageUrls, patchStringLevelGin };
+module.exports = { init, loginProxy, clientProxy, patchGinUrl, patchStringLevelGin };

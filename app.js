@@ -4,7 +4,6 @@ const path         = require('path');
 const fs           = require('fs');
 const cookieParser = require('cookie-parser');
 const https        = require('https');
-const zlib         = require('zlib');
 
 const app  = express();
 const PORT = process.env.PORT || 3030;
@@ -33,34 +32,44 @@ function loadModules() {
 const modules = loadModules();
 
 // ============ MIDDLEWARE ============
-app.use((req, res, next) => {
-    const ct = req.headers['content-type'] || '';
-    if (ct.includes('application/json')) {
-        express.json({ limit: '10mb' })(req, res, next);
-    } else {
-        express.raw({ type: '*/*', limit: '10mb' })(req, res, next);
-    }
-});
+app.use(express.raw({ type: '*/*', limit: '10mb' }));
 app.use(express.static('public'));
 app.use(cookieParser());
 
 // ============ TELEMETRY / UPLOAD SPOOF ============
+// ROOT CAUSE BLACKLIST (dari log analisis):
+//   #1 "Nonaktifkan data upload" + "modifier" → GIN TCP tembus langsung ke
+//      gin.freefiremobile.com karena patchGetLoginData() tidak patch CECNLHCONMI.
+//      Bukti: debugger 02:43 — CECNLHCONMI.is_enable_ggp masih TRUE di client.
+//      BackendLog: Proto_GET_TOKEN_NTF lalu Proto_CLIENT_DATA_FORWARD_NTF → BL.
+//      GIN mengirim AHLR (hash library) ke server → server detect libmemek/mod.
+//
+//   #2 "modifier" detect → EventTypeAndroidApplicationDetection detection code
+//      [352,353,...] sudah ada di semua sesi tapi tidak trigger BL sendiri.
+//      Yang trigger BL adalah CLIENT_DATA_FORWARD_NTF yang isinya AHLR dengan
+//      AHLC berbeda tiap sesi ($7a94XX$$, $2LJaSU7$$, $9XJC37Y$$) = signature
+//      anomaly detection.
+//
+//   FIX: patchGetLoginData() harus matiin semua flag CECNLHCONMI (sama dengan
+//        patchGinUrl() di proxy.js). Dan intercept CheckHackBehavior di sini.
+
 const SPOOF_PATHS = [
+    // ── Telemetry & log upload ──
     '/api/network_logNetworkLogEvent',
     '/api/network_log/NetworkLogEvent',
     '/web_log/NetworkLogEvent',
     '/LogEvent', '/ReportEventPushInfo',
-    '/CheckHackBehavior',
-    '/CheckNeedUpdateGPToken',  // GIN token refresh — selalu spoof
+    '/CheckHackBehavior',           // ← KRITIS: intercept di app.js juga
+    '/CheckNeedUpdateGPToken',
     '/ReportAntiAddiction', '/anti_addiction/report', '/AntiAddiction',
     '/firebase/log', '/crashlytics/report', '/sentry',
     '/upload', '/data/upload', '/DataUpload',
     '/SendLog', '/ReportLog', '/event/upload',
     '/sdk/log', '/sdk/report',
+    // ── GIN / GGP ──
     '/GinReport', '/gin/report', '/api/gin',
     '/gin/connect', '/gin/keepalive', '/gin/disconnect',
     '/gin/upload', '/gin/batch',
-    '/vodka', '/vodka/report', '/vodka/upload',
     '/GGP', '/ggp/report',
     '/GGPReport', '/ggp/upload',
     '/ggp/connect', '/ggp/keepalive',
@@ -72,10 +81,6 @@ const SPOOF_PATHS = [
     '/SecurityReport', '/ReportSecurityEvent',
     '/DataReport', '/DataUploadEvent',
     '/DisableUpload',
-    '/grtc/report', '/grtc/validate', '/grtc/sdk',
-    '/sdk/validate', '/sdk/report', '/sdk/check',
-    '/noop',
-    '/report', '/Report',
 ];
 
 function spoofOK(req, res) {
@@ -91,7 +96,6 @@ for (const p of SPOOF_PATHS) {
     app.all(p, spoofOK);
 }
 
-// Wildcard upload/telemetry catcher
 app.all('*', (req, res, next) => {
     const lower = req.path.toLowerCase();
     const isUpload =
@@ -107,10 +111,9 @@ app.all('*', (req, res, next) => {
         lower.includes('hackdata') ||
         lower.includes('clientdata') ||
         lower.includes('dataforward') ||
-        lower.includes('checkhack') ||
+        lower.includes('checkhack') ||        // ← tambahan
         lower.includes('/gin/') ||
         lower.includes('/ggp/') ||
-        lower.includes('/vodka') ||
         lower.includes('ginreport') ||
         lower.includes('ggpreport') ||
         lower.includes('ggpupload') ||
@@ -122,43 +125,67 @@ app.all('*', (req, res, next) => {
 });
 
 // ============ PROXY /GetLoginData (GIN + BAN PATCH) ============
-// PENTING: Route ini harus di-register SEBELUM modules.tglog.init() dan modules.proxy.init()
-// agar tidak di-intercept oleh catch-all proxy handler.
-app.all('/GetLoginData', (req, res) => {
-    // Lazy-require untuk pastikan modules sudah loaded
-    const { MY_IP } = require('./gamevar');
-    const { applyAllJsonPatches, patchImageUrls, patchStringLevelGin } = require('./modules/proxy');
-
+app.post('/GetLoginData', (req, res) => {
     const body = req.body;
+    const zlib = require('zlib');
+    const { MY_IP } = require('./gamevar');
 
-    // Forward headers yang aman — pastikan Accept-Encoding tidak mengandung 'br'
-    // karena beberapa build zlib Node tidak support brotli decompress
-    const safeHeaders = {};
-    const FORWARD_HEADERS = ['content-type', 'user-agent', 'accept-language', 'accept',
-                             'connection', 'authorization', 'cookie'];
-    for (const h of FORWARD_HEADERS) {
-        if (req.headers[h]) safeHeaders[h] = req.headers[h];
+    const GARENA_IMG_DOMAINS = [
+        'https://dl.bs.freefiremobile.com',
+        'https://dl.dir.freefiremobile.com',
+        'https://dl.cdn.freefiremobile.com',
+        'https://dl.ak.freefiremobile.com',
+        'https://dl.gmc.freefiremobile.com',
+        'https://core-bs.freefiremobile.com',
+        'https://core-gmc.freefiremobile.com',
+    ];
+    const proxyBase = MY_IP.replace(/\/$/, '');
+    const proxyHost = proxyBase.replace(/^https?:\/\//, '').replace(/\/$/, '');
+
+    // Pakai patchGinUrl + patchStringLevelGin dari proxy.js (DELETE method — paling aman)
+    const { patchGinUrl: _patchGinUrl, patchStringLevelGin: _patchStrGin } = require('./modules/proxy');
+
+    function patchGetLoginData(jsonObj) {
+        // DELETE CECNLHCONMI sepenuhnya (recursive) + kosongkan field terkait
+        if (typeof _patchGinUrl === 'function') _patchGinUrl(jsonObj);
+
+        // ===== AEBBNFBNIDB — clear ban (semua reason termasuk modifier) =====
+        if (jsonObj && typeof jsonObj['AEBBNFBNIDB'] === 'object' && jsonObj['AEBBNFBNIDB'] !== null) {
+            const b = jsonObj['AEBBNFBNIDB'];
+            const before = { ban_mode: b.ban_mode, ban_reason: b.ban_reason };
+            b.ban_mode    = 0;
+            b.unban_time  = 0;
+            b.hint_string = '';
+            if (b.ban_reason  !== undefined) b.ban_reason  = 0;
+            if (b.ban_type    !== undefined) b.ban_type    = 0;
+            if (b.ban_context !== undefined) b.ban_context = '';
+            console.log(`[GetLoginData-PATCH] AEBBNFBNIDB: ${JSON.stringify(before)} → all_clear`);
+        }
+
+        // Scan field lain yang mengandung ban_mode > 0
+        for (const key of Object.keys(jsonObj || {})) {
+            if (key === 'AEBBNFBNIDB') continue;
+            const sub = jsonObj[key];
+            if (sub && typeof sub === 'object' && !Array.isArray(sub) && sub.ban_mode !== undefined && sub.ban_mode !== 0) {
+                console.log(`[GetLoginData-PATCH] Extra ban at [${key}] ban_mode=${sub.ban_mode} → 0`);
+                sub.ban_mode   = 0;
+                sub.unban_time = 0;
+                if (sub.hint_string !== undefined) sub.hint_string = '';
+                if (sub.ban_reason  !== undefined) sub.ban_reason  = 0;
+            }
+        }
+        return jsonObj;
     }
-    safeHeaders['Host']            = 'clientbp.ggpolarbear.com';
-    safeHeaders['Accept-Encoding'] = 'gzip, deflate';
-
-    // Body bisa berupa Buffer (protobuf binary) atau object (JSON parsed)
-    let bodyBuf;
-    if (Buffer.isBuffer(body) && body.length > 0) {
-        bodyBuf = body;
-    } else if (body && typeof body === 'object' && Object.keys(body).length > 0) {
-        bodyBuf = Buffer.from(JSON.stringify(body), 'utf8');
-    } else {
-        bodyBuf = null;
-    }
-
-    safeHeaders['Content-Length'] = bodyBuf ? bodyBuf.length : 0;
 
     const options = {
         hostname: 'clientbp.ggpolarbear.com',
         path:     '/GetLoginData',
         method:   'POST',
-        headers:  safeHeaders,
+        headers: {
+            ...req.headers,
+            'Host':           'clientbp.ggpolarbear.com',
+            'Content-Length': Buffer.isBuffer(body) ? body.length : 0
+        }
     };
 
     const proxyReq = https.request(options, (proxyRes) => {
@@ -167,47 +194,40 @@ app.all('/GetLoginData', (req, res) => {
         let stream = proxyRes;
         if (encoding === 'gzip')    stream = proxyRes.pipe(zlib.createGunzip());
         else if (encoding === 'deflate') stream = proxyRes.pipe(zlib.createInflate());
-        else if (encoding === 'br') {
-            try { stream = proxyRes.pipe(zlib.createBrotliDecompress()); }
-            catch(e) { console.log('[GetLoginData] brotli not supported, reading raw'); }
-        }
+        else if (encoding === 'br') stream = proxyRes.pipe(zlib.createBrotliDecompress());
 
         stream.on('data', c => chunks.push(c));
         stream.on('end', () => {
             const rawBody = Buffer.concat(chunks);
+            const ct = proxyRes.headers['content-type'] || '';
             const headers = Object.assign({}, proxyRes.headers);
             delete headers['content-encoding'];
             delete headers['content-length'];
             delete headers['transfer-encoding'];
 
-            // Coba parse sebagai JSON — Garena mungkin tidak set content-type dengan benar
-            let parsed = null;
-            try { parsed = JSON.parse(rawBody.toString('utf8')); } catch(_) {}
-
-            if (parsed && typeof parsed === 'object') {
-                applyAllJsonPatches(parsed, '/GetLoginData');
-                let jsonStr = patchImageUrls(JSON.stringify(parsed));
-                jsonStr = patchStringLevelGin(jsonStr); // String-level fallback WAJIB
-                const patched = Buffer.from(jsonStr, 'utf8');
-                headers['content-type']   = 'application/json';
-                headers['content-length'] = String(patched.length);
-                res.writeHead(proxyRes.statusCode, headers);
-                console.log('[GetLoginData-PATCH] JSON patched OK — CECNLHCONMI deleted, GIN blind');
-                return res.end(patched);
+            if (ct.includes('application/json')) {
+                let parsed;
+                try { parsed = JSON.parse(rawBody.toString('utf8')); } catch(_) { parsed = null; }
+                if (parsed && typeof parsed === 'object') {
+                    patchGetLoginData(parsed);
+                    // Patch image URLs
+                    let jsonStr = JSON.stringify(parsed);
+                    for (const domain of GARENA_IMG_DOMAINS) {
+                        jsonStr = jsonStr.split(domain).join(proxyBase + '/cdn');
+                    }
+                    // String-level fallback — catch domain GIN yang mungkin masih tersisa di nested field
+                    if (typeof _patchStrGin === 'function') jsonStr = _patchStrGin(jsonStr);
+                    const patched = Buffer.from(jsonStr, 'utf8');
+                    headers['content-length'] = String(patched.length);
+                    res.writeHead(proxyRes.statusCode, headers);
+                    return res.end(patched);
+                }
             }
-
-            // Fallback: response bukan JSON (tidak seharusnya terjadi untuk GetLoginData)
-            // Tetap jalankan string-level patch sebagai last resort
-            let rawStr = rawBody.toString('utf8');
-            const patchedRaw = patchStringLevelGin(rawStr);
-            const outBuf = Buffer.from(patchedRaw, 'utf8');
-            console.log('[GetLoginData] WARNING: response bukan JSON — string-patch applied');
-            headers['content-length'] = String(outBuf.length);
+            headers['content-length'] = String(rawBody.length);
             res.writeHead(proxyRes.statusCode, headers);
-            res.end(outBuf);
+            res.end(rawBody);
         });
-        stream.on('error', (err) => {
-            console.log(`[GetLoginData] Decompress error: ${err.message}`);
+        stream.on('error', () => {
             if (!res.headersSent) res.writeHead(502);
             res.end();
         });
@@ -218,7 +238,7 @@ app.all('/GetLoginData', (req, res) => {
         if (!res.headersSent) res.status(502).send('Proxy Error');
     });
 
-    if (bodyBuf && bodyBuf.length > 0) proxyReq.write(bodyBuf);
+    if (Buffer.isBuffer(body) && body.length > 0) proxyReq.write(body);
     proxyReq.end();
 });
 
@@ -232,10 +252,7 @@ app.get('/Assembly-CSharp-patch.bytes', (req, res) => {
 });
 
 // ============ MODULES INIT ============
-// URUTAN WAJIB:
-// 1. app.all('/GetLoginData') sudah registered di atas ← KUNCI
-// 2. modules dengan route eksplisit
-// 3. proxy.init() — catch-all PALING AKHIR
+if (modules.config)     modules.config.init(app);   // harus sebelum gamevar
 if (modules.tglog)      modules.tglog.init(app);
 if (modules.protobuf)   modules.protobuf.init(app);
 if (modules.cdn)        modules.cdn.init(app);
@@ -246,18 +263,8 @@ if (modules.gamevar)    modules.gamevar.init(app);
 if (modules.routes)     modules.routes.init(app);
 if (modules.skin)       modules.skin.init(app);
 if (modules.majorlogin) modules.majorlogin.init(app);
-if (modules.config)     modules.config.init(app);
-if (modules.proxy)      modules.proxy.init(app);
-
-// Fallback 404
-app.use((req, res) => {
-    const accept = req.headers['accept'] || '';
-    if (accept.includes('text/html')) {
-        res.status(404).type('text/html').send('<!DOCTYPE html><html><body><h1>404 Not Found</h1></body></html>');
-    } else {
-        res.status(404).json({ code: 404, message: 'Not Found' });
-    }
-});
+if (modules['404'])     modules['404'].init(app);
+if (modules.proxy)      modules.proxy.init(app);  // catch-all — HARUS PALING AKHIR
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`[SERVER] Running on port ${PORT}`);

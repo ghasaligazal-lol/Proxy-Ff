@@ -6,423 +6,527 @@
 <title>Rezaa — Proxy Dashboard</title>
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
 :root {
---bg:         #070b0f;
---surface:    #0d1117;
---surface2:   #111820;
---surface3:   #161e28;
---border:     #1c2530;
---border2:    #223040;
---text:       #c9d4e0;
---muted:      #4e5f70;
---muted2:     #38485a;
---green:      #00e87e;
---green2:     #00c46a;
---green-bg:   rgba(0,232,126,0.08);
---green-ring: rgba(0,232,126,0.18);
---blue:       #3ab4f5;
---blue-bg:    rgba(58,180,245,0.08);
---amber:      #f5a623;
---amber-bg:   rgba(245,166,35,0.09);
---red:        #f44262;
---red-bg:     rgba(244,66,98,0.09);
+    --bg:         #070b0f;
+    --surface:    #0d1117;
+    --surface2:   #111820;
+    --surface3:   #161e28;
+    --border:     #1c2530;
+    --border2:    #223040;
+    --text:       #c9d4e0;
+    --muted:      #4e5f70;
+    --muted2:     #38485a;
+    --green:      #00e87e;
+    --green2:     #00c46a;
+    --green-bg:   rgba(0,232,126,0.08);
+    --green-ring: rgba(0,232,126,0.18);
+    --blue:       #3ab4f5;
+    --blue-bg:    rgba(58,180,245,0.08);
+    --amber:      #f5a623;
+    --amber-bg:   rgba(245,166,35,0.09);
+    --red:        #f44262;
+    --red-bg:     rgba(244,66,98,0.09);
 }
+
 html { scroll-behavior: smooth; }
+
 body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  min-height: 100vh;
-  padding: 0 0 48px;
-  line-height: 1.5;
-  font-size: 14px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    padding: 0 0 48px;
+    line-height: 1.5;
+    font-size: 14px;
 }
+
+/* ── Scanline overlay ── */
 body::before {
-  content: '';
-  position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px);
+    content: '';
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px);
 }
+
 .wrap { max-width: 480px; margin: 0 auto; padding: 0 16px; position: relative; z-index: 1; }
+
+/* ── Animated Header BG ── */
 .hero-bg {
-  position: relative;
-  padding: 36px 16px 28px;
-  overflow: hidden;
-  text-align: center;
+    position: relative;
+    padding: 36px 16px 28px;
+    overflow: hidden;
+    text-align: center;
 }
 .hero-bg::before {
-  content: '';
-  position: absolute; inset: 0;
-  background: radial-gradient(ellipse 70% 60% at 50% 0%, rgba(0,232,126,0.12) 0%, transparent 70%);
-  animation: heroPulse 4s ease-in-out infinite;
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse 70% 60% at 50% 0%, rgba(0,232,126,0.12) 0%, transparent 70%);
+    animation: heroPulse 4s ease-in-out infinite;
 }
 @keyframes heroPulse {
-  0%,100% { opacity: 0.7; transform: scaleY(1); }
-  50% { opacity: 1; transform: scaleY(1.1); }
+    0%,100% { opacity: 0.7; transform: scaleY(1); }
+    50% { opacity: 1; transform: scaleY(1.1); }
 }
+
+/* ── Status badge ── */
 .badge {
-  display: inline-flex; align-items: center; gap: 7px;
-  background: var(--green-bg);
-  border: 1px solid rgba(0,232,126,0.22);
-  color: var(--green);
-  font-size: 10px; font-weight: 700; letter-spacing: .1em;
-  padding: 5px 13px; border-radius: 20px;
-  margin-bottom: 16px; text-transform: uppercase;
-  position: relative;
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--green-bg);
+    border: 1px solid rgba(0,232,126,0.22);
+    color: var(--green);
+    font-size: 10px; font-weight: 700; letter-spacing: .1em;
+    padding: 5px 13px; border-radius: 20px;
+    margin-bottom: 16px; text-transform: uppercase;
+    position: relative;
 }
 .dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--green);
-  position: relative;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green);
+    position: relative;
 }
 .dot::after {
-  content: '';
-  position: absolute; inset: -4px;
-  border-radius: 50%;
-  background: var(--green);
-  opacity: 0;
-  animation: ping 2s cubic-bezier(0,0,0.2,1) infinite;
+    content: '';
+    position: absolute; inset: -4px;
+    border-radius: 50%;
+    background: var(--green);
+    opacity: 0;
+    animation: ping 2s cubic-bezier(0,0,0.2,1) infinite;
 }
 @keyframes ping {
-  0% { transform: scale(1); opacity: 0.6; }
-  100% { transform: scale(2.4); opacity: 0; }
+    0% { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(2.4); opacity: 0; }
 }
+
 .logo {
-  font-size: 32px; font-weight: 900; color: #fff;
-  letter-spacing: -1px; line-height: 1;
-  position: relative;
-  text-shadow: 0 0 40px rgba(0,232,126,0.15);
+    font-size: 32px; font-weight: 900; color: #fff;
+    letter-spacing: -1px; line-height: 1;
+    position: relative;
+    text-shadow: 0 0 40px rgba(0,232,126,0.15);
 }
 .logo span { color: var(--green); }
 .tagline { font-size: 12px; color: var(--muted); margin-top: 6px; letter-spacing: .04em; }
+
+/* ── Cards ── */
 .card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 16px 18px;
-  margin-bottom: 12px;
-  position: relative;
-  overflow: hidden;
-  transition: border-color .2s;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color .2s;
 }
 .card:hover { border-color: var(--border2); }
 .card::before {
-  content: '';
-  position: absolute; top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(0,232,126,0.15), transparent);
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0,232,126,0.15), transparent);
 }
+
 .card-head {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 10px; font-weight: 700; letter-spacing: .1em;
-  color: var(--muted); text-transform: uppercase;
-  margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 10px; font-weight: 700; letter-spacing: .1em;
+    color: var(--muted); text-transform: uppercase;
+    margin-bottom: 14px;
 }
 .card-head svg { opacity: .7; flex-shrink: 0; }
+
+/* ── Info rows ── */
 .info-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-  gap: 12px;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    gap: 12px;
 }
 .info-row:last-child { border-bottom: none; padding-bottom: 0; }
 .info-row .lbl { color: var(--muted); white-space: nowrap; display: flex; align-items: center; gap: 6px; }
 .info-row .val { color: var(--text); font-weight: 600; text-align: right; word-break: break-all; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+
+/* ── Mode selector ── */
 .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 .mode-btn {
-  padding: 14px 10px;
-  background: var(--surface2);
-  border: 1.5px solid var(--border2);
-  border-radius: 12px;
-  color: var(--muted);
-  cursor: pointer; text-align: center;
-  transition: all .18s cubic-bezier(.4,0,.2,1);
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  position: relative; overflow: hidden;
+    padding: 14px 10px;
+    background: var(--surface2);
+    border: 1.5px solid var(--border2);
+    border-radius: 12px;
+    color: var(--muted);
+    cursor: pointer; text-align: center;
+    transition: all .18s cubic-bezier(.4,0,.2,1);
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    position: relative; overflow: hidden;
 }
 .mode-btn::after {
-  content: ''; position: absolute; inset: 0;
-  background: var(--green-bg);
-  opacity: 0; transition: opacity .18s;
+    content: ''; position: absolute; inset: 0;
+    background: var(--green-bg);
+    opacity: 0; transition: opacity .18s;
 }
 .mode-btn:hover { border-color: var(--green); color: var(--text); }
 .mode-btn:hover::after { opacity: 1; }
 .mode-btn.active {
-  background: var(--green-bg);
-  border-color: var(--green);
-  color: var(--green);
-  box-shadow: 0 0 0 3px var(--green-ring);
+    background: var(--green-bg);
+    border-color: var(--green);
+    color: var(--green);
+    box-shadow: 0 0 0 3px var(--green-ring);
 }
 .mode-btn .mode-icon { width: 26px; height: 26px; position: relative; z-index: 1; }
 .mode-btn .mode-name { font-size: 12px; font-weight: 800; position: relative; z-index: 1; }
 .mode-btn .mode-desc { font-size: 10px; color: var(--muted); font-weight: 400; line-height: 1.4; position: relative; z-index: 1; }
 .mode-btn.active .mode-desc { color: rgba(0,232,126,0.65); }
 .mode-btn.active .mode-icon svg { stroke: var(--green); }
+
+/* ── Settings rows ── */
 .setting {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-  gap: 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    gap: 14px;
 }
 .setting:last-child { border-bottom: none; padding-bottom: 0; }
 .setting-info { flex: 1; min-width: 0; }
 .setting-label {
-  font-size: 13px; font-weight: 600; color: #dde8f5;
-  display: flex; align-items: center; gap: 7px;
+    font-size: 13px; font-weight: 600; color: #dde8f5;
+    display: flex; align-items: center; gap: 7px;
 }
 .setting-desc { font-size: 11px; color: var(--muted); margin-top: 3px; }
 .setting-ctrl { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+/* ── Tag ── */
 .tag {
-  font-size: 9px; font-weight: 800; padding: 2px 7px;
-  border-radius: 5px; letter-spacing: .06em; text-transform: uppercase;
+    font-size: 9px; font-weight: 800; padding: 2px 7px;
+    border-radius: 5px; letter-spacing: .06em; text-transform: uppercase;
 }
 .tag-amber { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245,166,35,0.2); }
 .tag-green { background: var(--green-bg); color: var(--green); border: 1px solid rgba(0,232,126,0.2); }
 .tag-blue  { background: var(--blue-bg);  color: var(--blue);  border: 1px solid rgba(58,180,245,0.2); }
+
+/* ── Toggle ── */
 .toggle { position: relative; width: 44px; height: 25px; flex-shrink: 0; }
 .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
 .toggle-track {
-  position: absolute; inset: 0;
-  background: var(--border2); border-radius: 13px;
-  cursor: pointer; transition: background .2s;
-  border: 1px solid rgba(255,255,255,0.05);
+    position: absolute; inset: 0;
+    background: var(--border2); border-radius: 13px;
+    cursor: pointer; transition: background .2s;
+    border: 1px solid rgba(255,255,255,0.05);
 }
 .toggle-track::after {
-  content: ''; position: absolute;
-  width: 19px; height: 19px; border-radius: 50%;
-  background: #fff; top: 2px; left: 2px;
-  transition: transform .2s cubic-bezier(.4,0,.2,1);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    content: ''; position: absolute;
+    width: 19px; height: 19px; border-radius: 50%;
+    background: #fff; top: 2px; left: 2px;
+    transition: transform .2s cubic-bezier(.4,0,.2,1);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
 }
 .toggle input:checked + .toggle-track { background: var(--green); }
 .toggle input:checked + .toggle-track::after { transform: translateX(19px); }
+
+/* ── Number input ── */
 .num-input {
-  background: var(--surface2);
-  border: 1.5px solid var(--border2);
-  border-radius: 9px;
-  color: var(--text);
-  font-size: 14px; font-weight: 700;
-  padding: 8px 10px;
-  width: 84px; text-align: center;
-  outline: none;
-  transition: border-color .15s, box-shadow .15s;
-  -moz-appearance: textfield;
-  font-family: 'SF Mono', 'Fira Code', monospace;
+    background: var(--surface2);
+    border: 1.5px solid var(--border2);
+    border-radius: 9px;
+    color: var(--text);
+    font-size: 14px; font-weight: 700;
+    padding: 8px 10px;
+    width: 84px; text-align: center;
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+    -moz-appearance: textfield;
+    font-family: 'SF Mono', 'Fira Code', monospace;
 }
 .num-input::-webkit-outer-spin-button,
 .num-input::-webkit-inner-spin-button { -webkit-appearance: none; }
 .num-input:focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-ring); }
 .num-input.error { border-color: var(--red) !important; box-shadow: 0 0 0 3px rgba(244,66,98,0.15) !important; }
+
+/* ── Slider ── */
+.speed-slider-wrap { margin-top: 12px; }
 .slider {
-  -webkit-appearance: none; appearance: none;
-  width: 100%; height: 4px;
-  background: var(--border2); border-radius: 2px; outline: none;
-  cursor: pointer;
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 4px;
+    background: var(--border2); border-radius: 2px; outline: none;
+    cursor: pointer;
 }
 .slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 20px; height: 20px; border-radius: 50%;
-  background: var(--green);
-  box-shadow: 0 0 0 3px var(--green-ring), 0 2px 6px rgba(0,0,0,0.4);
-  cursor: pointer; transition: transform .1s;
+    -webkit-appearance: none;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 0 3px var(--green-ring), 0 2px 6px rgba(0,0,0,0.4);
+    cursor: pointer; transition: transform .1s;
 }
 .slider::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .slider::-moz-range-thumb {
-  width: 20px; height: 20px; border-radius: 50%;
-  background: var(--green); border: none;
-  box-shadow: 0 0 0 3px var(--green-ring);
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--green); border: none;
+    box-shadow: 0 0 0 3px var(--green-ring);
 }
 .slider-labels {
-  display: flex; justify-content: space-between;
-  font-size: 10px; color: var(--muted); margin-top: 6px;
+    display: flex; justify-content: space-between;
+    font-size: 10px; color: var(--muted); margin-top: 6px;
 }
+
+/* ── Sensi grid ── */
 .sensi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
 .sensi-item label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 5px; }
 .sensi-item .num-input { width: 100%; text-align: left; }
+
+/* ── Save button ── */
 .btn-save {
-  width: 100%; padding: 15px;
-  background: var(--green);
-  border: none; border-radius: 12px;
-  color: #030d07; font-size: 15px; font-weight: 900;
-  cursor: pointer; letter-spacing: .02em;
-  display: flex; justify-content: center; align-items: center; gap: 9px;
-  transition: filter .15s, transform .1s, box-shadow .15s;
-  margin-top: 4px;
-  box-shadow: 0 4px 24px rgba(0,232,126,0.2);
-  position: relative; overflow: hidden;
+    width: 100%; padding: 15px;
+    background: var(--green);
+    border: none; border-radius: 12px;
+    color: #030d07; font-size: 15px; font-weight: 900;
+    cursor: pointer; letter-spacing: .02em;
+    display: flex; justify-content: center; align-items: center; gap: 9px;
+    transition: filter .15s, transform .1s, box-shadow .15s;
+    margin-top: 4px;
+    box-shadow: 0 4px 24px rgba(0,232,126,0.2);
+    position: relative; overflow: hidden;
 }
 .btn-save::before {
-  content: '';
-  position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 60%);
-  pointer-events: none;
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 60%);
+    pointer-events: none;
 }
 .btn-save:hover { filter: brightness(1.08); box-shadow: 0 6px 32px rgba(0,232,126,0.32); }
 .btn-save:active { transform: scale(.98); }
 .btn-save:disabled { opacity: .45; cursor: not-allowed; transform: none; filter: none; box-shadow: none; }
+
+/* ── Spin ── */
 .spin {
-  width: 17px; height: 17px;
-  border: 2.5px solid rgba(3,13,7,.25);
-  border-top-color: #030d07;
-  border-radius: 50%;
-  animation: rot .6s linear infinite;
-  display: none; flex-shrink: 0;
+    width: 17px; height: 17px;
+    border: 2.5px solid rgba(3,13,7,.25);
+    border-top-color: #030d07;
+    border-radius: 50%;
+    animation: rot .6s linear infinite;
+    display: none; flex-shrink: 0;
 }
 @keyframes rot { to { transform: rotate(360deg); } }
+
+/* ── Secondary buttons ── */
 .btn-row { display: flex; gap: 9px; margin-top: 12px; }
 .btn-sm {
-  flex: 1; padding: 11px 8px;
-  background: var(--surface); border: 1px solid var(--border2);
-  border-radius: 10px; color: var(--muted);
-  font-size: 12px; font-weight: 700; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  transition: border-color .15s, background .15s, color .15s;
-  text-decoration: none;
+    flex: 1; padding: 11px 8px;
+    background: var(--surface); border: 1px solid var(--border2);
+    border-radius: 10px; color: var(--muted);
+    font-size: 12px; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    transition: border-color .15s, background .15s, color .15s;
+    text-decoration: none;
 }
 .btn-sm:hover { border-color: var(--green); background: var(--green-bg); color: var(--green); }
 .btn-sm svg { flex-shrink: 0; }
+
+/* ── Toast ── */
 .toast {
-  position: fixed; bottom: 24px; left: 50%;
-  transform: translateX(-50%) translateY(90px);
-  background: var(--surface2);
-  border: 1px solid var(--border2);
-  border-radius: 12px; padding: 12px 20px;
-  font-size: 13px; font-weight: 600;
-  box-shadow: 0 12px 40px rgba(0,0,0,.6);
-  display: flex; align-items: center; gap: 10px;
-  transition: transform .3s cubic-bezier(.34,1.56,.64,1), opacity .2s;
-  opacity: 0; pointer-events: none; white-space: nowrap; z-index: 99;
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(90px);
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 12px; padding: 12px 20px;
+    font-size: 13px; font-weight: 600;
+    box-shadow: 0 12px 40px rgba(0,0,0,.6);
+    display: flex; align-items: center; gap: 10px;
+    transition: transform .3s cubic-bezier(.34,1.56,.64,1), opacity .2s;
+    opacity: 0; pointer-events: none; white-space: nowrap; z-index: 99;
 }
 .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 .toast.ok  { border-color: rgba(0,232,126,.35); color: var(--green); }
 .toast.err { border-color: rgba(244,66,98,.35); color: var(--red); }
+
+/* ── Speed panel animation ── */
 #speedPanel { overflow: hidden; transition: max-height .25s cubic-bezier(.4,0,.2,1), opacity .2s; max-height: 0; opacity: 0; padding-top: 0 !important; }
 #speedPanel.open { max-height: 160px; opacity: 1; padding-top: 12px !important; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="hero-bg">
-    <div class="badge"><span class="dot"></span> Server Online</div>
-    <div class="logo">PROXY — Reza<span>Nih</span></div>
-    <div class="tagline">Game Config Dashboard</div>
-  </div>
 
-  <!-- Device Info -->
-  <div class="card">
-    <div class="card-head">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="18" r="1"/></svg>
-      Device Info
+    <div class="hero-bg">
+        <div class="badge">
+            <span class="dot"></span> Server Online
+        </div>
+        <div class="logo">PROXY — Reza<span>Nih</span></div>
+        <div class="tagline">Game Config Dashboard</div>
     </div>
-    <div class="info-row">
-      <span class="lbl"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> IP Address</span>
-      <span class="val" id="dIp">—</span>
-    </div>
-    <div class="info-row">
-      <span class="lbl"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> Kota</span>
-      <span class="val" id="dCity">—</span>
-    </div>
-    <div class="info-row">
-      <span class="lbl"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="18" r="1"/></svg> Device</span>
-      <span class="val" id="dDev">—</span>
-    </div>
-    <div class="info-row">
-      <span class="lbl"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> Platform</span>
-      <span class="val" id="dPlat">—</span>
-    </div>
-    <div class="info-row">
-      <span class="lbl"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="16" height="10" rx="2"/><path d="M22 11v2"/></svg> Baterai</span>
-      <span class="val" id="dBatt">—</span>
-    </div>
-    <div class="info-row">
-      <span class="lbl"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg> ISP</span>
-      <span class="val" id="dIsp">—</span>
-    </div>
-  </div>
 
-  <!-- Body Mode -->
-  <div class="card">
-    <div class="card-head">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-      Body Mode
+    <!-- Device Info -->
+    <div class="card">
+        <div class="card-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="18" r="1"/></svg>
+            Device Info
+        </div>
+        <div class="info-row">
+            <span class="lbl">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                IP Address
+            </span>
+            <span class="val" id="dIp">—</span>
+        </div>
+        <div class="info-row">
+            <span class="lbl">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                Kota
+            </span>
+            <span class="val" id="dCity">—</span>
+        </div>
+        <div class="info-row">
+            <span class="lbl">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="18" r="1"/></svg>
+                Device
+            </span>
+            <span class="val" id="dDev">—</span>
+        </div>
+        <div class="info-row">
+            <span class="lbl">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                Platform
+            </span>
+            <span class="val" id="dPlat">—</span>
+        </div>
+        <div class="info-row">
+            <span class="lbl">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="16" height="10" rx="2"/><path d="M22 11v2"/></svg>
+                Baterai
+            </span>
+            <span class="val" id="dBatt">—</span>
+        </div>
+        <div class="info-row">
+            <span class="lbl">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
+                ISP
+            </span>
+            <span class="val" id="dIsp">—</span>
+        </div>
     </div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Pilih mode untuk client</div>
-    <div class="mode-grid">
-      <button class="mode-btn active" id="mode_full" onclick="setMode('full')">
-        <span class="mode-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4e5f70" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="icon_full"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
-        <span class="mode-name">Full Mod</span>
-        <span class="mode-desc">Speed · Sensi · Anti-ban flags inject</span>
-      </button>
-      <button class="mode-btn" id="mode_hs_only" onclick="setMode('hs_only')">
-        <span class="mode-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4e5f70" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="icon_hs"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="14.5" y2="14.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></span>
-        <span class="mode-name">HS Only</span>
-        <span class="mode-desc">Hanya body headshoot</span>
-      </button>
-    </div>
-  </div>
 
-  <!-- Speed Settings -->
-  <div class="card" id="speedCard">
-    <div class="card-head">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-      Run Speed
+    <!-- Body Mode -->
+    <div class="card">
+        <div class="card-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            Body Mode
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Pilih mode untuk client</div>
+        <div class="mode-grid">
+            <button class="mode-btn active" id="mode_full" onclick="setMode('full')">
+                <span class="mode-icon">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4e5f70" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="icon_full"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                </span>
+                <span class="mode-name">Full Mod</span>
+                <span class="mode-desc">Speed · Sensi · Anti-ban flags inject</span>
+            </button>
+            <button class="mode-btn" id="mode_hs_only" onclick="setMode('hs_only')">
+                <span class="mode-icon">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4e5f70" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="icon_hs"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="14.5" y2="14.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
+                </span>
+                <span class="mode-name">HS Only</span>
+                <span class="mode-desc">Hanya body headshoot</span>
+            </button>
+        </div>
     </div>
-    <div class="setting">
-      <div class="setting-info">
-        <div class="setting-label">Custom Speed <span class="tag tag-amber">MAX 10</span></div>
-        <div class="setting-desc">Default speed = 4.0</div>
-      </div>
-      <div class="setting-ctrl">
-        <label class="toggle"><input type="checkbox" id="speedToggle" onchange="onSpeedToggle()"><span class="toggle-track"></span></label>
-      </div>
-    </div>
-    <div id="speedPanel" style="padding-top:0;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <span style="font-size:12px;color:var(--muted)">RunSpeed Value</span>
-        <input type="number" class="num-input" id="speedVal" min="0.1" max="10" step="0.1" value="4.0" oninput="syncSlider()">
-      </div>
-      <input type="range" class="slider" id="speedSlider" min="0.1" max="10" step="0.1" value="4.0" oninput="syncInput()">
-      <div class="slider-labels"><span>0.1 slow</span><span>5.0 normal</span><span>10 max</span></div>
-    </div>
-  </div>
 
-  <!-- Sensitivity -->
-  <div class="card" id="sensiCard">
-    <div class="card-head">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="14.5" y2="14.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
-      Sensitivity
+    <!-- Speed Settings -->
+    <div class="card" id="speedCard">
+        <div class="card-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Run Speed
+        </div>
+        <div class="setting">
+            <div class="setting-info">
+                <div class="setting-label">
+                    Custom Speed
+                    <span class="tag tag-amber">MAX 10</span>
+                </div>
+                <div class="setting-desc">Default speed = 4.0</div>
+            </div>
+            <div class="setting-ctrl">
+                <label class="toggle">
+                    <input type="checkbox" id="speedToggle" onchange="onSpeedToggle()">
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+        </div>
+        <div id="speedPanel" style="padding-top:0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <span style="font-size:12px;color:var(--muted)">RunSpeed Value</span>
+                <input type="number" class="num-input" id="speedVal"
+                    min="0.1" max="10" step="0.1" value="4.0"
+                    oninput="syncSlider()">
+            </div>
+            <input type="range" class="slider" id="speedSlider"
+                min="0.1" max="10" step="0.1" value="4.0"
+                oninput="syncInput()">
+            <div class="slider-labels">
+                <span>0.1 slow</span>
+                <span>5.0 normal</span>
+                <span>10 max</span>
+            </div>
+        </div>
     </div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Maks sensitivity per scope · default 9.5 · maks 999.99</div>
-    <div class="sensi-grid">
-      <div class="sensi-item"><label>Free Look</label><input type="number" class="num-input" id="s_FreeLook" min="1" max="999.99" step="0.1" value="9.5"></div>
-      <div class="sensi-item"><label>1P (Hip Fire)</label><input type="number" class="num-input" id="s_1P" min="1" max="999.99" step="0.1" value="9.5"></div>
-      <div class="sensi-item"><label>Scope ×1</label><input type="number" class="num-input" id="s_X1" min="1" max="999.99" step="0.1" value="9.5"></div>
-      <div class="sensi-item"><label>Scope ×2</label><input type="number" class="num-input" id="s_X2" min="1" max="999.99" step="0.1" value="9.5"></div>
-      <div class="sensi-item"><label>Scope ×4</label><input type="number" class="num-input" id="s_X4" min="1" max="999.99" step="0.1" value="9.5"></div>
-      <div class="sensi-item"><label>Scope ×8</label><input type="number" class="num-input" id="s_X8" min="1" max="999.99" step="0.1" value="9.5"></div>
-      <div class="sensi-item" style="grid-column:1/-1"><label>General Max</label><input type="number" class="num-input" id="s_General" min="1" max="999.99" step="0.1" value="9.5" style="width:100%"></div>
+
+    <!-- Sensitivity -->
+    <div class="card" id="sensiCard">
+        <div class="card-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="14.5" y2="14.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
+            Sensitivity
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Maks sensitivity per scope · default 9.5 · maks 999.99</div>
+        <div class="sensi-grid">
+            <div class="sensi-item">
+                <label>Free Look</label>
+                <input type="number" class="num-input" id="s_FreeLook" min="1" max="999.99" step="0.1" value="9.5">
+            </div>
+            <div class="sensi-item">
+                <label>1P (Hip Fire)</label>
+                <input type="number" class="num-input" id="s_1P" min="1" max="999.99" step="0.1" value="9.5">
+            </div>
+            <div class="sensi-item">
+                <label>Scope ×1</label>
+                <input type="number" class="num-input" id="s_X1" min="1" max="999.99" step="0.1" value="9.5">
+            </div>
+            <div class="sensi-item">
+                <label>Scope ×2</label>
+                <input type="number" class="num-input" id="s_X2" min="1" max="999.99" step="0.1" value="9.5">
+            </div>
+            <div class="sensi-item">
+                <label>Scope ×4</label>
+                <input type="number" class="num-input" id="s_X4" min="1" max="999.99" step="0.1" value="9.5">
+            </div>
+            <div class="sensi-item">
+                <label>Scope ×8</label>
+                <input type="number" class="num-input" id="s_X8" min="1" max="999.99" step="0.1" value="9.5">
+            </div>
+            <div class="sensi-item" style="grid-column:1/-1">
+                <label>General Max</label>
+                <input type="number" class="num-input" id="s_General" min="1" max="999.99" step="0.1" value="9.5" style="width:100%">
+            </div>
+        </div>
     </div>
-  </div>
 
-  <button class="btn-save" id="saveBtn" onclick="saveConfig()">
-    <span class="spin" id="saveSpin"></span>
-    <svg id="saveIcon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#030d07" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-    <span id="saveLabel">Simpan Config</span>
-  </button>
-
-  <div class="btn-row">
-    <a href="https://chat.whatsapp.com/BTA9WjmjtO43DDMmqRMKVJ?s=cl&p=a&mlu=4" target="_blank" class="btn-sm">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      WA Group
-    </a>
-    <a href="https://whatsapp.com/channel/0029Vb8eX0Z1NCrYCXEXuu0K" target="_blank" class="btn-sm">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-      Channel
-    </a>
-    <button class="btn-sm" onclick="downloadConfig()">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      localconfig
+    <!-- Save -->
+    <button class="btn-save" id="saveBtn" onclick="saveConfig()">
+        <span class="spin" id="saveSpin"></span>
+        <svg id="saveIcon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#030d07" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        <span id="saveLabel">Simpan Config</span>
     </button>
-  </div>
+
+    <!-- Action buttons -->
+    <div class="btn-row">
+        <a href="https://chat.whatsapp.com/BTA9WjmjtO43DDMmqRMKVJ?s=cl&p=a&mlu=4" target="_blank" class="btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            WA Group
+        </a>
+        <a href="https://whatsapp.com/channel/0029Vb8eX0Z1NCrYCXEXuu0K" target="_blank" class="btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            Channel
+        </a>
+        <button class="btn-sm" onclick="downloadConfig()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            localconfig
+        </button>
+    </div>
+
 </div>
 
 <div class="toast" id="toast"></div>
@@ -431,215 +535,225 @@ body::before {
 const PROXY_URL = window.location.origin + '/';
 
 function showToast(msg, type = 'ok', dur = 2800) {
-  const t = document.getElementById('toast');
-  const icon = type === 'ok'
-    ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
-    : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
-  t.innerHTML = icon + msg;
-  t.className = `toast ${type} show`;
-  clearTimeout(t._t);
-  t._t = setTimeout(() => { t.className = 'toast'; }, dur);
+    const t = document.getElementById('toast');
+    const icon = type === 'ok'
+        ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+        : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+    t.innerHTML = icon + msg;
+    t.className = `toast ${type} show`;
+    clearTimeout(t._t);
+    t._t = setTimeout(() => { t.className = 'toast'; }, dur);
 }
 
 function onSpeedToggle() {
-  const on = document.getElementById('speedToggle').checked;
-  document.getElementById('speedPanel').classList.toggle('open', on);
+    const on = document.getElementById('speedToggle').checked;
+    const panel = document.getElementById('speedPanel');
+    panel.classList.toggle('open', on);
 }
 
 function syncSlider() {
-  const v = parseFloat(document.getElementById('speedVal').value);
-  if (!isNaN(v)) document.getElementById('speedSlider').value = Math.min(10, Math.max(0.1, v));
+    const v = parseFloat(document.getElementById('speedVal').value);
+    if (!isNaN(v)) document.getElementById('speedSlider').value = Math.min(10, Math.max(0.1, v));
 }
 function syncInput() {
-  document.getElementById('speedVal').value = document.getElementById('speedSlider').value;
+    document.getElementById('speedVal').value = document.getElementById('speedSlider').value;
 }
 
 let _currentMode = 'full';
 function setMode(mode) {
-  _currentMode = mode;
-  ['full','hs_only'].forEach(m => {
-    document.getElementById('mode_'+m).classList.toggle('active', m === mode);
-  });
-  const iconFull = document.getElementById('icon_full');
-  const iconHs   = document.getElementById('icon_hs');
-  if (mode === 'full') {
-    iconFull.setAttribute('stroke', 'var(--green)');
-    iconHs.setAttribute('stroke', '#4e5f70');
-  } else {
-    iconFull.setAttribute('stroke', '#4e5f70');
-    iconHs.setAttribute('stroke', 'var(--green)');
-  }
-  const isFull = mode === 'full';
-  ['speedCard','sensiCard'].forEach(id => {
-    const el = document.getElementById(id);
-    el.style.opacity = isFull ? '1' : '0.45';
-    el.style.pointerEvents = isFull ? '' : 'none';
-  });
+    _currentMode = mode;
+    ['full','hs_only'].forEach(m => {
+        document.getElementById('mode_'+m).classList.toggle('active', m === mode);
+    });
+    const iconFull = document.getElementById('icon_full');
+    const iconHs   = document.getElementById('icon_hs');
+    if (mode === 'full') {
+        iconFull.setAttribute('stroke', 'var(--green)');
+        iconHs.setAttribute('stroke', '#4e5f70');
+    } else {
+        iconFull.setAttribute('stroke', '#4e5f70');
+        iconHs.setAttribute('stroke', 'var(--green)');
+    }
+    const isFull = mode === 'full';
+    ['speedCard','sensiCard'].forEach(id => {
+        const el = document.getElementById(id);
+        el.style.opacity = isFull ? '1' : '0.45';
+        el.style.pointerEvents = isFull ? '' : 'none';
+    });
 }
 
 async function loadConfig() {
-  try {
-    const r = await fetch('/api/config', { cache: 'no-store' });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const d = await r.json();
-    if (d.bodyMode) setMode(d.bodyMode);
-    if (d.runSpeed != null) {
-      document.getElementById('speedToggle').checked = true;
-      document.getElementById('speedPanel').classList.add('open');
-      document.getElementById('speedVal').value = d.runSpeed;
-      document.getElementById('speedSlider').value = d.runSpeed;
-    }
-    const s = d.sensi || {};
-    setVal('s_General',  s.SensitivityMaxSetting,   9.5);
-    setVal('s_1P',       s.Sensitivity1PMaxSetting, 9.5);
-    setVal('s_X1',       s.X1ScopeMaxSetting,       9.5);
-    setVal('s_X2',       s.X2ScopeMaxSetting,       9.5);
-    setVal('s_X4',       s.X4ScopeMaxSetting,       9.5);
-    setVal('s_X8',       s.X8ScopeMaxSetting,       9.5);
-    setVal('s_FreeLook', s.FreeLookMaxSetting,       9.5);
-  } catch(e) { console.warn('Load config:', e); }
+    try {
+        const r = await fetch('/api/config');
+        const d = await r.json();
+        if (d.bodyMode) setMode(d.bodyMode);
+        if (d.runSpeed != null) {
+            document.getElementById('speedToggle').checked = true;
+            document.getElementById('speedPanel').classList.add('open');
+            document.getElementById('speedVal').value = d.runSpeed;
+            document.getElementById('speedSlider').value = d.runSpeed;
+        }
+        const s = d.sensi || {};
+        setVal('s_General',  s.SensitivityMaxSetting,   9.5);
+        setVal('s_1P',       s.Sensitivity1PMaxSetting, 9.5);
+        setVal('s_X1',       s.X1ScopeMaxSetting,       9.5);
+        setVal('s_X2',       s.X2ScopeMaxSetting,       9.5);
+        setVal('s_X4',       s.X4ScopeMaxSetting,       9.5);
+        setVal('s_X8',       s.X8ScopeMaxSetting,       9.5);
+        setVal('s_FreeLook', s.FreeLookMaxSetting,       9.5);
+    } catch(e) { console.warn('Load config:', e); }
 }
 
 function setVal(id, v, def) {
-  document.getElementById(id).value = (v != null) ? v : def;
+    document.getElementById(id).value = (v != null) ? v : def;
 }
 
 async function saveConfig() {
-  const btn   = document.getElementById('saveBtn');
-  const spin  = document.getElementById('saveSpin');
-  const icon  = document.getElementById('saveIcon');
-  const label = document.getElementById('saveLabel');
-  const speedOn  = document.getElementById('speedToggle').checked;
-  const speedRaw = parseFloat(document.getElementById('speedVal').value);
-  if (speedOn && (isNaN(speedRaw) || speedRaw < 0.1 || speedRaw > 10)) {
-    document.getElementById('speedVal').classList.add('error');
-    showToast('Speed harus 0.1 – 10', 'err');
-    return;
-  }
-  document.getElementById('speedVal').classList.remove('error');
-  const payload = {
-    bodyMode: _currentMode,
-    runSpeed: speedOn ? speedRaw : null,
-    sensi: {
-      SensitivityMaxSetting:   getNum('s_General',  9.5),
-      Sensitivity1PMaxSetting: getNum('s_1P',       9.5),
-      X1ScopeMaxSetting:       getNum('s_X1',       9.5),
-      X2ScopeMaxSetting:       getNum('s_X2',       9.5),
-      X4ScopeMaxSetting:       getNum('s_X4',       9.5),
-      X8ScopeMaxSetting:       getNum('s_X8',       9.5),
-      FreeLookMaxSetting:      getNum('s_FreeLook',  9.5),
+    const btn   = document.getElementById('saveBtn');
+    const spin  = document.getElementById('saveSpin');
+    const icon  = document.getElementById('saveIcon');
+    const label = document.getElementById('saveLabel');
+    const speedOn  = document.getElementById('speedToggle').checked;
+    const speedRaw = parseFloat(document.getElementById('speedVal').value);
+    if (speedOn && (isNaN(speedRaw) || speedRaw < 0.1 || speedRaw > 10)) {
+        document.getElementById('speedVal').classList.add('error');
+        showToast('Speed harus 0.1 – 10', 'err');
+        return;
     }
-  };
-  btn.disabled = true;
-  spin.style.display = 'block';
-  icon.style.display = 'none';
-  label.textContent = 'Menyimpan...';
-  try {
-    const r = await fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!r.ok) {
-      const txt = await r.text();
-      throw new Error(`HTTP ${r.status}: ${txt.substring(0, 120)}`);
+    document.getElementById('speedVal').classList.remove('error');
+    const payload = {
+        bodyMode: _currentMode,
+        runSpeed: speedOn ? speedRaw : null,
+        sensi: {
+            SensitivityMaxSetting:   getNum('s_General',  9.5),
+            Sensitivity1PMaxSetting: getNum('s_1P',       9.5),
+            X1ScopeMaxSetting:       getNum('s_X1',       9.5),
+            X2ScopeMaxSetting:       getNum('s_X2',       9.5),
+            X4ScopeMaxSetting:       getNum('s_X4',       9.5),
+            X8ScopeMaxSetting:       getNum('s_X8',       9.5),
+            FreeLookMaxSetting:      getNum('s_FreeLook',  9.5),
+        }
+    };
+    btn.disabled = true;
+    spin.style.display = 'block';
+    icon.style.display = 'none';
+    label.textContent = 'Menyimpan...';
+    try {
+        const r = await fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const d = await r.json();
+        if (d.ok) {
+            showToast('Config tersimpan!', 'ok', 3500);
+            await loadConfig();
+        } else {
+            showToast('Gagal simpan: ' + (d.error || '?'), 'err');
+        }
+    } catch(e) {
+        showToast('Network error: ' + e.message, 'err');
+    } finally {
+        btn.disabled = false;
+        spin.style.display = 'none';
+        icon.style.display = 'block';
+        label.textContent = 'Simpan Config';
     }
-    const d = await r.json();
-    if (d.ok) {
-      showToast('Config tersimpan!', 'ok', 3500);
-      await loadConfig();
-    } else {
-      showToast('Gagal simpan: ' + (d.error || '?'), 'err');
-    }
-  } catch(e) {
-    showToast('Error: ' + e.message, 'err');
-  } finally {
-    btn.disabled = false;
-    spin.style.display = 'none';
-    icon.style.display = 'block';
-    label.textContent = 'Simpan Config';
-  }
 }
 
 function getNum(id, def) {
-  const v = parseFloat(document.getElementById(id).value);
-  return (!isNaN(v) && v >= 0) ? Math.min(999.99, v) : def;
+    const v = parseFloat(document.getElementById(id).value);
+    return (!isNaN(v) && v >= 0) ? Math.min(999.99, v) : def;
 }
 
 async function loadDevice() {
-  function getDeviceName() {
-    const ua = navigator.userAgent;
-    let m = ua.match(/Linux;\s*(?:U;\s*)?Android\s*[\d.]+;\s*([^)]+?)\s*(?:Build\/[^)]+)?/i);
-    if (m) {
-      let model = m[1].trim().replace(/\s*wv\s*$/i, '').trim();
-      if (model && model !== 'armv8l' && !model.startsWith('Linux')) return model;
+    // ── Device name — ambil dari UA client-side (lebih akurat dari server) ──
+    // FF WebView UA format: "Dalvik/... (Linux; U; Android X.X; <MODEL> Build/...)"
+    // atau browser: "Mozilla/... (Linux; Android X; <MODEL>) AppleWebKit/..."
+    function getDeviceName() {
+        const ua = navigator.userAgent;
+        // Android: ambil model dari dalam kurung
+        let m = ua.match(/\(Linux;\s*(?:U;\s*)?Android\s*[\d.]+;\s*([^)]+?)\s*(?:Build\/[^)]+)?\)/i);
+        if (m) {
+            let model = m[1].trim();
+            // Buang "wv" suffix WebView
+            model = model.replace(/\s*wv\s*$/i, '').trim();
+            if (model && model !== 'armv8l' && !model.startsWith('Linux')) return model;
+        }
+        // Fallback: coba format Dalvik
+        m = ua.match(/;\s*([A-Za-z0-9 _\-]+?)\s*Build\//i);
+        if (m) {
+            const model = m[1].trim();
+            if (model && model.length > 2 && !model.startsWith('Android') && model !== 'armv8l') return model;
+        }
+        // iPhone
+        if (/iPhone/i.test(ua)) return 'iPhone';
+        if (/iPad/i.test(ua))   return 'iPad';
+        return 'Android Device';
     }
-    m = ua.match(/;\s*([A-Za-z0-9 _\-]+?)\s*Build\//i);
-    if (m) {
-      const model = m[1].trim();
-      if (model && model.length > 2 && !model.startsWith('Android') && model !== 'armv8l') return model;
+
+    function getPlatform() {
+        const ua = navigator.userAgent;
+        if (/Android/i.test(ua)) return 'Android';
+        if (/iPhone|iPad/i.test(ua)) return 'iOS';
+        if (/Windows/i.test(ua)) return 'Windows';
+        return navigator.platform || 'Other';
     }
-    if (/iPhone/i.test(ua)) return 'iPhone';
-    if (/iPad/i.test(ua))   return 'iPad';
-    return 'Android Device';
-  }
-  function getPlatform() {
-    const ua = navigator.userAgent;
-    if (/Android/i.test(ua)) return 'Android';
-    if (/iPhone|iPad/i.test(ua)) return 'iOS';
-    if (/Windows/i.test(ua)) return 'Windows';
-    return navigator.platform || 'Other';
-  }
-  document.getElementById('dDev').textContent  = getDeviceName();
-  document.getElementById('dPlat').textContent = getPlatform();
-  try {
-    const r = await fetch('/api/device');
-    const d = await r.json();
-    document.getElementById('dIp').textContent   = d.ip || '—';
-    document.getElementById('dCity').textContent = d.city && d.country ? `${d.city}, ${d.country}` : (d.city || '—');
-    document.getElementById('dIsp').textContent  = d.isp || '—';
-  } catch(_) {
-    document.getElementById('dIp').textContent   = '—';
-    document.getElementById('dCity').textContent = '—';
-    document.getElementById('dIsp').textContent  = '—';
-  }
-  try {
-    if ('getBattery' in navigator) {
-      const batt = await navigator.getBattery();
-      function updateBatt(b) {
-        const pct    = Math.round(b.level * 100);
-        const status = b.charging ? '⚡ Charging' : (pct <= 20 ? '🔴' : pct <= 50 ? '🟡' : '🟢');
-        document.getElementById('dBatt').textContent = `${status} ${pct}%`;
-      }
-      updateBatt(batt);
-      batt.addEventListener('levelchange',    () => updateBatt(batt));
-      batt.addEventListener('chargingchange', () => updateBatt(batt));
-    } else {
-      document.getElementById('dBatt').textContent = 'Tidak didukung';
+
+    document.getElementById('dDev').textContent  = getDeviceName();
+    document.getElementById('dPlat').textContent = getPlatform();
+
+    // ── IP + Geo dari server ──
+    try {
+        const r = await fetch('/api/device');
+        const d = await r.json();
+        document.getElementById('dIp').textContent   = d.ip || '—';
+        document.getElementById('dCity').textContent = d.city && d.country ? `${d.city}, ${d.country}` : (d.city || '—');
+        document.getElementById('dIsp').textContent  = d.isp || '—';
+    } catch(_) {
+        document.getElementById('dIp').textContent   = '—';
+        document.getElementById('dCity').textContent = '—';
+        document.getElementById('dIsp').textContent  = '—';
     }
-  } catch(_) {
-    document.getElementById('dBatt').textContent = '—';
-  }
+
+    // ── Baterai — Battery Status API ──
+    try {
+        if ('getBattery' in navigator) {
+            const batt = await navigator.getBattery();
+            function updateBatt(b) {
+                const pct    = Math.round(b.level * 100);
+                const status = b.charging ? '⚡ Charging' : (pct <= 20 ? '🔴' : pct <= 50 ? '🟡' : '🟢');
+                document.getElementById('dBatt').textContent = `${status} ${pct}%`;
+            }
+            updateBatt(batt);
+            batt.addEventListener('levelchange',    () => updateBatt(batt));
+            batt.addEventListener('chargingchange', () => updateBatt(batt));
+        } else {
+            document.getElementById('dBatt').textContent = 'Tidak didukung';
+        }
+    } catch(_) {
+        document.getElementById('dBatt').textContent = '—';
+    }
 }
 
 async function downloadConfig() {
-  try {
-    const r = await fetch('/localconfig.json', { cache: 'no-store' });
-    if (!r.ok) throw new Error('localconfig.json tidak ditemukan');
-    const cfg = await r.json();
-    cfg.verAddr = cfg.verAddr || PROXY_URL;
-    const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
-    const a = Object.assign(document.createElement('a'), {
-      href: URL.createObjectURL(blob), download: 'localconfig.json'
-    });
-    document.body.appendChild(a); a.click(); a.remove();
-    showToast('localconfig.json didownload', 'ok');
-  } catch(e) { showToast(e.message, 'err'); }
+    try {
+        const r = await fetch('/localconfig.json', { cache: 'no-store' });
+        if (!r.ok) throw new Error('localconfig.json tidak ditemukan');
+        const cfg = await r.json();
+        cfg.verAddr = cfg.verAddr || PROXY_URL;
+        const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+        const a = Object.assign(document.createElement('a'), {
+            href: URL.createObjectURL(blob), download: 'localconfig.json'
+        });
+        document.body.appendChild(a); a.click(); a.remove();
+        showToast('localconfig.json didownload', 'ok');
+    } catch(e) { showToast(e.message, 'err'); }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  loadDevice();
-  loadConfig();
+    loadDevice();
+    loadConfig();
 });
 </script>
 </body>
