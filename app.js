@@ -263,7 +263,11 @@ if (modules.gamevar)    modules.gamevar.init(app);
 if (modules.routes)     modules.routes.init(app);
 if (modules.skin)       modules.skin.init(app);
 if (modules.majorlogin) modules.majorlogin.init(app);
-if (modules['404'])     modules['404'].init(app);
+// BUGFIX: modules['404'] dihapus — 404.js pakai app.use() catch-all yang intercept SEBELUM
+// proxy.js sempat handle. Akibatnya GenerateNickname, MajorRegister, dan semua endpoint
+// yang belum di-register eksplisit → langsung balik HTML "404 Not Found",
+// tidak pernah di-forward ke clientbp/loginbp oleh proxy.
+// proxy.js sudah ada catch-all sendiri (app.all('*', ...)) — 404.js tidak perlu.
 if (modules.proxy)      modules.proxy.init(app);  // catch-all — HARUS PALING AKHIR
 
 app.listen(PORT, '0.0.0.0', () => {
