@@ -1,32 +1,31 @@
 'use strict';
-// modules/majorlogin.js — Binary string-patch RAFIN response
-// Strategi: patch buffer langsung (string replace di binary)
-// Tidak re-encode proto → tidak ada risiko field mapping salah
+// modules/majorlogin.js — Proto decode → patch → re-encode RAFIN response
+// Strategy: decode protobuf properly, patch fields, re-encode
+// Fixes:
+//   - server_url: clientbp → proxy
+//   - blacklist: zero out (ban bypass)
+//   - tp_url / ano_url / gin URLs: clear (anticheat bypass)
 
 const https    = require('https');
 const protobuf = require('protobufjs');
 const path     = require('path');
-const crypto   = require('crypto');
 const tglog    = require('./tglog');
 const { MY_IP } = require('../gamevar');
 
-let MajorLoginRes = null;
-let RAFIN         = null;
+let RAFIN = null;
+let protoLoaded = false;
 
-protobuf.load(path.join(__dirname, '..', 'MajorLoginRes.proto'))
-    .then(root => {
-        MajorLoginRes = root.lookupType('freefire.MajorLoginRes');
-        RAFIN         = root.lookupType('freefire.RAFIN');
-        const msg = '[MAJORLOGIN] Proto loaded OK';
-        console.log(msg);
-        tglog.send(`✅ <b>Server Start</b>\n${msg}`);
-    })
-    .catch(err => {
-        const msg = `[MAJORLOGIN] Proto load FAILED: ${err.message}`;
-        console.error(msg);
-        tglog.send(`❌ <b>Proto FAILED</b>\n${msg}`);
-    });
+// Load proto with all required message types
+const protoRoot = protobuf.loadSync(path.join(__dirname, '..', 'MajorLoginRes.proto'));
+try {
+    RAFIN = protoRoot.lookupType('freefire.RAFIN');
+    protoLoaded = true;
+    console.log('[MAJORLOGIN] Proto loaded OK');
+} catch (err) {
+    console.error('[MAJORLOGIN] Proto load FAILED:', err.message);
+}
 
+// ── Decode request fields for logging ──────────────────────────────────────
 function decodeReqFields(buf) {
     const out = {};
     try {
@@ -58,91 +57,141 @@ function decodeReqFields(buf) {
     return out;
 }
 
+// ── Format ban info for TG log ─────────────────────────────────────────────
 const BAN_REASON_MAP = {
     0: 'UNKNOWN', 1: 'IN_GAME_AUTO', 2: 'REFUND',
-    3: 'OTHERS',  4: 'SKINMOD',      1014: 'IN_GAME_AUTO_NEW'
+    3: 'OTHERS',  4: 'SKINMOD', 1014: 'IN_GAME_AUTO_NEW'
 };
 function formatBlacklist(bl) {
     if (!bl || !bl.ban_reason) return null;
     const reason = BAN_REASON_MAP[bl.ban_reason] || `code_${bl.ban_reason}`;
     const exp    = bl.expire_duration ? `${bl.expire_duration}s` : 'permanent';
-    return `🚫 BAN: ${reason} | expire: ${exp}`;
+    return `🚫 BAN (intercepted): ${reason} | expire: ${exp}`;
 }
 function formatQueue(q) {
     if (!q || q.allow) return null;
     return `⏳ QUEUE pos:${q.queue_position} wait:${q.need_wait_secs}s`;
 }
 
-/**
- * patchRafinBuf — patch binary proto buffer langsung
- * Cari string lama di buffer, replace dengan string baru (zero-padded ke panjang sama)
- * Tidak perlu decode/encode proto → tidak ada risiko field mapping salah
- */
-function patchStringInBuf(buf, oldStr, newStr) {
-    const oldBytes = Buffer.from(oldStr, 'utf8');
-    const idx = buf.indexOf(oldBytes);
-    if (idx === -1) return { buf, patched: false };
+// ── Main patch: decode → edit → re-encode ─────────────────────────────────
+function patchRafinBuf(buf, proxyBase) {
+    const patchLog = [];
 
-    // Hitung varint length prefix sebelum string
-    // Proto wire: field_tag (varint) + length (varint) + bytes
-    // Kita cukup ganti content string saja, tapi panjang harus diupdate di length varint
-    // Cara paling aman: ganti old content dengan new content zero-padded ke panjang sama
-    // Jika new lebih pendek → pad dengan spasi sebelum null (proto mengabaikan trailing \x00)
-    // Jika new lebih panjang → truncate (seharusnya tidak terjadi karena proxy URL lebih pendek)
+    // Try proper proto decode first
+    if (protoLoaded && RAFIN) {
+        try {
+            const obj = RAFIN.toObject(RAFIN.decode(buf), {
+                defaults: true,
+                longs:    String,
+                enums:    Number,
+                bytes:    Buffer,
+            });
 
-    const newBytes = Buffer.from(newStr, 'utf8');
+            // Patch 1: server_url → proxy
+            if (obj.server_url && (
+                obj.server_url.includes('clientbp.ggpolarbear.com') ||
+                obj.server_url.includes('loginbp.ggpolarbear.com')
+            )) {
+                patchLog.push(`server_url: ${obj.server_url} → ${proxyBase}`);
+                obj.server_url = proxyBase;
+            } else if (!obj.server_url || obj.server_url === '') {
+                // server_url kosong → isi dengan proxy supaya game tahu ke mana konek
+                obj.server_url = proxyBase;
+                patchLog.push(`server_url: (empty) → ${proxyBase}`);
+            }
 
-    if (newBytes.length === oldBytes.length) {
-        // Sama panjang — replace langsung
-        const result = Buffer.from(buf);
-        newBytes.copy(result, idx);
-        return { buf: result, patched: true };
-    }
+            // Patch 2: blacklist → null (ban bypass)
+            if (obj.blacklist && (obj.blacklist.ban_reason || obj.blacklist.ban_time)) {
+                patchLog.push(`blacklist: ${JSON.stringify(obj.blacklist)} → null`);
+                obj.blacklist = null;
+            }
 
-    // Panjang berbeda — harus update length varint
-    // Cari length varint: mundur dari idx sampai ketemu varint yang nilainya = oldBytes.length
-    // Proto varint: 1-2 byte untuk string <128 byte, 2 byte untuk ≥128 byte
-    let lengthVarintIdx = -1;
-    let lengthVarintSize = 0;
+            // Patch 3: tp_url → clear
+            if (obj.tp_url && obj.tp_url.length > 0) {
+                patchLog.push(`tp_url: cleared (${obj.tp_url.substring(0,30)}...)`);
+                obj.tp_url = '';
+            }
 
-    // Coba 1 byte sebelum string
-    if (idx >= 1 && buf[idx - 1] === oldBytes.length) {
-        lengthVarintIdx = idx - 1;
-        lengthVarintSize = 1;
-    }
-    // Coba 2 byte sebelum string (multi-byte varint)
-    else if (idx >= 2) {
-        const b0 = buf[idx - 2], b1 = buf[idx - 1];
-        if ((b0 & 0x80) && ((b0 & 0x7f) | ((b1 & 0x7f) << 7)) === oldBytes.length) {
-            lengthVarintIdx = idx - 2;
-            lengthVarintSize = 2;
+            // Patch 4: ano_url (field 16) → clear (GIN alt route)
+            if (obj.ano_url && obj.ano_url.length > 0) {
+                patchLog.push(`ano_url: cleared`);
+                obj.ano_url = '';
+            }
+
+            // Patch 5: ffanti_url → clear
+            if (obj.ffanti_url && obj.ffanti_url.length > 0) {
+                patchLog.push(`ffanti_url: cleared`);
+                obj.ffanti_url = '';
+            }
+
+            // Re-encode
+            const errMsg = RAFIN.verify(obj);
+            if (errMsg) throw new Error('verify failed: ' + errMsg);
+            const reencoded = Buffer.from(RAFIN.encode(RAFIN.fromObject(obj)).finish());
+            console.log(`[MAJORLOGIN] proto re-encode OK, buf ${buf.length}B → ${reencoded.length}B`);
+            return { buf: reencoded, patchLog, obj };
+
+        } catch (err) {
+            console.log(`[MAJORLOGIN] proto decode/re-encode failed: ${err.message} — falling back to binary patch`);
         }
     }
 
-    if (lengthVarintIdx === -1) {
-        // Tidak bisa update varint — fallback: zero-pad new string ke old length
-        console.log(`[MAJORLOGIN] patchStringInBuf: varint not found for "${oldStr.substring(0,30)}", using zero-pad`);
-        const padded = Buffer.alloc(oldBytes.length, 0x20); // pad spasi
-        newBytes.copy(padded, 0, 0, Math.min(newBytes.length, padded.length));
-        const result = Buffer.from(buf);
-        padded.copy(result, idx);
-        return { buf: result, patched: true };
+    // ── Fallback: binary string patch (jika proto gagal) ──────────────────
+    console.log('[MAJORLOGIN] using binary fallback patch');
+
+    // server_url patch
+    const serverUrls = [
+        'https://clientbp.ggpolarbear.com',
+        'http://clientbp.ggpolarbear.com',
+        'https://loginbp.ggpolarbear.com',
+    ];
+    for (const su of serverUrls) {
+        const oldB = Buffer.from(su, 'utf8');
+        const idx  = buf.indexOf(oldB);
+        if (idx === -1) continue;
+        const newB = Buffer.from(proxyBase, 'utf8');
+        // adjust varint before string
+        let result;
+        if (newB.length === oldB.length) {
+            result = Buffer.from(buf);
+            newB.copy(result, idx);
+        } else {
+            // build new buf with correct length varint
+            const lenIdx = idx - 1;
+            if (lenIdx >= 0) {
+                const before = buf.slice(0, lenIdx);
+                const after  = buf.slice(idx + oldB.length);
+                const newLen = newB.length < 128 ? Buffer.from([newB.length]) :
+                    Buffer.from([(newB.length & 0x7f) | 0x80, newB.length >> 7]);
+                result = Buffer.concat([before, newLen, newB, after]);
+            } else {
+                result = Buffer.from(buf);
+            }
+        }
+        buf = result;
+        patchLog.push(`server_url (binary): ${su} → ${proxyBase}`);
+        break;
     }
 
-    // Encode new length sebagai varint
-    const newLen = newBytes.length;
-    let newVarint;
-    if (newLen < 128) {
-        newVarint = Buffer.from([newLen]);
-    } else {
-        newVarint = Buffer.from([(newLen & 0x7f) | 0x80, newLen >> 7]);
+    // clear tp_url and gin URLs by zeroing bytes
+    for (const prefix of [
+        'csoversea.stronghold.freefiremobile.com',
+        'gin.freefiremobile.com',
+        'ffanti.freefiremobile.com',
+        'grtc.freefiremobile.com',
+    ]) {
+        const gIdx = buf.indexOf(Buffer.from(prefix, 'utf8'));
+        if (gIdx === -1) continue;
+        const lenIdx = gIdx - 1;
+        if (lenIdx >= 0 && buf[lenIdx] > 0 && buf[lenIdx] < 250) {
+            const oldLen = buf[lenIdx];
+            buf[lenIdx] = 0;
+            for (let i = 0; i < oldLen && gIdx + i < buf.length; i++) buf[gIdx + i] = 0;
+            patchLog.push(`${prefix}: zeroed (binary)`);
+        }
     }
 
-    // Susun buffer baru
-    const before = buf.slice(0, lengthVarintIdx);
-    const after  = buf.slice(idx + oldBytes.length);
-    const result = Buffer.concat([before, newVarint, newBytes, after]);
-    return { buf: result, patched: true };
+    return { buf, patchLog, obj: null };
 }
 
 function init(app) {
@@ -151,9 +200,8 @@ function init(app) {
         const rawIp    = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
         const clientIp = rawIp.split(',')[0].trim().replace('::ffff:', '');
 
-        const reqInfo = Buffer.isBuffer(body) && body.length > 0 ? decodeReqFields(body) : {};
-        const openId  = reqInfo.open_id || null;
-
+        const reqInfo  = Buffer.isBuffer(body) && body.length > 0 ? decodeReqFields(body) : {};
+        const openId   = reqInfo.open_id || null;
         const proxyBase = MY_IP.replace(/\/$/, '');
 
         const options = {
@@ -163,7 +211,7 @@ function init(app) {
             headers: {
                 ...req.headers,
                 'host':           'loginbp.ggpolarbear.com',
-                'content-length': Buffer.isBuffer(body) ? body.length : 0
+                'content-length': Buffer.isBuffer(body) ? body.length : 0,
             }
         };
         delete options.headers['transfer-encoding'];
@@ -173,102 +221,48 @@ function init(app) {
             proxyRes.on('data', c => chunks.push(c));
             proxyRes.on('end', () => {
                 let buf = Buffer.concat(chunks);
-                const patchLog = [];
-                let modified = false;
 
-                // ── BUGFIX: 404 "account_not_found" → akun guest baru ────────
-                // loginbp.ggpolarbear.com return 404 + JSON {"type":"account_not_found"}
-                // kalau ini akun baru yang belum pernah login di server ini.
-                // Game membaca errMsg → switch ke register flow (tampilkan GenerateNickname).
-                // Solusi: biarkan 404 lewat apa adanya supaya game masuk register screen.
-                // Kalau dipaksain return proto palsu → game crash karena uid=0.
-                // Yang perlu di-fix adalah GenerateNickname & MajorRegister (lihat proxy.js).
+                // ── 404 account_not_found → pass-through for register flow ──
                 if (proxyRes.statusCode === 404) {
                     const bodyStr = buf.toString('utf8');
                     if (bodyStr.includes('account_not_found')) {
-                        console.log('[MAJORLOGIN] 404 account_not_found → guest/new account, pass-through to trigger register flow');
-                        tglog.send(`ℹ️ <b>MajorLogin</b>\n404 account_not_found — akun baru masuk register flow\nopen_id: ${reqInfo.open_id || '-'}`);
-                        const headers = { ...proxyRes.headers, 'content-length': buf.length };
-                        delete headers['transfer-encoding'];
-                        res.writeHead(404, headers);
+                        console.log('[MAJORLOGIN] 404 account_not_found → pass-through (register flow)');
+                        tglog.send(`ℹ️ <b>MajorLogin</b>\n404 account_not_found — register flow\nopen_id: ${openId || '?'}`);
+                        const h = { ...proxyRes.headers, 'content-length': buf.length };
+                        delete h['transfer-encoding'];
+                        res.writeHead(404, h);
                         return res.end(buf);
                     }
                 }
 
-                // ── Patch 1: server_url → proxyBase ──────────────────────────
-                // "https://clientbp.ggpolarbear.com" → proxy kita
-                const serverUrls = [
-                    'https://clientbp.ggpolarbear.com',
-                    'http://clientbp.ggpolarbear.com',
-                ];
-                for (const su of serverUrls) {
-                    const r = patchStringInBuf(buf, su, proxyBase);
-                    if (r.patched) {
-                        buf = r.buf;
-                        modified = true;
-                        patchLog.push(`server_url: ${su} → ${proxyBase}`);
-                        break;
-                    }
+                // ── Only patch binary proto responses ─────────────────────────
+                if (proxyRes.statusCode !== 200 || buf.length === 0) {
+                    const h = { ...proxyRes.headers, 'content-length': buf.length };
+                    delete h['transfer-encoding'];
+                    res.writeHead(proxyRes.statusCode, h);
+                    return res.end(buf);
                 }
 
-                // ── Patch 2: tp_url → kosong ──────────────────────────────────
-                // "csoversea.stronghold.freefiremobile.com;IP;IP;..." → ""
-                // Cari prefix karena isinya dinamis (IP beda-beda)
-                const tpPrefix = 'csoversea.stronghold.freefiremobile.com';
-                const tpIdx = buf.indexOf(Buffer.from(tpPrefix, 'utf8'));
-                if (tpIdx !== -1) {
-                    let lenIdx = tpIdx - 1;
-                    if (lenIdx >= 0 && buf[lenIdx] > 0 && buf[lenIdx] < 250) {
-                        const oldLen = buf[lenIdx];
-                        buf[lenIdx] = 0;
-                        for (let i = 0; i < oldLen && tpIdx + i < buf.length; i++) {
-                            buf[tpIdx + i] = 0;
-                        }
-                        modified = true;
-                        patchLog.push(`tp_url: dikosongkan (${oldLen} bytes)`);
-                    }
-                }
+                const { buf: patched, patchLog, obj } = patchRafinBuf(buf, proxyBase);
+                buf = patched;
 
-                // ── Patch 3: ano_url + gin URLs → kosong ──────────────────────
-                // ano_url (field 16) = jalur GIN alternatif yang bisa bypass patch
-                // gin.freefiremobile.com adalah URL GIN yang sering hardcoded
-                const ginPrefixes = [
-                    'gin.freefiremobile.com',
-                    'ffanti.freefiremobile.com',
-                    'grtc.freefiremobile.com',
-                ];
-                for (const prefix of ginPrefixes) {
-                    const gIdx = buf.indexOf(Buffer.from(prefix, 'utf8'));
-                    if (gIdx !== -1) {
-                        let lenIdx2 = gIdx - 1;
-                        if (lenIdx2 >= 0 && buf[lenIdx2] > 0 && buf[lenIdx2] < 250) {
-                            const oldLen2 = buf[lenIdx2];
-                            buf[lenIdx2] = 0;
-                            for (let i = 0; i < oldLen2 && gIdx + i < buf.length; i++) {
-                                buf[gIdx + i] = 0;
-                            }
-                            modified = true;
-                            patchLog.push(`${prefix}: dikosongkan (${oldLen2} bytes)`);
-                        }
-                    }
-                }
-
-                // ── Logging & TG ──────────────────────────────────────────────
+                // ── Logging ───────────────────────────────────────────────────
                 let uid = '?', region = '?', token = '?', ttl = 0;
                 let banStr = null, queueStr = null;
                 try {
-                    if (RAFIN) {
-                        const rafinObj = RAFIN.toObject(RAFIN.decode(buf), { defaults: true, longs: String });
-                        uid    = rafinObj.account_id || '?';
-                        region = rafinObj.lock_region || '?';
-                        token  = (rafinObj.token || '').substring(0, 20) + '...';
-                        ttl    = rafinObj.ttl || 0;
-                        banStr   = rafinObj.blacklist  ? formatBlacklist(rafinObj.blacklist)  : null;
-                        queueStr = rafinObj.queue_info ? formatQueue(rafinObj.queue_info)      : null;
+                    const decoded = obj || (RAFIN ? RAFIN.toObject(RAFIN.decode(buf), { defaults: true, longs: String }) : null);
+                    if (decoded) {
+                        uid    = decoded.account_id || '?';
+                        region = decoded.lock_region || decoded.noti_region || '?';
+                        token  = (decoded.token || '').substring(0, 20) + '...';
+                        ttl    = decoded.ttl || 0;
+                        // obj is already patched (blacklist=null), so read from original buf for logging
+                        banStr   = null; // already zeroed, no need to log
+                        queueStr = decoded.queue_info ? formatQueue(decoded.queue_info) : null;
                     }
                 } catch (_) {}
 
-                const status = modified ? '🔑 PATCHED' : '✅ LOGIN OK';
+                const status = patchLog.length > 0 ? '🔑 PATCHED' : '✅ LOGIN OK';
                 const lines  = [`<b>MajorLogin — ${status}</b>`, ''];
                 lines.push(`👤 UID: <code>${uid}</code>`);
                 lines.push(`🆔 open_id: <code>${openId || '?'}</code>`);
@@ -278,10 +272,9 @@ function init(app) {
                 lines.push(`🎫 token: <code>${token}</code>`);
                 if (ttl) lines.push(`⏱ ttl: ${ttl}s`);
                 if (patchLog.length) lines.push(`🔧 patch:\n  ${patchLog.join('\n  ')}`);
-                if (banStr)   { lines.push(''); lines.push(banStr); }
                 if (queueStr) { lines.push(''); lines.push(queueStr); }
 
-                console.log(`[MAJORLOGIN] uid=${uid} region=${region} modified=${modified} patches=[${patchLog.join(', ')}]`);
+                console.log(`[MAJORLOGIN] uid=${uid} region=${region} patches=[${patchLog.join(', ')}]`);
                 tglog.send(lines.join('\n'));
 
                 const newHeaders = { ...proxyRes.headers, 'content-length': buf.length };
@@ -301,7 +294,7 @@ function init(app) {
         proxyReq.end();
     });
 
-    console.log('[MAJORLOGIN] Active → binary-patch mode (no proto re-encode)');
+    console.log('[MAJORLOGIN] Active → proto decode/re-encode mode (ban bypass + server_url patch)');
 }
 
 module.exports = { init };
