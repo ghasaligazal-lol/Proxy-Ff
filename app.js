@@ -130,8 +130,7 @@ app.all('*', (req, res, next) => {
         console.log(`[SPOOF-WILDCARD] ${req.method} ${req.path} → blocked`);
         return spoofOK(req, res);
     }
-    next();
-});
+
     const lower = req.path.toLowerCase();
     const isUpload =
         lower.includes('logevent') ||
@@ -146,22 +145,23 @@ app.all('*', (req, res, next) => {
         lower.includes('hackdata') ||
         lower.includes('clientdata') ||
         lower.includes('dataforward') ||
-        lower.includes('checkhack') ||        // ← tambahan
+        lower.includes('checkhack') ||
         lower.includes('/gin/') ||
         lower.includes('/ggp/') ||
         lower.includes('ginreport') ||
         lower.includes('ggpreport') ||
         lower.includes('ggpupload') ||
         lower.includes('ginupload') ||
-        lower.includes('ffanti') ||           // ← FFAnti binary hash reporter
-        lower.includes('abnormal') ||         // ← Abnormal Data reporter
-        lower.includes('detection') ||        // ← App/modifier detection
-        lower.includes('libhash') ||          // ← Library hash report
-        lower.includes('ahlreport') ||        // ← Antihack library report
-        lower.includes('modifier') ||         // ← Modifier detection
+        lower.includes('ffanti') ||
+        lower.includes('abnormal') ||
+        lower.includes('detection') ||
+        lower.includes('libhash') ||
+        lower.includes('ahlreport') ||
+        lower.includes('modifier') ||
         (lower.includes('report') && lower.includes('event')) ||
         (lower.includes('upload') && !lower.includes('cdn'));
     if (isUpload) return spoofOK(req, res);
+
     next();
 });
 
