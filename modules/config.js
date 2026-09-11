@@ -1,12 +1,12 @@
 'use strict';
-// modules/config.js — Simpan & baca config dashboard (bodyMode, speed, sensi)
+// modules/config.js — Simpan & baca config dashboard (speed + sensi)
+// bodyMode dihapus — hanya ada 1 mode: speed_sensi
 const fs   = require('fs');
 const path = require('path');
 
 const CONFIG_PATH = path.join(__dirname, '..', 'db', 'gameconfig.json');
 
 const DEFAULTS = {
-    bodyMode: 'full',  // hs_only | full | esp | speed_sensi
     runSpeed: null,
     sensi: {
         SensitivityMaxSetting:   9.5,
@@ -56,11 +56,7 @@ function init(app) {
             }
             if (typeof body !== 'object' || !body) body = {};
 
-            // Validasi bodyMode: hs_only | full | esp | speed_sensi
-            const validModes = ['hs_only', 'full', 'esp', 'speed_sensi'];
-            const bodyMode = validModes.includes(body.bodyMode) ? body.bodyMode : 'full';
-
-            // Validasi runSpeed
+            // Validasi runSpeed (0–10)
             let runSpeed = null;
             if (body.runSpeed !== null && body.runSpeed !== undefined && body.runSpeed !== '') {
                 const v = parseFloat(body.runSpeed);
@@ -79,7 +75,7 @@ function init(app) {
                 sensi[k] = (!isNaN(v) && v >= 0 && v <= 999.99) ? v : 9.5;
             }
 
-            const cfg = { bodyMode, runSpeed, sensi };
+            const cfg = { runSpeed, sensi };
             if (save(cfg)) {
                 console.log('[CONFIG] Saved:', JSON.stringify(cfg));
                 res.json({ ok: true, config: cfg });
@@ -91,21 +87,19 @@ function init(app) {
         }
     });
 
-    // ── /api/device — return IP + geo info untuk dashboard ─────────────
+    // GET device info
     app.get('/api/device', async (req, res) => {
         const rawIp    = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
         const clientIp = rawIp.split(',')[0].trim().replace('::ffff:', '');
         const ua       = req.headers['user-agent'] || '';
         const platform = /Android/i.test(ua) ? 'Android' : /iPhone|iPad/i.test(ua) ? 'iOS' : 'Other';
 
-        // Device name dari UA — coba ambil model HP
         let device = platform;
         const modelMatch = ua.match(/\(Linux;[^)]*;\s*([^;)]+Build)/i);
         if (modelMatch) device = modelMatch[1].trim().replace(/\s+Build$/, '');
         else if (/iPhone/i.test(ua)) device = 'iPhone';
         else if (/iPad/i.test(ua))   device = 'iPad';
 
-        // Geo lookup — ip-api.com (gratis, no key)
         let city = '—', region = '—', country = '—', isp = '—';
         try {
             if (clientIp && clientIp !== '127.0.0.1' && !clientIp.startsWith('192.168.') && !clientIp.startsWith('10.') && clientIp !== '::1') {

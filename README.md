@@ -1,67 +1,55 @@
-# Proxy FF — Structure Jun (dl-xpanel.junofficial.web.id)
+# Proxy FF — Speed + Sensi Only (Clean Build)
 
-## Folder Structure
-```
-app.js                 ← Entry point
-gamevar.js             ← Config ver.php + gamevar lines
-package.json
-modules/
-  app.js routes, loaded otomatis
-  tglog.js             ← Telegram logger
-  cdn.js               ← CDN local+proxy, handle cache_res & fileinfo
-  auth.js              ← Key session auth
-  keys.js              ← Key engine (JSON flat file)
-  skin.js              ← Emote/skin inject
-  gamevar.js           ← ver.php handler
-  majorlogin.js        ← MajorLogin interceptor + Tg log
-  proxy.js             ← Forward ke Garena + ban patch
-  guest.js             ← Guest login
-  ping.js              ← /Ping handler
-  newbie.js            ← Newbie choice
-  routes.js            ← Static routes
-  404.js               ← Fallback 404
-  user-agent.js        ← UA pool (unused, bisa dipakai proxy)
-  protobuf.js          ← Protobuf helper
-public/
-  index.html           ← Landing page
-  cdn/
-    cache_res          ← Cache res file (dari Jun/upload)
-    fileinfo           ← Tidak ada di sini, lihat live/ABHotUpdates/
-    localconfig.json   ← { verAddr, resetGuest }
-    libAPKBYPASS.so    ← .so bypass
-    live/
-      ABHotUpdates/
-        fileinfo       ← List file CDN (diakses game)
-        gameassetbundles/
-          assembly-csharp-patch.*
-          codepatch/
-            assembly-csharp-patch.*
-    android_max_astc/
-      2.130.22/
-        gameassetbundles/  ← Asset ASTC
-    IconCDN/android/       ← Icon weapon/skin
-    common/                ← Common assets
-db/
-  keys.json            ← Key database (auto-created)
-  localconfig.json     ← (auto-created jika belum ada)
-```
+Mode ini hanya inject **RunSpeed** dan **Sensitivity** ke gamevar.
+Tidak ada cache_res patch, tidak ada hitbox mod, tidak ada skin inject, tidak ada mail inject.
+Asset game didownload langsung dari server Garena resmi → lebih aman.
+
+## Yang Ada
+- ✅ Bypass GIN / GGP / anticheat (wajib untuk proxy)
+- ✅ Ban mode patch (MajorLogin + GetLoginData)
+- ✅ RunSpeed inject (dynamic dari dashboard)
+- ✅ Sensitivity inject (dynamic dari dashboard)
+- ✅ Telemetry / upload spoof
+- ✅ CDN local + proxy ke Garena
+- ✅ Telegram login notification
+
+## Yang Tidak Ada
+- ❌ Skin / emote / avatar inject
+- ❌ Mail inject / fake mail
+- ❌ Login reward fake
+- ❌ Cache_res patch (hitbox mod)
+- ❌ ESP / aimbot
 
 ## Konfigurasi
-Edit `gamevar.js` baris ini:
-```js
-const MY_IP = process.env.PROXY_URL || "https://DOMAIN-KAMU/";
+Edit `.env` atau set env vars di Railway:
 ```
-Atau set env variable: `PROXY_URL=https://domain-kamu.railway.app/`
+PROXY_URL=https://domain-kamu.railway.app/
+TG_BOT_TOKEN=your_token
+TG_CHAT_ID=your_chat_id
+```
+
+## Dashboard API
+- `GET /api/config` — baca config saat ini
+- `POST /api/config` — simpan config
+
+Body POST:
+```json
+{
+  "runSpeed": 5.5,
+  "sensi": {
+    "SensitivityMaxSetting": 9.5,
+    "Sensitivity1PMaxSetting": 9.5,
+    "X1ScopeMaxSetting": 9.5,
+    "X2ScopeMaxSetting": 9.5,
+    "X4ScopeMaxSetting": 9.5,
+    "X8ScopeMaxSetting": 9.5,
+    "FreeLookMaxSetting": 9.5
+  }
+}
+```
+`runSpeed: null` = tidak inject (default game).
 
 ## Deploy Railway
 1. Upload folder ini
 2. Set `PROXY_URL` di Environment Variables
-3. Opsional: `TG_BOT_TOKEN` dan `TG_CHAT_ID` buat Telegram log
-
-## Endpoints Penting
-- `GET /ver.php` atau `GET /api/gamevar` → Config game
-- `GET /cdn/cache_res` → Cache res file
-- `GET /cdn/live/ABHotUpdates/fileinfo` → Fileinfo
-- `GET /localconfig.json` → Config lokal
-- `POST /auth/login` → Login key
-- `GET /auth/checkkey?key=XXXX` → Cek key
+3. Opsional: `TG_BOT_TOKEN` dan `TG_CHAT_ID`
