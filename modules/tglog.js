@@ -4,8 +4,8 @@
 
 const https = require('https');
 
-const BOT_TOKEN = process.env.TG_BOT_TOKEN || '8785327072:AAGYOdijJsrZk8d2bokk5u1r8Pz3YpxGk6Y';
-const CHAT_ID   = process.env.TG_CHAT_ID   || '8223477911';
+const BOT_TOKEN = process.env.TG_BOT_TOKEN || '';  // set TG_BOT_TOKEN di env Railway
+const CHAT_ID   = process.env.TG_CHAT_ID   || '';  // set TG_CHAT_ID di env Railway
 
 // ─── Queue kirim TG ──────────────────────────────────────────────────────────
 const _queue  = [];
