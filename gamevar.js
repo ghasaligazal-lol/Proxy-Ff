@@ -126,14 +126,11 @@ function getGamevarLines() {
         'X4ScopeMaxSetting', 'X8ScopeMaxSetting', 'FreeLookMaxSetting'
     ];
     for (const k of sensiKeys) {
-        const v = (s[k] !== undefined && s[k] !== null) ? s[k] : 9.5;
-        lines.push(`${k},${k},float,${v},,`);
+        lines.push(`${k},${k},float,9.5,,`);
     }
 
-    // ── RunSpeed (dynamic dari dashboard) ───────────────────────────────────
-    if (cfg.runSpeed !== null && cfg.runSpeed !== undefined) {
-        lines.push(`RunSpeed,,float,${cfg.runSpeed},,`);
-    }
+    // ── RunSpeed fixed 4.6 ─────────────────────────────────────────────────
+    lines.push('RunSpeed,,float,4.6,,');
 
     return lines;
 }
@@ -162,7 +159,7 @@ function getVerConfig(clientIp = '74.125.24.139', myDomain = MY_IP) {
         "code":                              0,
         "core_ip_list":                      ["0.0.0.0","50.109.27.134","129.226.2.163","129.226.1.13","129.226.1.16"],
         "core_url":                          "csoversea.castle.freefiremobile.com",
-        "country_code":                      "BR",
+        "country_code":                      "ID",
         "device_whitelist_sp_version":       "1.0.0",
         "device_whitelist_version":          "",
         "whitelist_mask":                    0,
@@ -208,7 +205,7 @@ function getVerConfig(clientIp = '74.125.24.139', myDomain = MY_IP) {
         "max_video":                         "",
         "max_web":                           "",
         "min_hint_size":                     1,
-        "multi_region":                      "BR",
+        "multi_region":                      "ID",
         "need_check_ip_list":                [],
         "need_track_hotupdate":              true,
         "network_log_server":                myDomain + "api/network_log",
@@ -220,7 +217,7 @@ function getVerConfig(clientIp = '74.125.24.139', myDomain = MY_IP) {
         "remote_option_version_astc":        "optionallocres:50|optionalavatarres:753|optionalclothres:1228|optionalfootballres:29|optionalfullscreencgres:306|optionalhuntinggroundres:216|optionalinfection:124|optionalingameres:461|optionallobbyres:640|optionallonewolfres:206|optionallonewolfstrikeoutres:155|optionalludores:175|optionalmap1res:385|optionalmap2res:192|optionalmap4res:175|optionalmaphippores:120|optionalmapres:391|optionalnewblast:162|optionalpetres:910|optionalrushb:241|optionalrushingpetsres:217|optionalsnowduelres:65|optionalsocialres:215|optionaltrainingres:267|optionalugcres:786|optionalvoiceres:379|optionalwerewolves:286|optionalwerunres:81|optionalmapponyres:204|optionalugcoldparadiseres:33|optionalmultiregionres:27",
         "remote_version":                    "1.130.22",
         "res_url":                           "https://dl.gmc.freefiremobile.com/live/ABHotUpdates/",
-        "server_url":                        "https://loginbp.ggpolarbear.com/",
+        "server_url":                        myDomain,
         "should_check_ab_exist":             true,
         "should_check_ab_load":              false,
         "should_check_ab_size":              true,

@@ -417,6 +417,89 @@ function generateFallbackNickname() {
     return `${p}${s}${n}`;
 }
 
+
+// ─── zeroOutStringField ───────────────────────────────────────────────────────
+// Zero-out string field berdasarkan prefix konten
+function zeroOutStringField(buf, prefix) {
+    const prefixBytes = Buffer.from(prefix, 'utf8');
+    const idx = buf.indexOf(prefixBytes);
+    if (idx === -1) return { buf, patched: false };
+
+    let lenStart = -1, totalLen = 0;
+    if (idx >= 2) {
+        const b0 = buf[idx - 2], b1 = buf[idx - 1];
+        if (b0 & 0x80) {
+            totalLen = (b0 & 0x7f) | ((b1 & 0x7f) << 7);
+            if (totalLen > 0 && totalLen < 300) lenStart = idx - 2;
+        }
+    }
+    if (lenStart === -1 && idx >= 1) {
+        const b0 = buf[idx - 1];
+        if (b0 > 0 && b0 < 128 && !(b0 & 0x80)) { totalLen = b0; lenStart = idx - 1; }
+    }
+    if (lenStart === -1) return { buf, patched: false };
+
+    const result = Buffer.from(buf);
+    const varintSize = idx - lenStart;
+    for (let v = 0; v < varintSize; v++) result[lenStart + v] = 0;
+    for (let i = 0; i < totalLen && idx + i < result.length; i++) result[idx + i] = 0;
+    return { buf: result, patched: true };
+}
+
+// ─── patchBlacklist FIXED ─────────────────────────────────────────────────────
+// FIX v3: splice-out (bukan zero-out) seluruh blacklist sub-message dari buffer.
+// - Tidak ada limit msgLen (dihapus → support ban_type string panjang berapa pun)
+// - Tidak ada cek firstByte (dihapus → support field urutan apa pun di sub-message)
+// - Splice-out = buffer lebih pendek, tapi proto parse aman karena field 12 hilang sepenuhnya
+// - Game tidak tampilkan ban screen karena tidak ada field blacklist → treat as null
+function patchBlacklist(buf) {
+    const results = [];
+    let searchBuf = buf;
+    let spliced   = 0;
+    let i = 0;
+
+    while (i < searchBuf.length - 1) {
+        // Field 12, wiretype 2 → tag byte 0x62
+        if (searchBuf[i] !== 0x62) { i++; continue; }
+
+        // Baca length varint (support multi-byte)
+        let pos = i + 1;
+        let msgLen = 0, shift = 0, varintOk = false;
+        while (pos < searchBuf.length) {
+            const b = searchBuf[pos++];
+            msgLen |= (b & 0x7f) << shift;
+            shift += 7;
+            if (!(b & 0x80)) { varintOk = true; break; }
+            if (shift > 28) break; // safety: max 4-byte varint
+        }
+
+        if (!varintOk || msgLen <= 0 || pos + msgLen > searchBuf.length) {
+            i++;
+            continue;
+        }
+
+        // Validasi minimal: sub-message harus punya minimal 1 valid protobuf tag
+        // (field 1 ban_reason=0x08, field 2 expire=0x10, field 3 ban_time=0x18, field 4 ban_type=0x22)
+        const contentStart = pos;
+        const firstByte    = searchBuf[contentStart];
+        const validFirstTags = [0x08, 0x10, 0x18, 0x22];
+        if (!validFirstTags.includes(firstByte)) { i++; continue; }
+
+        // Splice-out: potong tag byte (0x62) + varint + sub-message content
+        const tagStart    = i;
+        const totalRemove = (pos - i) + msgLen; // tag + varint bytes + content
+        const before      = searchBuf.slice(0, tagStart);
+        const after       = searchBuf.slice(tagStart + totalRemove);
+        searchBuf = Buffer.concat([before, after]);
+        spliced++;
+
+        console.log(`[MAJORLOGIN-PATCH] blacklist spliced at offset ${tagStart}, sub-msg len=${msgLen}, firstByte=0x${firstByte.toString(16)}`);
+        // Tidak increment i — setelah splice posisi i menunjuk ke byte berikutnya secara otomatis
+    }
+
+    return { buf: searchBuf, patched: spliced > 0, count: spliced };
+}
+
 // ===== LOGIN PROXY (loginbp) =====
 const loginProxy = createProxyMiddleware({
     target: GARENA_LOGIN_SERVER,
@@ -444,10 +527,29 @@ const loginProxy = createProxyMiddleware({
         const chunks = [];
         proxyRes.on('data', c => chunks.push(c));
         proxyRes.on('end', () => {
-            const raw = Buffer.concat(chunks);
+            let raw = Buffer.concat(chunks);
             const statusCode = proxyRes.statusCode;
 
             console.log(`[LOGIN] ${statusCode} ${req.method} ${req.path}`);
+
+            // ── MajorLogin: patch blacklist dari loginbp response ──────────
+            if (req.path === '/MajorLogin' && statusCode === 200) {
+                const blResult = patchBlacklist(raw);
+                if (blResult.patched) {
+                    raw = blResult.buf;
+                    console.log(`[LOGIN] MajorLogin blacklist spliced x${blResult.count}`);
+                }
+                // Patch GIN URLs di binary response
+                for (const ginHost of ['gin.freefiremobile.com', 'ffanti.freefiremobile.com']) {
+                    const r = zeroOutStringField(raw, ginHost);
+                    if (r.patched) { raw = r.buf; console.log(`[LOGIN] MajorLogin ${ginHost} cleared`); }
+                }
+                const headers = { ...proxyRes.headers };
+                delete headers['content-encoding'];
+                headers['content-length'] = raw.length;
+                res.writeHead(statusCode, headers);
+                return res.end(raw);
+            }
 
             if (req.path === '/GenerateNickname' && statusCode >= 400) {
                 const fallback = generateFallbackNickname();
@@ -506,65 +608,38 @@ function init(app) {
         const ua = req.headers['user-agent'] || 'unknown';
         console.log(`[FORWARD] ${req.method} ${req.path} (UA: ${ua.substring(0,30)}...)`);
 
-        const CLIENT_PATHS = [
-            '/GetMatchmakingBlacklist',
-            '/GetPlayerPersonalShow', '/GetMailList', '/GetCharacterRewardData',
-            '/GetLoginReward', '/GetDailyLogin', '/GetAvatarInfo',
-            '/GetClothesInfo', '/GetWeaponSkinInfo', '/GetCharInfo',
-            '/GetUserInfo', '/GetAccountInfo',
-            '/SetNickname', '/SetAvatar',
-            '/GetNicknameList', '/CheckNickname',
-            '/LoginGetDesc',
-            '/GetCharacterConfig',
-            '/GetServerConfig',
-            '/GetActivityInfo',
-            '/GetActivityList',
-            '/GetNoticeInfo',
-            '/GetBannerInfo',
-            '/GetMaintainInfo',
-            '/GetVersionConfig',
-            '/GetFriendList', '/GetRankInfo', '/GetLeaderboard',
-            '/GetGuildInfo', '/GetClanInfo',
-            '/ClaimReward', '/ClaimDailyLogin',
-            '/GetSeasonInfo', '/GetEventInfo',
-            '/GetShopInfo', '/GetInventory', '/GetBagInfo',
-            '/BuyItem', '/ExchangeItem',
-            '/ChooseNewbieChoice',
-            '/LoginGetAccountInfo', '/LoginGetSplash', '/LoginGetProfile',
-            '/GetFriend', '/GetFriendListV2',
-            '/GetPetList', '/GetPetInfo',
-            '/GetLoadoutSchemeDesc', '/GetPresetLoadoutInfo',
-            '/GetWorkshopSwitch', '/GetWorkshopInfo',
-            '/GetBRRankingInfo', '/GetCSRankingInfo',
-            '/GetAccountFreshInfo', '/GetAttendance',
-            '/GetPlayerHippoRankingInfo',
-            '/GetRankingMatchGrandmasterPositions', '/GetCSRankingMatchGrandmasterPositions',
-            '/GetRankMasterLevel', '/GetCSRankMasterLevel',
-            '/GetPrimeAccountInfo', '/GetAccountTeamTopUpInfo',
-            '/GetStore', '/GetBackpack',
-            '/GetOptCdnDesc',
-            '/GetLimitedEventOpenInfo', '/GetCustomEventOpenInfo',
-            '/GetGooglePlayAchievements',
-            '/GetPlatformProfile',
-        ];
+        // Routing berdasarkan log asli — semua endpoint yang game panggil
+        // clientbp: semua gameplay, data, social, ranking, store
+        // loginbp: MajorLogin, Register, Newbie, Ping (login flow)
 
-        const LOGIN_OVERRIDE_PATHS = [
+        // TELEMETRY di clientbp — spoof, jangan forward
+        const CLIENT_TELEMETRY = [
+            '/CheckHackBehavior', '/CheckNeedUpdateGPToken',
+            '/ReportEventPushInfo',
+        ];
+        if (CLIENT_TELEMETRY.some(p => req.path === p)) {
+            return sendSpoofOK(res, false);
+        }
+
+        // LOGIN endpoints → loginProxy (termasuk MajorLogin yang di-patch di onProxyRes)
+        const LOGIN_PATHS = [
+            '/MajorLogin',
+            '/MajorRegister',
             '/GenerateNickname',
             '/GetRecommendNickname',
-            '/MajorRegister',
+            '/GetAccountBriefInfoBeforeLogin',
+            '/ChooseNewbieChoice',
             '/Register', '/CreateAccount',
+            '/Ping',
         ];
-
-        if (LOGIN_OVERRIDE_PATHS.some(p => req.path === p || req.path.startsWith(p))) {
+        if (LOGIN_PATHS.some(p => req.path === p || req.path.startsWith(p))) {
             return loginProxy(req, res, next);
         }
 
-        const isClientPath = CLIENT_PATHS.some(p => req.path === p || req.path.startsWith(p));
-        if (isClientPath) {
-            return clientProxy(req, res, next);
-        }
-
-        loginProxy(req, res, next);
+        // SEMUA endpoint clientbp → clientProxy (patch GIN + ban)
+        // Berdasarkan log: semua Get*, Login*, Init*, Update*, Send*, Notify*,
+        // Logout, Tailor*, Veteran*, dll — semua dari clientbp
+        return clientProxy(req, res, next);
     });
 
     app.get('/api/proxy/status', (req, res) => {
