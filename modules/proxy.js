@@ -423,10 +423,11 @@ function createClientProxyWithBanPatch() {
             try {
                 let rawBody = await collectResponseBody(proxyRes);
 
-                // Binary patch GIN untuk semua response (termasuk protobuf binary)
-                const binResult = patchBinaryGin(rawBody);
-                if (binResult.patched) rawBody = binResult.buf;
-
+                // NOTE: patchBinaryGin() DIHAPUS dari sini.
+                // Alasan: GetLoginData response = binary protobuf (EGLJDBDMENB).
+                // Zero-out string tanpa update parent sub-message length varint
+                // → ProtoException "Sub-message not read correctly" → game crash/null.
+                // GIN di-disable lewat MajorLogin binary patch (tp_url + ffanti_url + ff_anti_config_desc).
                 if (contentType.includes('application/json')) {
                     let parsed;
                     try { parsed = JSON.parse(rawBody.toString('utf8')); } catch (_) { parsed = null; }
@@ -504,6 +505,72 @@ function zeroOutStringField(buf, prefix) {
     for (let v = 0; v < varintSize; v++) result[lenStart + v] = 0;
     for (let i = 0; i < totalLen && idx + i < result.length; i++) result[idx + i] = 0;
     return { buf: result, patched: true };
+}
+
+
+// ─── spliceProtoStringField ───────────────────────────────────────────────────
+// Splice-out (hapus sepenuhnya) sebuah string field dari protobuf binary
+// berdasarkan field number. Aman karena tidak perlu tahu isi string-nya.
+//
+// Protobuf wire format:
+//   tag varint  (field_number << 3 | 2) untuk string/bytes/embedded message
+//   length varint  (panjang isi field)
+//   content bytes
+//
+// Untuk field number ≤ 15: tag = 1 byte  (field_num << 3 | 2)
+// Untuk field number 16-2047: tag = 2 bytes
+function encodeProtoTag(fieldNumber, wireType) {
+    const tagNum = (fieldNumber << 3) | wireType;
+    if (tagNum <= 0x7F) return [tagNum];
+    return [(tagNum & 0x7F) | 0x80, (tagNum >> 7) & 0x7F];
+}
+
+function decodeVarint(buf, pos) {
+    let result = 0, shift = 0;
+    while (pos < buf.length) {
+        const b = buf[pos++];
+        result |= (b & 0x7F) << shift;
+        shift += 7;
+        if (!(b & 0x80)) return { value: result, nextPos: pos };
+        if (shift > 28) break;
+    }
+    return null;
+}
+
+function spliceProtoStringField(buf, fieldNumber, label) {
+    // wiretype 2 = length-delimited (string, bytes, embedded message)
+    const tagBytes = Buffer.from(encodeProtoTag(fieldNumber, 2));
+    let result = buf;
+    let spliced = 0;
+    let searchFrom = 0;
+
+    while (true) {
+        const tagPos = result.indexOf(tagBytes, searchFrom);
+        if (tagPos === -1) break;
+
+        // Baca length varint setelah tag
+        const lenDec = decodeVarint(result, tagPos + tagBytes.length);
+        if (!lenDec) { searchFrom = tagPos + 1; continue; }
+
+        const { value: fieldLen, nextPos: contentStart } = lenDec;
+        if (fieldLen < 0 || fieldLen > 65535 || contentStart + fieldLen > result.length) {
+            searchFrom = tagPos + 1;
+            continue;
+        }
+
+        const totalRemove = (contentStart - tagPos) + fieldLen;
+        result = Buffer.concat([result.slice(0, tagPos), result.slice(tagPos + totalRemove)]);
+        spliced++;
+        console.log(`[PROTO-SPLICE] field ${fieldNumber} (${label}) spliced at 0x${tagPos.toString(16)}, len=${fieldLen}`);
+        // jangan increment searchFrom — setelah splice, posisi tagPos otomatis ke byte berikutnya
+    }
+
+    return result;
+}
+
+function spliceProtoMessageField(buf, fieldNumber, label) {
+    // Message field = wiretype 2 juga, sama dengan string
+    return spliceProtoStringField(buf, fieldNumber, label);
 }
 
 // ─── patchBlacklist FIXED ─────────────────────────────────────────────────────
@@ -610,28 +677,24 @@ const loginProxy = createProxyMiddleware({
 
             // ── MajorLogin: patch blacklist + server_url ──────────────────
             if (req.path === '/MajorLogin' && statusCode === 200) {
-                // 1. Patch blacklist (binary splice)
+                // 1. Patch blacklist (binary splice field 12, tag 0x62)
                 const blResult = patchBlacklist(raw);
                 if (blResult.patched) {
                     raw = blResult.buf;
                     console.log(`[LOGIN] MajorLogin blacklist spliced x${blResult.count}`);
                 }
 
-                // 2. Patch GIN URLs di binary
-                for (const ginHost of ['gin.freefiremobile.com', 'ffanti.freefiremobile.com']) {
-                    const r = zeroOutStringField(raw, ginHost);
-                    if (r.patched) { raw = r.buf; console.log(`[LOGIN] MajorLogin ${ginHost} cleared`); }
-                }
+                // 2. Patch tp_url (field 14, wiretype 2 → tag 0x72)
+                //    ffanti_url (field 24, wiretype 2 → tag 0xC2 0x01)
+                //    ff_anti_config_desc (field 25, wiretype 2 → tag 0xCA 0x01)
+                //    Dengan cara: splice-out seluruh field dari buffer
+                //    Lebih aman dari zero-out karena tidak corrupt length varint parent
+                raw = spliceProtoStringField(raw, 14,  'tp_url');
+                raw = spliceProtoStringField(raw, 24,  'ffanti_url');
+                raw = spliceProtoMessageField(raw, 25, 'ff_anti_config_desc');
 
-                // 3. Patch server_url di MajorLogin response
-                // Setelah ChooseRegion, loginbp return server_url = clientbp.ggpolarbear.com
-                // Game pakai ini untuk GetLoginData → bypass proxy → GIN tidak di-patch
-                //
-                // Approach: cari proto varint length prefix sebelum string clientbp,
-                // lalu replace seluruh length+string dengan proxy URL + update varint length
-                // Ini lebih aman daripada in-place karena kita splice buffer
                 // 3. Patch server_url: ganti clientbp → proxy
-                // supaya GetLoginData lewat proxy → patchBinaryGin jalan → GIN di-disable
+                // supaya GetLoginData lewat proxy → GIN/ban patches jalan
                 const CLIENTBP_STR  = 'https://clientbp.ggpolarbear.com';
                 const PROXY_STR     = MY_IP.replace(/[\/]+$/, ''); // tanpa trailing slash
                 const clientbpBytes = Buffer.from(CLIENTBP_STR, 'utf8');
@@ -680,6 +743,23 @@ const loginProxy = createProxyMiddleware({
                 delete headers['content-encoding'];
                 headers['content-length'] = raw.length;
                 res.writeHead(statusCode, headers);
+                return res.end(raw);
+            }
+
+            // GetLoginData: binary proto → forward as-is
+            // JANGAN patch binary (patchBinaryGin) → menyebabkan ProtoException
+            // blacklist di GetLoginData sudah di-handle via MajorLogin proto patches
+            if (req.path === '/GetLoginData') {
+                // Patch blacklist kalau ada (splice field 12 dari binary)
+                const blGLD = patchBlacklist(raw);
+                if (blGLD.patched) {
+                    raw = blGLD.buf;
+                    console.log(`[LOGIN] GetLoginData blacklist spliced x${blGLD.count}`);
+                }
+                const hdrs = { ...proxyRes.headers };
+                delete hdrs['content-encoding'];
+                hdrs['content-length'] = raw.length;
+                res.writeHead(statusCode, hdrs);
                 return res.end(raw);
             }
 
@@ -766,6 +846,14 @@ function init(app) {
             '/Ping',
         ];
         if (LOGIN_PATHS.some(p => req.path === p || req.path.startsWith(p))) {
+            return loginProxy(req, res, next);
+        }
+
+        // GetLoginData: forward ke loginbp (bukan clientbp)
+        // Response = binary proto EGLJDBDMENB → forward as-is tanpa binary patch
+        // (binary patch menyebabkan ProtoException: Sub-message not read correctly)
+        // GIN di-disable dari MajorLogin patch (tp_url, ffanti_url, ff_anti_config_desc di-splice)
+        if (req.path === '/GetLoginData') {
             return loginProxy(req, res, next);
         }
 
