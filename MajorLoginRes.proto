@@ -2,10 +2,8 @@ syntax = "proto3";
 package freefire;
 
 // ============================================================
-// MajorLoginRes.proto — FIXED & COMPLETE
-// Semua field yang diketahui dari traffic nyata sudah ada di sini.
-// Kalau ada field unknown, protobufjs akan preserve as unknown fields
-// sehingga encode ulang tidak hilang data → tidak corrupt.
+// MajorLoginRes.proto — v8 COMPLETE
+// FfAntiConfigDesc: tambah semua field yang terlihat di BackendLog
 // ============================================================
 
 enum BanReason {
@@ -31,14 +29,21 @@ message LoginQueueInfo {
   bool   queue_is_full  = 4;
 }
 
+// FfAntiConfigDesc — FIXED: tambah semua field dari BackendLog
+// Field numbers dideduksi dari urutan JSON + proto3 convention
 message FfAntiConfigDesc {
-  bool   enable     = 1;
-  string config_url = 2;
-  string version    = 3;
+  string region               = 1;  // FIX: ada di BackendLog (sebelumnya tidak ada)
+  bool   enable               = 2;  // sebelumnya field 1
+  string config_url           = 3;  // sebelumnya field 2
+  string version              = 4;  // sebelumnya field 3
+  bool   hpe_enable           = 5;  // FIX: baru
+  bool   ffi_enable           = 6;  // FIX: baru
+  bool   mtp_lite_data_enable = 7;  // FIX: baru
+  bool   ffm_enable           = 8;  // FIX: baru
+  bool   ffo_enable           = 9;  // FIX: baru
 }
 
 // RAFIN = full MajorLogin response
-// Field numbers harus exact match dengan server response
 message RAFIN {
   uint64              account_id            = 1;
   string              lock_region           = 2;
@@ -65,8 +70,6 @@ message RAFIN {
   bytes               aiv                   = 23;
   string              ffanti_url            = 24;
   FfAntiConfigDesc    ff_anti_config_desc   = 25;
-
-  // Field tambahan yang mungkin ada di response server
   string              garena_open_id        = 26;
   uint32              login_count           = 27;
   string              server_region         = 28;

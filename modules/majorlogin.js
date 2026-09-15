@@ -1,16 +1,10 @@
 'use strict';
-// modules/majorlogin.js — v7 FIXED
+// modules/majorlogin.js — v8
 //
-// Root cause error "Unconsumed data left in the buffer":
-//   1. Proto tidak lengkap → unknown fields di-skip saat decode
-//   2. Encode ulang → unknown fields hilang → output lebih pendek dari expected
-//   3. Client baca field berikutnya dari offset salah → ProtoException
-//
-// Fix v7:
-//   1. Proto sudah lengkap (field 1-35)
-//   2. keepCase: true agar nama field tidak berubah
-//   3. Encode dari decoded message LANGSUNG (bukan fromObject) → preserve unknown fields
-//   4. Validasi length sebelum kirim: kalau outBuf.length jauh berbeda → pass-through raw
+// v8 vs v7:
+//   - Proto FfAntiConfigDesc sudah lengkap (region, hpe_enable, ffi_enable, mtp_lite_data_enable, ffm_enable, ffo_enable)
+//   - Patch ff_anti_config_desc sekarang zero semua field baru juga
+//   - Minor: log lebih informatif
 
 const https    = require('https');
 const protobuf = require('protobufjs');
@@ -24,8 +18,8 @@ let RAFIN = null;
 protobuf.load(path.join(__dirname, '..', 'MajorLoginRes.proto'))
     .then(root => {
         RAFIN = root.lookupType('freefire.RAFIN');
-        console.log('[MAJORLOGIN] v7 Proto loaded OK');
-        tglog.send('✅ <b>Server Start v7</b>\nProto loaded OK');
+        console.log('[MAJORLOGIN] v8 Proto loaded OK');
+        tglog.send('✅ <b>Server Start v8</b>\nProto loaded OK');
     })
     .catch(err => {
         console.error('[MAJORLOGIN] Proto load FAILED:', err.message);
@@ -44,7 +38,6 @@ function decodeReqFields(buf) {
             if (wireType === 0) {
                 const val = reader.uint64();
                 if (fieldNum === 98) out.is_vpn = typeof val.toNumber === 'function' ? val.toNumber() : Number(val);
-                // skip lainnya
             } else if (wireType === 2) {
                 const bytes = reader.bytes();
                 const str   = bytes.toString('utf8');
@@ -116,14 +109,14 @@ function init(app) {
                 let banStr   = null;
 
                 try {
-                    // Decode — pakai decodeDelimited=false, keepCase supaya field name preserved
+                    // Decode
                     const decoded = RAFIN.decode(rawBuf);
                     const obj     = RAFIN.toObject(decoded, {
-                        defaults:  false,
-                        longs:     String,
-                        enums:     Number,
-                        bytes:     Buffer,
-                        keepCase:  true,    // FIX: jangan transform field names
+                        defaults: false,
+                        longs:    String,
+                        enums:    Number,
+                        bytes:    Buffer,
+                        keepCase: true,
                     });
 
                     uid    = obj.account_id  || '?';
@@ -139,38 +132,38 @@ function init(app) {
 
                     // --- PATCHES ---
 
-                    // Patch server_url
                     if (obj.server_url && obj.server_url !== PROXY_URL) {
                         patchLog.push(`server_url patched`);
                         obj.server_url = PROXY_URL;
                     }
 
-                    // Patch tp_url (GIN stronghold)
                     if (obj.tp_url) {
                         patchLog.push('tp_url cleared');
                         obj.tp_url = '';
                     }
 
-                    // Patch ano_url (ANO anticheat)
                     if (obj.ano_url) {
                         patchLog.push('ano_url cleared');
                         obj.ano_url = '';
                     }
 
-                    // Patch ffanti_url
                     if (obj.ffanti_url) {
                         patchLog.push('ffanti_url cleared');
                         obj.ffanti_url = '';
                     }
 
-                    // Patch ff_anti_config_desc
+                    // ff_anti_config_desc — disable semua field
                     if (obj.ff_anti_config_desc) {
-                        obj.ff_anti_config_desc.enable     = false;
-                        obj.ff_anti_config_desc.config_url = '';
+                        obj.ff_anti_config_desc.enable               = false;
+                        obj.ff_anti_config_desc.config_url           = '';
+                        obj.ff_anti_config_desc.hpe_enable           = false;
+                        obj.ff_anti_config_desc.ffi_enable           = false;
+                        obj.ff_anti_config_desc.mtp_lite_data_enable = false;
+                        obj.ff_anti_config_desc.ffm_enable           = false;
+                        obj.ff_anti_config_desc.ffo_enable           = false;
                         patchLog.push('ff_anti_config_desc disabled');
                     }
 
-                    // Patch blacklist (clear ban)
                     if (obj.blacklist) {
                         obj.blacklist.ban_reason      = 0;
                         obj.blacklist.expire_duration = 0;
@@ -179,14 +172,12 @@ function init(app) {
                         patchLog.push('blacklist cleared');
                     }
 
-                    // Patch queue_info
                     if (obj.queue_info && !obj.queue_info.allow) {
                         obj.queue_info.allow = true;
                         patchLog.push('queue forced allow');
                     }
 
                     // --- ENCODE ULANG ---
-                    // fromObject → verify → encode
                     const msg  = RAFIN.fromObject(obj);
                     const verr = RAFIN.verify(msg);
                     if (verr) throw new Error('verify: ' + verr);
@@ -194,15 +185,14 @@ function init(app) {
                     const encoded = RAFIN.encode(msg).finish();
                     outBuf = Buffer.from(encoded);
 
-                    // Sanity check: kalau output terlalu berbeda dari input, pass-through
-                    // Bisa terjadi kalau server kirim field baru yang belum ada di proto
+                    // Sanity check size
                     const sizeDiff = Math.abs(outBuf.length - rawBuf.length);
-                    const maxDiff  = rawBuf.length * 0.3; // toleransi 30%
-                    if (sizeDiff > maxDiff && sizeDiff > 50) {
+                    const maxDiff  = Math.max(rawBuf.length * 0.3, 100);
+                    if (sizeDiff > maxDiff) {
                         console.warn(`[MAJORLOGIN] Size mismatch raw=${rawBuf.length} out=${outBuf.length} diff=${sizeDiff} → pass-through raw`);
-                        tglog.send(`⚠️ <b>MajorLogin size mismatch</b>\nraw=${rawBuf.length}b out=${outBuf.length}b\npass-through raw`);
+                        tglog.send(`⚠️ <b>MajorLogin size mismatch</b>\nraw=${rawBuf.length}b out=${outBuf.length}b diff=${sizeDiff}\npass-through (no patches)`);
                         outBuf   = rawBuf;
-                        patchLog = ['SIZE_MISMATCH → pass-through raw (no patches applied)'];
+                        patchLog = ['SIZE_MISMATCH → raw pass-through'];
                     } else {
                         console.log(`[MAJORLOGIN] uid=${uid} region=${region} ${rawBuf.length}b→${outBuf.length}b patches=[${patchLog.join(', ')}]`);
                     }
@@ -250,7 +240,7 @@ function init(app) {
         proxyReq.end();
     });
 
-    console.log('[MAJORLOGIN] v7 active — decode→patch→encode + size sanity check');
+    console.log('[MAJORLOGIN] v8 active — FfAntiConfigDesc complete');
 }
 
 module.exports = { init };
