@@ -153,7 +153,6 @@ const _ginDomainPattern = new RegExp(
     '("(?:[^"\\\\]|\\\\.)*(?:' + [
         'gin\\.freefiremobile\\.com',
         'grtc\\.garenanow\\.com',
-        'ggblueshark\\.com',
         'ffanti\\.',
         'ggpolarbear\\.com/gin',
         'ggpolarbear\\.com/ggp',
@@ -161,9 +160,6 @@ const _ginDomainPattern = new RegExp(
         '124\\.158\\.135\\.168',
         'stronghold\\.freefiremobile\\.com',
         'vodka\\.freefiremobile\\.com',
-        'idevent\\.gg',
-        'idnetwork\\.gg',
-        'sggigateway\\.gg',
         'gamesecurity\\.sea\\.freefiremobile\\.com',
     ].join('|') + ')(?:[^"\\\\]|\\\\.)*")',
     'gi'
@@ -304,18 +300,73 @@ const GIN_HOSTS_BINARY = [
 ];
 
 function patchBinaryGin(buf) {
+    // Splice seluruh proto string field yang mengandung GIN hostname
+    // Format proto string: [tag_varint][len_varint][string_bytes]
+    // Kita cari string content, mundur untuk nemu len_varint, lalu mundur lagi untuk nemu tag_varint
+    // Kemudian splice seluruh [tag+len+string] dari buffer
+    let out = Buffer.from(buf);
     let patched = false;
-    const out = Buffer.from(buf); // copy
+
     for (const host of GIN_HOSTS_BINARY) {
-        let idx = 0;
+        let searchFrom = 0;
         while (true) {
-            const pos = out.indexOf(host, idx);
-            if (pos === -1) break;
-            // Zero-out: ganti dengan spasi (0x20) supaya string valid tapi tidak resolve
-            out.fill(0x20, pos, pos + host.length);
+            const strPos = out.indexOf(host, searchFrom);
+            if (strPos === -1) break;
+
+            const strLen = host.length;
+
+            // Decode varint length sebelum string (mundur dari strPos)
+            // Coba 1-byte varint dulu
+            let lenVarintSize = 0;
+            let foundLen = -1;
+            if (strPos >= 1) {
+                const b = out[strPos - 1];
+                if (!(b & 0x80) && b === strLen) {
+                    lenVarintSize = 1;
+                    foundLen = b;
+                }
+            }
+            // Coba 2-byte varint
+            if (foundLen === -1 && strPos >= 2) {
+                const b0 = out[strPos - 2], b1 = out[strPos - 1];
+                if ((b0 & 0x80) && !(b1 & 0x80)) {
+                    const decoded = (b0 & 0x7f) | ((b1 & 0x7f) << 7);
+                    if (decoded === strLen) { lenVarintSize = 2; foundLen = decoded; }
+                }
+            }
+
+            if (foundLen === -1) {
+                // Tidak bisa decode varint — zero-out string saja (fallback)
+                out.fill(0x20, strPos, strPos + strLen);
+                patched = true;
+                console.log(`[BINARY-GIN] fallback zero ${host.toString()} @ 0x${strPos.toString(16)}`);
+                searchFrom = strPos + strLen;
+                continue;
+            }
+
+            const lenPos = strPos - lenVarintSize;
+
+            // Cek tag byte sebelum len_varint (harus ada, wire type 2)
+            let tagSize = 0;
+            if (lenPos >= 1) {
+                const tb = out[lenPos - 1];
+                if ((tb & 0x07) === 2) tagSize = 1; // wire type 2 = length-delimited
+            }
+            if (lenPos >= 2 && tagSize === 0) {
+                const tb0 = out[lenPos - 2];
+                if ((tb0 & 0x80) && ((out[lenPos - 1] & 0x07) === 2)) tagSize = 2;
+            }
+
+            const spliceStart = lenPos - tagSize;
+            const spliceEnd   = strPos + strLen;
+
+            // Splice out [tag][len][string]
+            const before = out.slice(0, spliceStart);
+            const after  = out.slice(spliceEnd);
+            out = Buffer.concat([before, after]);
             patched = true;
-            console.log();
-            idx = pos + host.length;
+            console.log(`[BINARY-GIN] spliced ${host.toString()} (tag=${tagSize}b len=${lenVarintSize}b str=${strLen}b) @ 0x${spliceStart.toString(16)}`);
+            // searchFrom tidak perlu update karena buffer sudah lebih pendek
         }
     }
     return { buf: out, patched };
@@ -595,23 +646,57 @@ const loginProxy = createProxyMiddleware({
                     if (r.patched) { raw = r.buf; console.log(`[LOGIN] MajorLogin ${ginHost} cleared`); }
                 }
 
-                // 3. Patch server_url → proxy kita
-                // MajorLogin return server_url = clientbp.ggpolarbear.com setelah ChooseRegion
-                // Game langsung konek ke sana untuk GetLoginData → bypass proxy → GIN tidak di-patch
-                // Fix: replace clientbp URL dengan proxy URL supaya GetLoginData lewat proxy
-                const clientbpBuf = Buffer.from('https://clientbp.ggpolarbear.com', 'utf8');
-                const proxyUrlBuf = Buffer.from(MY_IP.replace(/\/$/, ''), 'utf8');
-                let srvPos = raw.indexOf(clientbpBuf);
-                if (srvPos !== -1 && proxyUrlBuf.length <= clientbpBuf.length) {
-                    // Replace in-place: pad dengan spasi kalau lebih pendek
-                    const padded = Buffer.alloc(clientbpBuf.length, 0x20);
-                    proxyUrlBuf.copy(padded);
-                    padded.copy(raw, srvPos);
-                    console.log(`[LOGIN] server_url patched: clientbp → proxy`);
-                } else if (srvPos !== -1) {
-                    // Proxy URL lebih panjang — tidak bisa in-place, kosongkan saja
-                    raw.fill(0x20, srvPos, srvPos + clientbpBuf.length);
-                    console.log(`[LOGIN] server_url cleared (proxy URL too long)`);
+                // 3. Patch server_url di MajorLogin response
+                // Setelah ChooseRegion, loginbp return server_url = clientbp.ggpolarbear.com
+                // Game pakai ini untuk GetLoginData → bypass proxy → GIN tidak di-patch
+                //
+                // Approach: cari proto varint length prefix sebelum string clientbp,
+                // lalu replace seluruh length+string dengan proxy URL + update varint length
+                // Ini lebih aman daripada in-place karena kita splice buffer
+                // 3. Patch server_url: ganti clientbp → proxy
+                // supaya GetLoginData lewat proxy → patchBinaryGin jalan → GIN di-disable
+                const CLIENTBP_STR  = 'https://clientbp.ggpolarbear.com';
+                const PROXY_STR     = MY_IP.replace(/[\/]+$/, ''); // tanpa trailing slash
+                const clientbpBytes = Buffer.from(CLIENTBP_STR, 'utf8');
+                const proxyBytes    = Buffer.from(PROXY_STR,    'utf8');
+
+                function encodeVarint(n) {
+                    const bytes = [];
+                    while (n > 0x7F) { bytes.push((n & 0x7F) | 0x80); n >>= 7; }
+                    bytes.push(n & 0x7F);
+                    return Buffer.from(bytes);
+                }
+
+                let srvPos = raw.indexOf(clientbpBytes);
+                if (srvPos !== -1) {
+                    const oldLen    = clientbpBytes.length;
+                    const newLen    = proxyBytes.length;
+                    const newLenVar = encodeVarint(newLen);
+
+                    // Cari awal field: mundur dari srvPos untuk nemu [len_varint]
+                    // lalu cek apakah sebelumnya ada tag byte (wiretype 2 = & 0x07 === 2)
+                    // Decode len_varint (1 atau 2 bytes)
+                    let lenStart = -1, lenSize = 0;
+                    if (srvPos >= 1 && raw[srvPos-1] === oldLen) {
+                        lenStart = srvPos - 1; lenSize = 1;
+                    } else if (srvPos >= 2) {
+                        const b0 = raw[srvPos-2], b1 = raw[srvPos-1];
+                        if ((b0 & 0x80) && !(b1 & 0x80)) {
+                            const decoded = (b0 & 0x7f) | ((b1 & 0x7f) << 7);
+                            if (decoded === oldLen) { lenStart = srvPos-2; lenSize = 2; }
+                        }
+                    }
+
+                    if (lenStart !== -1) {
+                        // Splice: ganti [len_varint][old_string] dengan [new_len_varint][new_string]
+                        const before = raw.slice(0, lenStart);
+                        const after  = raw.slice(srvPos + oldLen);
+                        raw = Buffer.concat([before, newLenVar, proxyBytes, after]);
+                        console.log(`[LOGIN] server_url: clientbp(${oldLen}b) → proxy(${newLen}b)`);
+                    } else {
+                        // Fallback: tidak bisa decode varint → log saja
+                        console.log(`[LOGIN] server_url: varint not found at 0x${srvPos.toString(16)}, raw[-2,-1]=${raw[srvPos-2]?.toString(16)},${raw[srvPos-1]?.toString(16)}`);
+                    }
                 }
 
                 const headers = { ...proxyRes.headers };
