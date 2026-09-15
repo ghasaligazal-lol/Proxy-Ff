@@ -580,18 +580,40 @@ const loginProxy = createProxyMiddleware({
 
             console.log(`[LOGIN] ${statusCode} ${req.method} ${req.path} (${raw.length}b)`);
 
-            // ── MajorLogin: patch blacklist dari loginbp response ──────────
+            // ── MajorLogin: patch blacklist + server_url ──────────────────
             if (req.path === '/MajorLogin' && statusCode === 200) {
+                // 1. Patch blacklist (binary splice)
                 const blResult = patchBlacklist(raw);
                 if (blResult.patched) {
                     raw = blResult.buf;
                     console.log(`[LOGIN] MajorLogin blacklist spliced x${blResult.count}`);
                 }
-                // Patch GIN URLs di binary response
+
+                // 2. Patch GIN URLs di binary
                 for (const ginHost of ['gin.freefiremobile.com', 'ffanti.freefiremobile.com']) {
                     const r = zeroOutStringField(raw, ginHost);
                     if (r.patched) { raw = r.buf; console.log(`[LOGIN] MajorLogin ${ginHost} cleared`); }
                 }
+
+                // 3. Patch server_url → proxy kita
+                // MajorLogin return server_url = clientbp.ggpolarbear.com setelah ChooseRegion
+                // Game langsung konek ke sana untuk GetLoginData → bypass proxy → GIN tidak di-patch
+                // Fix: replace clientbp URL dengan proxy URL supaya GetLoginData lewat proxy
+                const clientbpBuf = Buffer.from('https://clientbp.ggpolarbear.com', 'utf8');
+                const proxyUrlBuf = Buffer.from(MY_IP.replace(/\/$/, ''), 'utf8');
+                let srvPos = raw.indexOf(clientbpBuf);
+                if (srvPos !== -1 && proxyUrlBuf.length <= clientbpBuf.length) {
+                    // Replace in-place: pad dengan spasi kalau lebih pendek
+                    const padded = Buffer.alloc(clientbpBuf.length, 0x20);
+                    proxyUrlBuf.copy(padded);
+                    padded.copy(raw, srvPos);
+                    console.log(`[LOGIN] server_url patched: clientbp → proxy`);
+                } else if (srvPos !== -1) {
+                    // Proxy URL lebih panjang — tidak bisa in-place, kosongkan saja
+                    raw.fill(0x20, srvPos, srvPos + clientbpBuf.length);
+                    console.log(`[LOGIN] server_url cleared (proxy URL too long)`);
+                }
+
                 const headers = { ...proxyRes.headers };
                 delete headers['content-encoding'];
                 headers['content-length'] = raw.length;
