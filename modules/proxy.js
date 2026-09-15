@@ -300,11 +300,10 @@ const GIN_HOSTS_BINARY = [
 ];
 
 function patchBinaryGin(buf) {
-    // Splice seluruh proto string field yang mengandung GIN hostname
-    // Format proto string: [tag_varint][len_varint][string_bytes]
-    // Kita cari string content, mundur untuk nemu len_varint, lalu mundur lagi untuk nemu tag_varint
-    // Kemudian splice seluruh [tag+len+string] dari buffer
-    let out = Buffer.from(buf);
+    // In-place patch: temukan string GIN, set varint length = 0, zero-out string bytes
+    // TIDAK splice — splice merusak parent message length prefix di proto
+    // Dengan length=0 dan content=null bytes, proto parser skip field ini → GIN tidak bisa init
+    const out = Buffer.from(buf);
     let patched = false;
 
     for (const host of GIN_HOSTS_BINARY) {
@@ -312,61 +311,39 @@ function patchBinaryGin(buf) {
         while (true) {
             const strPos = out.indexOf(host, searchFrom);
             if (strPos === -1) break;
-
             const strLen = host.length;
 
-            // Decode varint length sebelum string (mundur dari strPos)
-            // Coba 1-byte varint dulu
-            let lenVarintSize = 0;
-            let foundLen = -1;
-            if (strPos >= 1) {
-                const b = out[strPos - 1];
-                if (!(b & 0x80) && b === strLen) {
-                    lenVarintSize = 1;
-                    foundLen = b;
-                }
+            // Zero-out string content
+            out.fill(0x00, strPos, strPos + strLen);
+
+            // Update varint length ke 0
+            // Coba 1-byte varint (strLen < 128)
+            if (strPos >= 1 && out[strPos - 1] === strLen) {
+                out[strPos - 1] = 0x00;
+                patched = true;
+                console.log(`[BINARY-GIN] cleared ${host.toString()} @ 0x${strPos.toString(16)} (1b varint)`);
             }
             // Coba 2-byte varint
-            if (foundLen === -1 && strPos >= 2) {
+            else if (strPos >= 2) {
                 const b0 = out[strPos - 2], b1 = out[strPos - 1];
                 if ((b0 & 0x80) && !(b1 & 0x80)) {
                     const decoded = (b0 & 0x7f) | ((b1 & 0x7f) << 7);
-                    if (decoded === strLen) { lenVarintSize = 2; foundLen = decoded; }
+                    if (decoded === strLen) {
+                        out[strPos - 2] = 0x00;
+                        out[strPos - 1] = 0x00;
+                        patched = true;
+                        console.log(`[BINARY-GIN] cleared ${host.toString()} @ 0x${strPos.toString(16)} (2b varint)`);
+                    }
                 }
             }
 
-            if (foundLen === -1) {
-                // Tidak bisa decode varint — zero-out string saja (fallback)
-                out.fill(0x20, strPos, strPos + strLen);
+            if (!patched) {
+                // Fallback: zero-out content saja tanpa update varint
                 patched = true;
-                console.log(`[BINARY-GIN] fallback zero ${host.toString()} @ 0x${strPos.toString(16)}`);
-                searchFrom = strPos + strLen;
-                continue;
+                console.log(`[BINARY-GIN] partial clear ${host.toString()} @ 0x${strPos.toString(16)}`);
             }
 
-            const lenPos = strPos - lenVarintSize;
-
-            // Cek tag byte sebelum len_varint (harus ada, wire type 2)
-            let tagSize = 0;
-            if (lenPos >= 1) {
-                const tb = out[lenPos - 1];
-                if ((tb & 0x07) === 2) tagSize = 1; // wire type 2 = length-delimited
-            }
-            if (lenPos >= 2 && tagSize === 0) {
-                const tb0 = out[lenPos - 2];
-                if ((tb0 & 0x80) && ((out[lenPos - 1] & 0x07) === 2)) tagSize = 2;
-            }
-
-            const spliceStart = lenPos - tagSize;
-            const spliceEnd   = strPos + strLen;
-
-            // Splice out [tag][len][string]
-            const before = out.slice(0, spliceStart);
-            const after  = out.slice(spliceEnd);
-            out = Buffer.concat([before, after]);
-            patched = true;
-            console.log(`[BINARY-GIN] spliced ${host.toString()} (tag=${tagSize}b len=${lenVarintSize}b str=${strLen}b) @ 0x${spliceStart.toString(16)}`);
-            // searchFrom tidak perlu update karena buffer sudah lebih pendek
+            searchFrom = strPos + strLen;
         }
     }
     return { buf: out, patched };
