@@ -1,10 +1,16 @@
 'use strict';
-// modules/majorlogin.js — v8
+// modules/majorlogin.js — v9
 //
-// v8 vs v7:
-//   - Proto FfAntiConfigDesc sudah lengkap (region, hpe_enable, ffi_enable, mtp_lite_data_enable, ffm_enable, ffo_enable)
-//   - Patch ff_anti_config_desc sekarang zero semua field baru juga
-//   - Minor: log lebih informatif
+// FIX v9: hapus size sanity check yang terlalu ketat.
+//
+// Root cause v8 masih gagal patch:
+//   tp_url (~95 bytes) + ffanti_url (~95 bytes) di-clear → output berkurang ~190 bytes
+//   → size diff = 172 bytes, 43% dari raw → melebihi threshold 30% → pass-through raw
+//   → SEMUA patch diabaikan, anticheat tidak di-disable
+//
+// Solusi: hapus sanity check sepenuhnya.
+// Proto sudah lengkap (v8) → decode/encode tidak akan corrupt.
+// Exception handler sudah cukup sebagai safety net.
 
 const https    = require('https');
 const protobuf = require('protobufjs');
@@ -18,15 +24,14 @@ let RAFIN = null;
 protobuf.load(path.join(__dirname, '..', 'MajorLoginRes.proto'))
     .then(root => {
         RAFIN = root.lookupType('freefire.RAFIN');
-        console.log('[MAJORLOGIN] v8 Proto loaded OK');
-        tglog.send('✅ <b>Server Start v8</b>\nProto loaded OK');
+        console.log('[MAJORLOGIN] v9 Proto loaded OK');
+        tglog.send('✅ <b>Server Start v9</b>\nProto loaded OK');
     })
     .catch(err => {
         console.error('[MAJORLOGIN] Proto load FAILED:', err.message);
         tglog.send(`❌ <b>Proto FAILED</b>\n${err.message}`);
     });
 
-// Decode request fields untuk logging
 function decodeReqFields(buf) {
     const out = {};
     try {
@@ -82,9 +87,10 @@ function init(app) {
             proxyRes.on('end', () => {
                 const rawBuf = Buffer.concat(chunks);
 
-                // 404 account_not_found → pass-through
+                // 404 account_not_found → pass-through langsung
                 if (proxyRes.statusCode === 404) {
-                    if (rawBuf.toString('utf8').includes('account_not_found')) {
+                    const bodyStr = rawBuf.toString('utf8');
+                    if (bodyStr.includes('account_not_found')) {
                         console.log('[MAJORLOGIN] 404 account_not_found');
                         tglog.send(`ℹ️ <b>MajorLogin 404</b>\nopen_id: ${reqInfo.open_id || '-'}`);
                         const h = { ...proxyRes.headers, 'content-length': rawBuf.length };
@@ -112,7 +118,7 @@ function init(app) {
                     // Decode
                     const decoded = RAFIN.decode(rawBuf);
                     const obj     = RAFIN.toObject(decoded, {
-                        defaults: false,
+                        defaults: false,   // jangan encode field default
                         longs:    String,
                         enums:    Number,
                         bytes:    Buffer,
@@ -124,7 +130,7 @@ function init(app) {
                     token  = (obj.token || '').substring(0, 20) + '...';
                     ttl    = obj.ttl || 0;
 
-                    // Detect ban sebelum patch
+                    // Detect ban
                     if (obj.blacklist && obj.blacklist.ban_reason && obj.blacklist.ban_reason !== 0) {
                         const reason = BAN_REASON_MAP[obj.blacklist.ban_reason] || `code_${obj.blacklist.ban_reason}`;
                         banStr = `🚫 BAN detected: ${reason}`;
@@ -132,27 +138,31 @@ function init(app) {
 
                     // --- PATCHES ---
 
+                    // server_url → proxy (hanya kalau ada nilainya)
                     if (obj.server_url && obj.server_url !== PROXY_URL) {
                         patchLog.push(`server_url patched`);
                         obj.server_url = PROXY_URL;
                     }
 
+                    // tp_url → clear
                     if (obj.tp_url) {
                         patchLog.push('tp_url cleared');
                         obj.tp_url = '';
                     }
 
+                    // ano_url → clear
                     if (obj.ano_url) {
                         patchLog.push('ano_url cleared');
                         obj.ano_url = '';
                     }
 
+                    // ffanti_url → clear
                     if (obj.ffanti_url) {
                         patchLog.push('ffanti_url cleared');
                         obj.ffanti_url = '';
                     }
 
-                    // ff_anti_config_desc — disable semua field
+                    // ff_anti_config_desc → disable semua
                     if (obj.ff_anti_config_desc) {
                         obj.ff_anti_config_desc.enable               = false;
                         obj.ff_anti_config_desc.config_url           = '';
@@ -164,6 +174,7 @@ function init(app) {
                         patchLog.push('ff_anti_config_desc disabled');
                     }
 
+                    // blacklist → clear ban
                     if (obj.blacklist) {
                         obj.blacklist.ban_reason      = 0;
                         obj.blacklist.expire_duration = 0;
@@ -172,6 +183,7 @@ function init(app) {
                         patchLog.push('blacklist cleared');
                     }
 
+                    // queue_info → force allow
                     if (obj.queue_info && !obj.queue_info.allow) {
                         obj.queue_info.allow = true;
                         patchLog.push('queue forced allow');
@@ -182,20 +194,12 @@ function init(app) {
                     const verr = RAFIN.verify(msg);
                     if (verr) throw new Error('verify: ' + verr);
 
-                    const encoded = RAFIN.encode(msg).finish();
-                    outBuf = Buffer.from(encoded);
+                    outBuf = Buffer.from(RAFIN.encode(msg).finish());
 
-                    // Sanity check size
-                    const sizeDiff = Math.abs(outBuf.length - rawBuf.length);
-                    const maxDiff  = Math.max(rawBuf.length * 0.3, 100);
-                    if (sizeDiff > maxDiff) {
-                        console.warn(`[MAJORLOGIN] Size mismatch raw=${rawBuf.length} out=${outBuf.length} diff=${sizeDiff} → pass-through raw`);
-                        tglog.send(`⚠️ <b>MajorLogin size mismatch</b>\nraw=${rawBuf.length}b out=${outBuf.length}b diff=${sizeDiff}\npass-through (no patches)`);
-                        outBuf   = rawBuf;
-                        patchLog = ['SIZE_MISMATCH → raw pass-through'];
-                    } else {
-                        console.log(`[MAJORLOGIN] uid=${uid} region=${region} ${rawBuf.length}b→${outBuf.length}b patches=[${patchLog.join(', ')}]`);
-                    }
+                    // FIX v9: TIDAK ada size sanity check
+                    // tp_url + ffanti_url cleared → output bisa berkurang 190+ bytes
+                    // Selama tidak ada exception, hasil encode VALID
+                    console.log(`[MAJORLOGIN] v9 uid=${uid} region=${region} ${rawBuf.length}b→${outBuf.length}b patches=[${patchLog.join(', ')}]`);
 
                 } catch (err) {
                     console.error('[MAJORLOGIN] Patch error:', err.message, '→ pass-through raw');
@@ -205,7 +209,7 @@ function init(app) {
                 }
 
                 // TG log
-                const lines = [`<b>MajorLogin</b>`, ''];
+                const lines = [`<b>MajorLogin v9</b>`, ''];
                 lines.push(`👤 UID: <code>${uid}</code>`);
                 lines.push(`🆔 open_id: <code>${reqInfo.open_id || '?'}</code>`);
                 if (reqInfo.client_version) lines.push(`📱 ver: ${reqInfo.client_version}`);
@@ -240,7 +244,7 @@ function init(app) {
         proxyReq.end();
     });
 
-    console.log('[MAJORLOGIN] v8 active — FfAntiConfigDesc complete');
+    console.log('[MAJORLOGIN] v9 active — no size check, full patch');
 }
 
 module.exports = { init };
