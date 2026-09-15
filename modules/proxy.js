@@ -482,96 +482,49 @@ function generateFallbackNickname() {
 // ─── zeroOutStringField ───────────────────────────────────────────────────────
 // Zero-out string field berdasarkan prefix konten
 function zeroOutStringField(buf, prefix) {
+    // Cari content prefix di buffer, lalu zero-out varint length + seluruh content.
+    // Buffer length tetap SAMA → tidak geser offset field lain → aman.
+    // Search from start, return first hit.
     const prefixBytes = Buffer.from(prefix, 'utf8');
     const idx = buf.indexOf(prefixBytes);
     if (idx === -1) return { buf, patched: false };
 
     let lenStart = -1, totalLen = 0;
+
+    // Coba 2-byte varint dulu (lebih spesifik)
     if (idx >= 2) {
         const b0 = buf[idx - 2], b1 = buf[idx - 1];
-        if (b0 & 0x80) {
-            totalLen = (b0 & 0x7f) | ((b1 & 0x7f) << 7);
-            if (totalLen > 0 && totalLen < 300) lenStart = idx - 2;
+        if ((b0 & 0x80) && !(b1 & 0x80)) {
+            const decoded = (b0 & 0x7f) | ((b1 & 0x7f) << 7);
+            // Validasi: decoded harus >= prefix.length dan reasonable
+            if (decoded >= prefix.length && decoded < 2048) {
+                totalLen = decoded;
+                lenStart = idx - 2;
+            }
         }
     }
+    // Coba 1-byte varint
     if (lenStart === -1 && idx >= 1) {
         const b0 = buf[idx - 1];
-        if (b0 > 0 && b0 < 128 && !(b0 & 0x80)) { totalLen = b0; lenStart = idx - 1; }
+        if (!(b0 & 0x80) && b0 >= prefix.length && b0 < 128) {
+            totalLen = b0;
+            lenStart = idx - 1;
+        }
     }
     if (lenStart === -1) return { buf, patched: false };
 
+    // Validasi: totalLen tidak boleh melewati batas buffer
+    if (idx + totalLen > buf.length) return { buf, patched: false };
+
     const result = Buffer.from(buf);
     const varintSize = idx - lenStart;
+    // Zero varint bytes
     for (let v = 0; v < varintSize; v++) result[lenStart + v] = 0;
-    for (let i = 0; i < totalLen && idx + i < result.length; i++) result[idx + i] = 0;
+    // Zero content bytes
+    for (let i = 0; i < totalLen; i++) result[idx + i] = 0;
     return { buf: result, patched: true };
 }
 
-
-// ─── spliceProtoStringField ───────────────────────────────────────────────────
-// Splice-out (hapus sepenuhnya) sebuah string field dari protobuf binary
-// berdasarkan field number. Aman karena tidak perlu tahu isi string-nya.
-//
-// Protobuf wire format:
-//   tag varint  (field_number << 3 | 2) untuk string/bytes/embedded message
-//   length varint  (panjang isi field)
-//   content bytes
-//
-// Untuk field number ≤ 15: tag = 1 byte  (field_num << 3 | 2)
-// Untuk field number 16-2047: tag = 2 bytes
-function encodeProtoTag(fieldNumber, wireType) {
-    const tagNum = (fieldNumber << 3) | wireType;
-    if (tagNum <= 0x7F) return [tagNum];
-    return [(tagNum & 0x7F) | 0x80, (tagNum >> 7) & 0x7F];
-}
-
-function decodeVarint(buf, pos) {
-    let result = 0, shift = 0;
-    while (pos < buf.length) {
-        const b = buf[pos++];
-        result |= (b & 0x7F) << shift;
-        shift += 7;
-        if (!(b & 0x80)) return { value: result, nextPos: pos };
-        if (shift > 28) break;
-    }
-    return null;
-}
-
-function spliceProtoStringField(buf, fieldNumber, label) {
-    // wiretype 2 = length-delimited (string, bytes, embedded message)
-    const tagBytes = Buffer.from(encodeProtoTag(fieldNumber, 2));
-    let result = buf;
-    let spliced = 0;
-    let searchFrom = 0;
-
-    while (true) {
-        const tagPos = result.indexOf(tagBytes, searchFrom);
-        if (tagPos === -1) break;
-
-        // Baca length varint setelah tag
-        const lenDec = decodeVarint(result, tagPos + tagBytes.length);
-        if (!lenDec) { searchFrom = tagPos + 1; continue; }
-
-        const { value: fieldLen, nextPos: contentStart } = lenDec;
-        if (fieldLen < 0 || fieldLen > 65535 || contentStart + fieldLen > result.length) {
-            searchFrom = tagPos + 1;
-            continue;
-        }
-
-        const totalRemove = (contentStart - tagPos) + fieldLen;
-        result = Buffer.concat([result.slice(0, tagPos), result.slice(tagPos + totalRemove)]);
-        spliced++;
-        console.log(`[PROTO-SPLICE] field ${fieldNumber} (${label}) spliced at 0x${tagPos.toString(16)}, len=${fieldLen}`);
-        // jangan increment searchFrom — setelah splice, posisi tagPos otomatis ke byte berikutnya
-    }
-
-    return result;
-}
-
-function spliceProtoMessageField(buf, fieldNumber, label) {
-    // Message field = wiretype 2 juga, sama dengan string
-    return spliceProtoStringField(buf, fieldNumber, label);
-}
 
 // ─── patchBlacklist FIXED ─────────────────────────────────────────────────────
 // FIX v3: splice-out (bukan zero-out) seluruh blacklist sub-message dari buffer.
@@ -677,65 +630,98 @@ const loginProxy = createProxyMiddleware({
 
             // ── MajorLogin: patch blacklist + server_url ──────────────────
             if (req.path === '/MajorLogin' && statusCode === 200) {
-                // 1. Patch blacklist (binary splice field 12, tag 0x62)
+                // ── Step 1: Patch blacklist (binary splice field 12, tag 0x62) ──────
                 const blResult = patchBlacklist(raw);
                 if (blResult.patched) {
                     raw = blResult.buf;
                     console.log(`[LOGIN] MajorLogin blacklist spliced x${blResult.count}`);
                 }
 
-                // 2. Patch tp_url (field 14, wiretype 2 → tag 0x72)
-                //    ffanti_url (field 24, wiretype 2 → tag 0xC2 0x01)
-                //    ff_anti_config_desc (field 25, wiretype 2 → tag 0xCA 0x01)
-                //    Dengan cara: splice-out seluruh field dari buffer
-                //    Lebih aman dari zero-out karena tidak corrupt length varint parent
-                raw = spliceProtoStringField(raw, 14,  'tp_url');
-                raw = spliceProtoStringField(raw, 24,  'ffanti_url');
-                raw = spliceProtoMessageField(raw, 25, 'ff_anti_config_desc');
+                // ── Step 2: Zero-out tp_url dan ffanti_url via CONTENT SEARCH ────────
+                // JANGAN splice by field number tag — tag byte bisa muncul di dalam
+                // content field lain (false positive → corrupt buffer).
+                // Zero-out by content prefix: cari string actual, mundur baca varint,
+                // set varint=0 + zero content. Buffer length tidak berubah → aman.
+                // tp_url / ffanti_url isinya: "csoversea.stronghold.freefiremobile.com;..."
+                const ANTICHEAT_PREFIXES = [
+                    'csoversea.stronghold',   // tp_url / ffanti_url ID server
+                    'stronghold.freefire',     // fallback stronghold domain
+                    'gin.freefiremobile.com',  // GIN direct
+                    'ffanti.freefiremobile',   // FFAnti
+                    'ggp.freefiremobile',      // GGP
+                ];
+                for (const prefix of ANTICHEAT_PREFIXES) {
+                    // Loop sampai semua instance di-zero (tp_url & ffanti_url bisa identik)
+                    let loopLimit = 5;
+                    while (loopLimit-- > 0) {
+                        const r = zeroOutStringField(raw, prefix);
+                        if (!r.patched) break;
+                        raw = r.buf;
+                        console.log(`[LOGIN] MajorLogin zero-out: "${prefix}"`);
+                    }
+                }
 
-                // 3. Patch server_url: ganti clientbp → proxy
+                // ── Step 3: Patch server_url: ganti clientbp → proxy ────────────────
                 // supaya GetLoginData lewat proxy → GIN/ban patches jalan
+                // ── server_url replace: clientbp → proxy ────────────────────────
+                // Search content "https://clientbp.ggpolarbear.com" lalu replace
+                // dengan proxy URL. Pakai zeroOutStringField approach tapi splice+replace.
+                // PENTING: lakukan SETELAH semua zero-out di atas supaya buffer stabil.
                 const CLIENTBP_STR  = 'https://clientbp.ggpolarbear.com';
                 const PROXY_STR     = MY_IP.replace(/[\/]+$/, ''); // tanpa trailing slash
                 const clientbpBytes = Buffer.from(CLIENTBP_STR, 'utf8');
                 const proxyBytes    = Buffer.from(PROXY_STR,    'utf8');
 
-                function encodeVarint(n) {
+                function encodeVarintLocal(n) {
                     const bytes = [];
                     while (n > 0x7F) { bytes.push((n & 0x7F) | 0x80); n >>= 7; }
                     bytes.push(n & 0x7F);
                     return Buffer.from(bytes);
                 }
 
-                let srvPos = raw.indexOf(clientbpBytes);
+                const srvPos = raw.indexOf(clientbpBytes);
                 if (srvPos !== -1) {
-                    const oldLen    = clientbpBytes.length;
+                    const oldLen    = clientbpBytes.length;   // 32
                     const newLen    = proxyBytes.length;
-                    const newLenVar = encodeVarint(newLen);
+                    const newLenVar = encodeVarintLocal(newLen);
 
-                    // Cari awal field: mundur dari srvPos untuk nemu [len_varint]
-                    // lalu cek apakah sebelumnya ada tag byte (wiretype 2 = & 0x07 === 2)
-                    // Decode len_varint (1 atau 2 bytes)
-                    let lenStart = -1, lenSize = 0;
-                    if (srvPos >= 1 && raw[srvPos-1] === oldLen) {
-                        lenStart = srvPos - 1; lenSize = 1;
-                    } else if (srvPos >= 2) {
-                        const b0 = raw[srvPos-2], b1 = raw[srvPos-1];
+                    // Decode length varint sebelum string (1 atau 2 bytes)
+                    let lenStart = -1;
+                    // Coba 1-byte varint
+                    if (srvPos >= 1 && raw[srvPos - 1] === oldLen) {
+                        lenStart = srvPos - 1;
+                    }
+                    // Coba 2-byte varint (oldLen >= 128, tidak mungkin untuk 32, tapi safety)
+                    else if (srvPos >= 2) {
+                        const b0 = raw[srvPos - 2], b1 = raw[srvPos - 1];
                         if ((b0 & 0x80) && !(b1 & 0x80)) {
-                            const decoded = (b0 & 0x7f) | ((b1 & 0x7f) << 7);
-                            if (decoded === oldLen) { lenStart = srvPos-2; lenSize = 2; }
+                            const decoded = (b0 & 0x7F) | ((b1 & 0x7F) << 7);
+                            if (decoded === oldLen) lenStart = srvPos - 2;
                         }
                     }
 
                     if (lenStart !== -1) {
-                        // Splice: ganti [len_varint][old_string] dengan [new_len_varint][new_string]
-                        const before = raw.slice(0, lenStart);
-                        const after  = raw.slice(srvPos + oldLen);
-                        raw = Buffer.concat([before, newLenVar, proxyBytes, after]);
-                        console.log(`[LOGIN] server_url: clientbp(${oldLen}b) → proxy(${newLen}b)`);
+                        // Validasi: byte sebelum lenStart harus proto tag wiretype 2
+                        // (field_num << 3 | 2) — cek bit paling rendah 3 = 0b010
+                        const tagByte = lenStart > 0 ? raw[lenStart - 1] : -1;
+                        const validTag = tagByte !== -1 && (tagByte & 0x07) === 2;
+                        if (validTag) {
+                            const before = raw.slice(0, lenStart);
+                            const after  = raw.slice(srvPos + oldLen);
+                            raw = Buffer.concat([before, newLenVar, proxyBytes, after]);
+                            console.log(`[LOGIN] server_url: "${CLIENTBP_STR}"(${oldLen}b) → proxy(${newLen}b)`);
+                        } else {
+                            // Tag byte tidak valid → coba fallback zeroOut then re-search
+                            console.log(`[LOGIN] server_url: tag byte 0x${tagByte.toString(16)} bukan wiretype 2 → skip`);
+                        }
                     } else {
-                        // Fallback: tidak bisa decode varint → log saja
-                        console.log(`[LOGIN] server_url: varint not found at 0x${srvPos.toString(16)}, raw[-2,-1]=${raw[srvPos-2]?.toString(16)},${raw[srvPos-1]?.toString(16)}`);
+                        console.log(`[LOGIN] server_url: varint not found @ 0x${srvPos.toString(16)}`);
+                    }
+                } else {
+                    // clientbp tidak ditemukan, mungkin sudah di-patch sebelumnya
+                    // Cek apakah proxy URL sudah ada (retry scenario)
+                    if (!raw.includes(proxyBytes)) {
+                        console.log('[LOGIN] server_url: clientbp not found in binary');
                     }
                 }
 
