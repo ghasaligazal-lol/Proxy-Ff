@@ -513,7 +513,10 @@ const loginProxy = createProxyMiddleware({
 
         if (req.headers['user-agent'])       proxyReq.setHeader('User-Agent', req.headers['user-agent']);
         if (req.headers['accept-language'])  proxyReq.setHeader('Accept-Language', req.headers['accept-language']);
-        if (req.headers['accept-encoding'])  proxyReq.setHeader('Accept-Encoding', req.headers['accept-encoding']);
+        // JANGAN forward accept-encoding — supaya loginbp kirim plain binary
+        // bukan gzip, sehingga patchBlacklist bisa baca proto langsung
+        proxyReq.removeHeader('accept-encoding');
+        proxyReq.setHeader('Accept-Encoding', 'identity');
         if (req.headers['accept'])           proxyReq.setHeader('Accept', req.headers['accept']);
         if (req.headers['connection'])       proxyReq.setHeader('Connection', req.headers['connection']);
         if (req.headers['content-type'])     proxyReq.setHeader('Content-Type', req.headers['content-type']);
@@ -529,8 +532,21 @@ const loginProxy = createProxyMiddleware({
         proxyRes.on('end', () => {
             let raw = Buffer.concat(chunks);
             const statusCode = proxyRes.statusCode;
+            const encoding = (proxyRes.headers['content-encoding'] || '').toLowerCase();
 
-            console.log(`[LOGIN] ${statusCode} ${req.method} ${req.path}`);
+            // Decompress kalau masih compressed (safety net)
+            if (encoding === 'gzip' || encoding === 'deflate') {
+                try {
+                    const zlib = require('zlib');
+                    raw = encoding === 'gzip'
+                        ? zlib.gunzipSync(raw)
+                        : zlib.inflateSync(raw);
+                } catch (e) {
+                    console.log(`[LOGIN] Decompress error: ${e.message}`);
+                }
+            }
+
+            console.log(`[LOGIN] ${statusCode} ${req.method} ${req.path} (${raw.length}b)`);
 
             // ── MajorLogin: patch blacklist dari loginbp response ──────────
             if (req.path === '/MajorLogin' && statusCode === 200) {
@@ -629,6 +645,7 @@ function init(app) {
             '/GetRecommendNickname',
             '/GetAccountBriefInfoBeforeLogin',
             '/ChooseNewbieChoice',
+            '/ChooseRegion',
             '/Register', '/CreateAccount',
             '/Ping',
         ];
