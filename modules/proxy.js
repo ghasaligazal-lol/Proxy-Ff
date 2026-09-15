@@ -1,30 +1,26 @@
-// modules/proxy.js - FORWARD + TELEMETRY SPOOF
-// CLEAN VERSION: tanpa mail inject, skin inject, login reward, account TG log
+'use strict';
+// modules/proxy.js - FORWARD + PATCH
+// Semua binary surgery (patchBlacklist, zeroOutStringField, server_url splice) DIHAPUS.
+// MajorLogin dihandle oleh modules/majorlogin.js (decode→patch→encode protobuf).
+// Proxy ini hanya handle: JSON ban patch, GIN patch, clientbp forward, loginbp forward.
+
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const { MY_IP } = require('../gamevar');
-const zlib   = require('zlib');
-const tglog  = require('./tglog');
+const zlib = require('zlib');
 
 const GARENA_LOGIN_SERVER  = 'https://loginbp.ggpolarbear.com';
 const GARENA_CLIENT_SERVER = 'https://clientbp.ggpolarbear.com';
 
+// ===== TELEMETRY SPOOF =====
 const TELEMETRY_PATHS = [
-    '/LogEvent',
-    '/ReportEventPushInfo',
-    '/CheckHackBehavior',
-    '/CheckNeedUpdateGPToken',
-    '/GinReport', '/gin/report', '/gin/connect', '/gin/keepalive',
-    '/gin/disconnect', '/gin/upload', '/gin/batch',
-    '/GGP', '/GGPReport', '/ggp/report', '/ggp/connect',
-    '/ggp/keepalive', '/ggp/upload',
+    '/LogEvent', '/ReportEventPushInfo', '/CheckHackBehavior', '/CheckNeedUpdateGPToken',
+    '/GinReport', '/gin/report', '/gin/connect', '/gin/keepalive', '/gin/disconnect', '/gin/upload', '/gin/batch',
+    '/GGP', '/GGPReport', '/ggp/report', '/ggp/connect', '/ggp/keepalive', '/ggp/upload',
     '/AntiAddiction', '/ReportAntiAddiction',
-    '/AnticheatReport', '/anticheat/report', '/anticheat/upload',
-    '/AnticheatUpload', '/CheckHackData', '/ReportHackData',
-    '/ReportClientData', '/ClientDataForward',
-    '/SecurityReport', '/ReportSecurityEvent',
-    '/DataReport', '/DataUploadEvent',
-    '/api/network_log', '/network_log', '/networklog',
-    '/api/logNetworkLogEvent', '/logNetworkLogEvent',
+    '/AnticheatReport', '/anticheat/report', '/anticheat/upload', '/AnticheatUpload',
+    '/CheckHackData', '/ReportHackData', '/ReportClientData', '/ClientDataForward',
+    '/SecurityReport', '/ReportSecurityEvent', '/DataReport', '/DataUploadEvent',
+    '/api/network_log', '/network_log', '/networklog', '/api/logNetworkLogEvent', '/logNetworkLogEvent',
     '/ffanti/upload', '/ffanti/report', '/ffanti/connect',
     '/FFAnti', '/FFAntiReport', '/FFAntiUpload', '/ReportFFAnti', '/CheckFFAnti',
     '/AbnormalDataReport', '/ReportAbnormalData', '/AbnormalData',
@@ -35,31 +31,19 @@ const TELEMETRY_PATHS = [
     '/gamesecurity/ban', '/ban',
 ];
 
-function isTelemetryPath(path) {
-    const lower = path.toLowerCase();
-    if (TELEMETRY_PATHS.some(p => path === p || path.startsWith(p + '?'))) return true;
+function isTelemetryPath(p) {
+    const lower = p.toLowerCase();
+    if (TELEMETRY_PATHS.some(t => p === t || p.startsWith(t + '?'))) return true;
     return (
-        lower.includes('logevent') ||
-        lower.includes('networklog') ||
-        lower.includes('reportevent') ||
-        lower.includes('antiaddiction') ||
-        lower.includes('anticheat') ||
-        lower.includes('hackdata') ||
-        lower.includes('clientdata') ||
-        lower.includes('dataforward') ||
-        lower.includes('securityreport') ||
-        lower.includes('ginreport') ||
-        lower.includes('ggpreport') ||
-        lower.includes('ginupload') ||
-        lower.includes('ggpupload') ||
-        lower.includes('/gin/') ||
-        lower.includes('/ggp/') ||
-        lower.includes('ffanti') ||
-        lower.includes('abnormal') ||
-        lower.includes('detection') ||
-        lower.includes('libhash') ||
-        lower.includes('ahlreport') ||
-        lower.includes('modifie') ||
+        lower.includes('logevent') || lower.includes('networklog') ||
+        lower.includes('reportevent') || lower.includes('antiaddiction') ||
+        lower.includes('anticheat') || lower.includes('hackdata') ||
+        lower.includes('clientdata') || lower.includes('dataforward') ||
+        lower.includes('securityreport') || lower.includes('ginreport') ||
+        lower.includes('ggpreport') || lower.includes('/gin/') || lower.includes('/ggp/') ||
+        lower.includes('ffanti') || lower.includes('abnormal') ||
+        lower.includes('detection') || lower.includes('libhash') ||
+        lower.includes('ahlreport') || lower.includes('modifie') ||
         (lower.includes('report') && lower.includes('event'))
     );
 }
@@ -75,75 +59,46 @@ function sendSpoofOK(res, isBinary) {
     }
 }
 
-// ===== BAN PATCH =====
+// ===== BAN PATCH (JSON only — untuk clientbp JSON responses) =====
 const BAN_INFO_KEY = 'AEBBNFBNIDB';
 
 function patchBanInfo(jsonObj) {
     if (jsonObj && typeof jsonObj[BAN_INFO_KEY] === 'object' && jsonObj[BAN_INFO_KEY] !== null) {
         const banInfo = jsonObj[BAN_INFO_KEY];
-        banInfo.ban_mode    = 0;
-        banInfo.unban_time  = 0;
-        banInfo.hint_string = '';
-        console.log('[BAN-PATCH] AEBBNFBNIDB → ban_mode:0');
+        banInfo.ban_mode = 0; banInfo.unban_time = 0; banInfo.hint_string = '';
     }
+    if (jsonObj && Array.isArray(jsonObj.blacklist)) jsonObj.blacklist = [];
+    if (jsonObj && jsonObj.blacklist_info !== undefined) jsonObj.blacklist_info = null;
 
-    if (jsonObj && Array.isArray(jsonObj.blacklist)) {
-        if (jsonObj.blacklist.length > 0) {
-            console.log(`[BL-PATCH] blacklist[] cleared: ${jsonObj.blacklist.length} entries`);
-        }
-        jsonObj.blacklist = [];
-    }
-    if (jsonObj && jsonObj.blacklist_info !== undefined && jsonObj.blacklist_info !== null) {
-        jsonObj.blacklist_info = null;
-    }
-
-    function zapBlacklist(obj, depth) {
+    function zapBL(obj, depth) {
         if (!obj || typeof obj !== 'object' || depth > 10) return;
-        if (Array.isArray(obj)) { obj.forEach(i => zapBlacklist(i, depth + 1)); return; }
+        if (Array.isArray(obj)) { obj.forEach(i => zapBL(i, depth + 1)); return; }
         if ('is_in_blacklist' in obj) {
-            obj.is_in_blacklist     = false;
-            obj.ban_time            = 0;
-            obj.ban_reason          = 0;
-            obj.ban_reason_detail   = '';
-            obj.ban_expire_duration = 0;
-            obj.ban_type            = '';
+            obj.is_in_blacklist = false; obj.ban_time = 0; obj.ban_reason = 0;
+            obj.ban_reason_detail = ''; obj.ban_expire_duration = 0; obj.ban_type = '';
         }
         if ('matchmaking_blacklist' in obj) {
             const mbl = obj.matchmaking_blacklist;
-            if (typeof mbl === 'number' && mbl !== 0) {
-                obj.matchmaking_blacklist = 0;
-            } else if (mbl && typeof mbl === 'object') {
-                if (mbl.is_in_blacklist) {
-                    mbl.is_in_blacklist = false;
-                    if (mbl.ban_time            !== undefined) mbl.ban_time            = 0;
-                    if (mbl.ban_reason          !== undefined) mbl.ban_reason          = 0;
-                    if (mbl.ban_reason_detail   !== undefined) mbl.ban_reason_detail   = '';
-                    if (mbl.ban_expire_duration !== undefined) mbl.ban_expire_duration = 0;
-                    if (mbl.ban_type            !== undefined) mbl.ban_type            = '';
-                }
+            if (typeof mbl === 'number') { obj.matchmaking_blacklist = 0; }
+            else if (mbl && typeof mbl === 'object' && mbl.is_in_blacklist) {
+                mbl.is_in_blacklist = false; mbl.ban_time = 0; mbl.ban_reason = 0;
+                mbl.ban_reason_detail = ''; mbl.ban_expire_duration = 0; mbl.ban_type = '';
             }
         }
-        if ('championship_is_in_blacklist' in obj && obj.championship_is_in_blacklist) {
-            obj.championship_is_in_blacklist = false;
-        }
-        for (const k of Object.keys(obj)) zapBlacklist(obj[k], depth + 1);
+        if ('championship_is_in_blacklist' in obj) obj.championship_is_in_blacklist = false;
+        for (const k of Object.keys(obj)) zapBL(obj[k], depth + 1);
     }
-    zapBlacklist(jsonObj, 0);
-
-    return jsonObj;
+    zapBL(jsonObj, 0);
 }
 
 function patchMatchmakingBL(jsonObj, urlPath) {
-    if (!urlPath.includes('GetMatchmakingBlacklist')) return jsonObj;
-    if (!jsonObj || typeof jsonObj !== 'object') return jsonObj;
-    jsonObj.blacklist      = [];
-    jsonObj.blacklist_info = null;
+    if (!urlPath.includes('GetMatchmakingBlacklist') || !jsonObj || typeof jsonObj !== 'object') return;
+    jsonObj.blacklist = []; jsonObj.blacklist_info = null;
     if (jsonObj.blacklist_list !== undefined) jsonObj.blacklist_list = [];
-    if (jsonObj.bl_list        !== undefined) jsonObj.bl_list        = [];
-    return jsonObj;
+    if (jsonObj.bl_list !== undefined) jsonObj.bl_list = [];
 }
 
-// ===== GIN/GGP URL PATCH =====
+// ===== GIN/GGP PATCH (JSON only) =====
 const GIN_CONFIG_KEY = 'CECNLHCONMI';
 const GRTC_URL_KEY   = 'LJAPOJNBOFE';
 const TRACEROUTE_KEY = 'FOGGNIHIBPG';
@@ -166,99 +121,44 @@ const _ginDomainPattern = new RegExp(
 );
 
 function patchStringLevelGin(jsonStr) {
-    const result = jsonStr.replace(_ginDomainPattern, '""');
-    if (result !== jsonStr) {
-        console.log('[STRING-PATCH] GIN/anticheat domain ditemukan dan dihapus');
-    }
-    return result;
+    return jsonStr.replace(_ginDomainPattern, '""');
 }
 
-function removeKeyRecursive(obj, key, depth) {
+function delKeyRecursive(obj, key, depth) {
     if (!obj || typeof obj !== 'object' || depth > 10) return;
-    if (Array.isArray(obj)) {
-        for (const item of obj) {
-            if (item && typeof item === 'object') removeKeyRecursive(item, key, depth + 1);
-        }
-        return;
-    }
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        delete obj[key];
-        console.log(`[GIN-PATCH] ${key} DELETED (depth ${depth})`);
-    }
-    for (const k of Object.keys(obj)) {
-        const val = obj[k];
-        if (val && typeof val === 'object') removeKeyRecursive(val, key, depth + 1);
-    }
+    if (Array.isArray(obj)) { for (const item of obj) delKeyRecursive(item, key, depth + 1); return; }
+    if (Object.prototype.hasOwnProperty.call(obj, key)) delete obj[key];
+    for (const k of Object.keys(obj)) delKeyRecursive(obj[k], key, depth + 1);
 }
 
-function patchAbnormalData(jsonObj) {
-    if (!jsonObj || typeof jsonObj !== 'object') return jsonObj;
-
-    if (jsonObj['AEDDPHHONNI'] !== undefined && jsonObj['AEDDPHHONNI']) {
-        jsonObj['AEDDPHHONNI'] = '';
-        console.log('[ABNORMAL-PATCH] AEDDPHHONNI cleared');
-    }
-    if (jsonObj['android_apps_to_detect_res'] !== undefined) {
-        const apd = jsonObj['android_apps_to_detect_res'];
-        if (apd && typeof apd === 'object' && !Array.isArray(apd)) {
-            if (Array.isArray(apd['android_apps_to_detect_res'])) {
-                apd['android_apps_to_detect_res'] = [];
-            }
-        } else if (Array.isArray(apd) && apd.length > 0) {
-            jsonObj['android_apps_to_detect_res'] = [];
-        }
-    }
-    if (jsonObj['LMDDDJPIMOK'] === true) { jsonObj['LMDDDJPIMOK'] = false; }
-    if (jsonObj['OPICFECKHIA'] === true) { jsonObj['OPICFECKHIA'] = false; }
-    if (jsonObj['HPLCNHDMBDN'] === true) { jsonObj['HPLCNHDMBDN'] = false; }
-    if (jsonObj['GDHNPEMKNAM'] === true) { jsonObj['GDHNPEMKNAM'] = false; }
-
-    return jsonObj;
+function zeroFieldRecursive(obj, field, replacement, depth) {
+    if (!obj || typeof obj !== 'object' || depth > 10) return;
+    if (Array.isArray(obj)) { for (const item of obj) zeroFieldRecursive(item, field, replacement, depth + 1); return; }
+    if (obj[field] !== undefined) obj[field] = replacement;
+    for (const k of Object.keys(obj)) zeroFieldRecursive(obj[k], field, replacement, depth + 1);
 }
 
 function patchGinUrl(jsonObj) {
-    removeKeyRecursive(jsonObj, GIN_CONFIG_KEY, 0);
-    removeKeyRecursive(jsonObj, GRTC_URL_KEY, 0);
-
-    if (jsonObj && Array.isArray(jsonObj[TRACEROUTE_KEY])) {
-        jsonObj[TRACEROUTE_KEY] = [];
-        console.log('[GIN-PATCH] FOGGNIHIBPG (traceroute list) dikosongkan');
+    delKeyRecursive(jsonObj, GIN_CONFIG_KEY, 0);
+    delKeyRecursive(jsonObj, GRTC_URL_KEY, 0);
+    if (jsonObj && Array.isArray(jsonObj[TRACEROUTE_KEY])) jsonObj[TRACEROUTE_KEY] = [];
+    if (jsonObj && Array.isArray(jsonObj[SERVERNODE_KEY])) jsonObj[SERVERNODE_KEY] = [];
+    for (const f of ['POEPGJPHCMJ', 'EMFPDECPCDG', 'PDJHKBDIHGL', 'IIPKMIOFCJP']) {
+        if (jsonObj && jsonObj[f] !== undefined) jsonObj[f] = '';
     }
-    if (jsonObj && Array.isArray(jsonObj[SERVERNODE_KEY])) {
-        jsonObj[SERVERNODE_KEY] = [];
-        console.log('[GIN-PATCH] HDNAPFEGDGG (server node list) dikosongkan');
-    }
-
-    const KILL_FLAGS = ['POEPGJPHCMJ', 'EMFPDECPCDG', 'PDJHKBDIHGL', 'IIPKMIOFCJP'];
-    for (const f of KILL_FLAGS) {
-        if (jsonObj && jsonObj[f] !== undefined) {
-            jsonObj[f] = '';
-        }
-    }
-
-    _zeroField(jsonObj, 'hacker_protection', 0, 0);
-    _zeroField(jsonObj, 'ut_flag', 0, 0);
-
+    zeroFieldRecursive(jsonObj, 'hacker_protection', 0, 0);
+    zeroFieldRecursive(jsonObj, 'ut_flag', 0, 0);
     if (jsonObj && jsonObj['android_apps_to_detect_res'] !== undefined) {
         const apd = jsonObj['android_apps_to_detect_res'];
-        if (apd && typeof apd === 'object' && !Array.isArray(apd)) {
-            if (Array.isArray(apd['android_apps_to_detect_res'])) {
-                apd['android_apps_to_detect_res'] = [];
-            }
-        } else if (Array.isArray(apd)) {
-            jsonObj['android_apps_to_detect_res'] = [];
-        }
-        console.log('[GIN-PATCH] android_apps_to_detect_res dikosongkan');
+        if (Array.isArray(apd)) jsonObj['android_apps_to_detect_res'] = [];
+        else if (apd && typeof apd === 'object' && Array.isArray(apd['android_apps_to_detect_res']))
+            apd['android_apps_to_detect_res'] = [];
     }
-
-    _zeroField(jsonObj, 'is_report_to_ggp',   false, 0);
-    _zeroField(jsonObj, 'is_enable_ggp',       false, 0);
-    _zeroField(jsonObj, 'is_enable_tcp',       false, 0);
-    _zeroField(jsonObj, 'is_transfer_report',  false, 0);
-    _zeroField(jsonObj, 'is_get_feature',      false, 0);
-    _zeroField(jsonObj, 'is_get_flag',         false, 0);
-    _zeroField(jsonObj, 'ggp_url',             '',    0);
-
+    zeroFieldRecursive(jsonObj, 'is_report_to_ggp',  false, 0);
+    zeroFieldRecursive(jsonObj, 'is_enable_ggp',     false, 0);
+    zeroFieldRecursive(jsonObj, 'is_enable_tcp',     false, 0);
+    zeroFieldRecursive(jsonObj, 'is_transfer_report',false, 0);
+    zeroFieldRecursive(jsonObj, 'ggp_url',           '',    0);
     const ahcd = jsonObj && jsonObj['anti_hack_center_desc'];
     if (ahcd && typeof ahcd === 'object') {
         const inner = ahcd['anti_hack_center_desc'] || ahcd;
@@ -267,119 +167,51 @@ function patchGinUrl(jsonObj) {
             if (inner['link']         !== undefined) inner['link']         = '';
         }
     }
-    _zeroField(jsonObj, 'ban_list_url', '', 0);
-
-    return jsonObj;
+    zeroFieldRecursive(jsonObj, 'ban_list_url', '', 0);
 }
 
-function _zeroField(obj, field, replacement, depth) {
-    if (!obj || typeof obj !== 'object' || depth > 10) return;
-    if (Array.isArray(obj)) {
-        for (const item of obj) {
-            if (item && typeof item === 'object') _zeroField(item, field, replacement, depth + 1);
-        }
-        return;
+function patchAbnormalData(jsonObj) {
+    if (!jsonObj || typeof jsonObj !== 'object') return;
+    if (jsonObj['AEDDPHHONNI']) jsonObj['AEDDPHHONNI'] = '';
+    if (jsonObj['android_apps_to_detect_res'] !== undefined) {
+        const apd = jsonObj['android_apps_to_detect_res'];
+        if (Array.isArray(apd) && apd.length > 0) jsonObj['android_apps_to_detect_res'] = [];
+        else if (apd && typeof apd === 'object' && Array.isArray(apd['android_apps_to_detect_res']))
+            apd['android_apps_to_detect_res'] = [];
     }
-    if (obj[field] !== undefined && obj[field] !== replacement) {
-        obj[field] = replacement;
-    }
-    for (const k of Object.keys(obj)) {
-        const val = obj[k];
-        if (val && typeof val === 'object') _zeroField(val, field, replacement, depth + 1);
-    }
-}
-
-// ===== BINARY GIN PATCH =====
-// GetLoginData response = protobuf binary (bukan JSON)
-// Patch in-place: zero-out GIN hostname strings dalam binary
-const GIN_HOSTS_BINARY = [
-    Buffer.from('gin.freefiremobile.com',   'utf8'),
-    Buffer.from('ffanti.freefiremobile.com','utf8'),
-    Buffer.from('gin2.freefiremobile.com',  'utf8'),
-    Buffer.from('ggp.freefiremobile.com',   'utf8'),
-];
-
-function patchBinaryGin(buf) {
-    // In-place patch: temukan string GIN, set varint length = 0, zero-out string bytes
-    // TIDAK splice — splice merusak parent message length prefix di proto
-    // Dengan length=0 dan content=null bytes, proto parser skip field ini → GIN tidak bisa init
-    const out = Buffer.from(buf);
-    let patched = false;
-
-    for (const host of GIN_HOSTS_BINARY) {
-        let searchFrom = 0;
-        while (true) {
-            const strPos = out.indexOf(host, searchFrom);
-            if (strPos === -1) break;
-            const strLen = host.length;
-
-            // Zero-out string content
-            out.fill(0x00, strPos, strPos + strLen);
-
-            // Update varint length ke 0
-            // Coba 1-byte varint (strLen < 128)
-            if (strPos >= 1 && out[strPos - 1] === strLen) {
-                out[strPos - 1] = 0x00;
-                patched = true;
-                console.log(`[BINARY-GIN] cleared ${host.toString()} @ 0x${strPos.toString(16)} (1b varint)`);
-            }
-            // Coba 2-byte varint
-            else if (strPos >= 2) {
-                const b0 = out[strPos - 2], b1 = out[strPos - 1];
-                if ((b0 & 0x80) && !(b1 & 0x80)) {
-                    const decoded = (b0 & 0x7f) | ((b1 & 0x7f) << 7);
-                    if (decoded === strLen) {
-                        out[strPos - 2] = 0x00;
-                        out[strPos - 1] = 0x00;
-                        patched = true;
-                        console.log(`[BINARY-GIN] cleared ${host.toString()} @ 0x${strPos.toString(16)} (2b varint)`);
-                    }
-                }
-            }
-
-            if (!patched) {
-                // Fallback: zero-out content saja tanpa update varint
-                patched = true;
-                console.log(`[BINARY-GIN] partial clear ${host.toString()} @ 0x${strPos.toString(16)}`);
-            }
-
-            searchFrom = strPos + strLen;
-        }
-    }
-    return { buf: out, patched };
+    if (jsonObj['LMDDDJPIMOK'] === true) jsonObj['LMDDDJPIMOK'] = false;
+    if (jsonObj['OPICFECKHIA'] === true) jsonObj['OPICFECKHIA'] = false;
+    if (jsonObj['HPLCNHDMBDN'] === true) jsonObj['HPLCNHDMBDN'] = false;
+    if (jsonObj['GDHNPEMKNAM'] === true) jsonObj['GDHNPEMKNAM'] = false;
 }
 
 // ===== IMAGE URL PATCH =====
 const PROXY_HOST_URL = MY_IP.replace(/\/$/, '');
 const GARENA_IMG_DOMAINS = [
-    'https://dl.bs.freefiremobile.com',
-    'https://dl.dir.freefiremobile.com',
-    'https://dl.cdn.freefiremobile.com',
-    'https://dl.ak.freefiremobile.com',
-    'https://dl.gmc.freefiremobile.com',
-    'https://core-bs.freefiremobile.com',
+    'https://dl.bs.freefiremobile.com', 'https://dl.dir.freefiremobile.com',
+    'https://dl.cdn.freefiremobile.com', 'https://dl.ak.freefiremobile.com',
+    'https://dl.gmc.freefiremobile.com', 'https://core-bs.freefiremobile.com',
     'https://core-gmc.freefiremobile.com',
 ];
 
 function patchImageUrls(jsonStr) {
-    let patched = jsonStr;
-    for (const domain of GARENA_IMG_DOMAINS) {
-        patched = patched.split(domain).join(`${PROXY_HOST_URL}/cdn`);
-    }
-    return patched;
+    let out = jsonStr;
+    for (const d of GARENA_IMG_DOMAINS) out = out.split(d).join(`${PROXY_HOST_URL}/cdn`);
+    return out;
 }
 
+// ===== collectResponseBody =====
 function collectResponseBody(proxyRes) {
     return new Promise((resolve, reject) => {
-        const encoding = proxyRes.headers['content-encoding'];
+        const enc = proxyRes.headers['content-encoding'];
         const chunks = [];
         let stream = proxyRes;
-        if (encoding === 'gzip') stream = proxyRes.pipe(zlib.createGunzip());
-        else if (encoding === 'deflate') stream = proxyRes.pipe(zlib.createInflate());
-        else if (encoding === 'br') stream = proxyRes.pipe(zlib.createBrotliDecompress());
-        stream.on('data', chunk => chunks.push(chunk));
-        stream.on('end',  ()    => resolve(Buffer.concat(chunks)));
-        stream.on('error', err => {
+        if (enc === 'gzip')    stream = proxyRes.pipe(zlib.createGunzip());
+        else if (enc === 'deflate') stream = proxyRes.pipe(zlib.createInflate());
+        else if (enc === 'br') stream = proxyRes.pipe(zlib.createBrotliDecompress());
+        stream.on('data', c => chunks.push(c));
+        stream.on('end',  () => resolve(Buffer.concat(chunks)));
+        stream.on('error', () => {
             const raw = [];
             proxyRes.on('data', c => raw.push(c));
             proxyRes.on('end', () => resolve(Buffer.concat(raw)));
@@ -388,24 +220,19 @@ function collectResponseBody(proxyRes) {
     });
 }
 
-// Client proxy — patch ban/GIN, tanpa skin/mail/reward inject
-function createClientProxyWithBanPatch() {
+// ===== CLIENT PROXY (clientbp — JSON responses only) =====
+function createClientProxy() {
     return createProxyMiddleware({
         target: GARENA_CLIENT_SERVER,
         changeOrigin: true,
         secure: false,
         selfHandleResponse: true,
-        onProxyReq: (proxyReq, req, res) => {
-            const host = new URL(GARENA_CLIENT_SERVER).host;
-            proxyReq.setHeader('Host', host);
+        onProxyReq: (proxyReq, req) => {
+            proxyReq.setHeader('Host',   new URL(GARENA_CLIENT_SERVER).host);
             proxyReq.setHeader('Origin', GARENA_CLIENT_SERVER);
-
-            if (req.headers['user-agent'])       proxyReq.setHeader('User-Agent',       req.headers['user-agent']);
-            if (req.headers['accept-language'])  proxyReq.setHeader('Accept-Language',  req.headers['accept-language']);
-            if (req.headers['accept-encoding'])  proxyReq.setHeader('Accept-Encoding',  req.headers['accept-encoding']);
-            if (req.headers['accept'])           proxyReq.setHeader('Accept',           req.headers['accept']);
-            if (req.headers['content-type'])     proxyReq.setHeader('Content-Type',     req.headers['content-type']);
-
+            ['user-agent','accept-language','accept-encoding','accept','content-type'].forEach(h => {
+                if (req.headers[h]) proxyReq.setHeader(h, req.headers[h]);
+            });
             if (Buffer.isBuffer(req.body) && req.body.length > 0) {
                 proxyReq.setHeader('Content-Length', req.body.length);
                 proxyReq.write(req.body);
@@ -414,38 +241,27 @@ function createClientProxyWithBanPatch() {
         onProxyRes: async (proxyRes, req, res) => {
             const statusCode  = proxyRes.statusCode;
             const contentType = proxyRes.headers['content-type'] || '';
-
-            const headers = Object.assign({}, proxyRes.headers);
+            const headers = { ...proxyRes.headers };
             delete headers['content-encoding'];
             delete headers['content-length'];
             delete headers['transfer-encoding'];
 
             try {
-                let rawBody = await collectResponseBody(proxyRes);
+                const rawBody = await collectResponseBody(proxyRes);
 
-                // NOTE: patchBinaryGin() DIHAPUS dari sini.
-                // Alasan: GetLoginData response = binary protobuf (EGLJDBDMENB).
-                // Zero-out string tanpa update parent sub-message length varint
-                // → ProtoException "Sub-message not read correctly" → game crash/null.
-                // GIN di-disable lewat MajorLogin binary patch (tp_url + ffanti_url + ff_anti_config_desc).
                 if (contentType.includes('application/json')) {
                     let parsed;
                     try { parsed = JSON.parse(rawBody.toString('utf8')); } catch (_) { parsed = null; }
-
                     if (parsed && typeof parsed === 'object') {
                         patchBanInfo(parsed);
                         patchMatchmakingBL(parsed, req.url || '');
                         patchGinUrl(parsed);
                         patchAbnormalData(parsed);
-                        // IMAGE URL patch
-                        let jsonStr = patchImageUrls(JSON.stringify(parsed));
-                        // String-level GIN domain fallback
-                        jsonStr = patchStringLevelGin(jsonStr);
-                        const patched = Buffer.from(jsonStr, 'utf8');
-                        headers['content-length'] = String(patched.length);
+                        let jsonStr = patchStringLevelGin(patchImageUrls(JSON.stringify(parsed)));
+                        const out = Buffer.from(jsonStr, 'utf8');
+                        headers['content-length'] = String(out.length);
                         res.writeHead(statusCode, headers);
-                        res.end(patched);
-                        console.log(`[CLIENT-PATCH] ${statusCode} ${req.method} ${req.url}`);
+                        res.end(out);
                         return;
                     }
                 }
@@ -453,16 +269,12 @@ function createClientProxyWithBanPatch() {
                 headers['content-length'] = String(rawBody.length);
                 res.writeHead(statusCode, headers);
                 res.end(rawBody);
-                console.log(`[CLIENT] ${statusCode} ${req.method} ${req.url}`);
-
             } catch (err) {
-                console.log(`[CLIENT] body collect error: ${err.message}`);
-                if (!res.headersSent) res.writeHead(502);
-                res.end();
+                console.log(`[CLIENT] error: ${err.message}`);
+                if (!res.headersSent) { res.writeHead(502); res.end(); }
             }
         },
         onError: (err, req, res) => {
-            console.log(`[CLIENT] ERROR: ${err.message}`);
             if (!res.headersSent) res.status(502).json({ code: 502, message: 'Proxy error' });
         }
     });
@@ -474,133 +286,25 @@ const NICK_SUFFIXES = ['FF','GG','MAX','Pro','ID','Hebat','Keren','Jago'];
 function generateFallbackNickname() {
     const p = NICK_PREFIXES[Math.floor(Math.random() * NICK_PREFIXES.length)];
     const s = NICK_SUFFIXES[Math.floor(Math.random() * NICK_SUFFIXES.length)];
-    const n = Math.floor(100 + Math.random() * 900);
-    return `${p}${s}${n}`;
+    return `${p}${s}${Math.floor(100 + Math.random() * 900)}`;
 }
 
-
-// ─── zeroOutStringField ───────────────────────────────────────────────────────
-// Zero-out string field berdasarkan prefix konten
-function zeroOutStringField(buf, prefix) {
-    // Cari content prefix di buffer, lalu zero-out varint length + seluruh content.
-    // Buffer length tetap SAMA → tidak geser offset field lain → aman.
-    // Search from start, return first hit.
-    const prefixBytes = Buffer.from(prefix, 'utf8');
-    const idx = buf.indexOf(prefixBytes);
-    if (idx === -1) return { buf, patched: false };
-
-    let lenStart = -1, totalLen = 0;
-
-    // Coba 2-byte varint dulu (lebih spesifik)
-    if (idx >= 2) {
-        const b0 = buf[idx - 2], b1 = buf[idx - 1];
-        if ((b0 & 0x80) && !(b1 & 0x80)) {
-            const decoded = (b0 & 0x7f) | ((b1 & 0x7f) << 7);
-            // Validasi: decoded harus >= prefix.length dan reasonable
-            if (decoded >= prefix.length && decoded < 2048) {
-                totalLen = decoded;
-                lenStart = idx - 2;
-            }
-        }
-    }
-    // Coba 1-byte varint
-    if (lenStart === -1 && idx >= 1) {
-        const b0 = buf[idx - 1];
-        if (!(b0 & 0x80) && b0 >= prefix.length && b0 < 128) {
-            totalLen = b0;
-            lenStart = idx - 1;
-        }
-    }
-    if (lenStart === -1) return { buf, patched: false };
-
-    // Validasi: totalLen tidak boleh melewati batas buffer
-    if (idx + totalLen > buf.length) return { buf, patched: false };
-
-    const result = Buffer.from(buf);
-    const varintSize = idx - lenStart;
-    // Zero varint bytes
-    for (let v = 0; v < varintSize; v++) result[lenStart + v] = 0;
-    // Zero content bytes
-    for (let i = 0; i < totalLen; i++) result[idx + i] = 0;
-    return { buf: result, patched: true };
-}
-
-
-// ─── patchBlacklist FIXED ─────────────────────────────────────────────────────
-// FIX v3: splice-out (bukan zero-out) seluruh blacklist sub-message dari buffer.
-// - Tidak ada limit msgLen (dihapus → support ban_type string panjang berapa pun)
-// - Tidak ada cek firstByte (dihapus → support field urutan apa pun di sub-message)
-// - Splice-out = buffer lebih pendek, tapi proto parse aman karena field 12 hilang sepenuhnya
-// - Game tidak tampilkan ban screen karena tidak ada field blacklist → treat as null
-function patchBlacklist(buf) {
-    const results = [];
-    let searchBuf = buf;
-    let spliced   = 0;
-    let i = 0;
-
-    while (i < searchBuf.length - 1) {
-        // Field 12, wiretype 2 → tag byte 0x62
-        if (searchBuf[i] !== 0x62) { i++; continue; }
-
-        // Baca length varint (support multi-byte)
-        let pos = i + 1;
-        let msgLen = 0, shift = 0, varintOk = false;
-        while (pos < searchBuf.length) {
-            const b = searchBuf[pos++];
-            msgLen |= (b & 0x7f) << shift;
-            shift += 7;
-            if (!(b & 0x80)) { varintOk = true; break; }
-            if (shift > 28) break; // safety: max 4-byte varint
-        }
-
-        if (!varintOk || msgLen <= 0 || pos + msgLen > searchBuf.length) {
-            i++;
-            continue;
-        }
-
-        // Validasi minimal: sub-message harus punya minimal 1 valid protobuf tag
-        // (field 1 ban_reason=0x08, field 2 expire=0x10, field 3 ban_time=0x18, field 4 ban_type=0x22)
-        const contentStart = pos;
-        const firstByte    = searchBuf[contentStart];
-        const validFirstTags = [0x08, 0x10, 0x18, 0x22];
-        if (!validFirstTags.includes(firstByte)) { i++; continue; }
-
-        // Splice-out: potong tag byte (0x62) + varint + sub-message content
-        const tagStart    = i;
-        const totalRemove = (pos - i) + msgLen; // tag + varint bytes + content
-        const before      = searchBuf.slice(0, tagStart);
-        const after       = searchBuf.slice(tagStart + totalRemove);
-        searchBuf = Buffer.concat([before, after]);
-        spliced++;
-
-        console.log(`[MAJORLOGIN-PATCH] blacklist spliced at offset ${tagStart}, sub-msg len=${msgLen}, firstByte=0x${firstByte.toString(16)}`);
-        // Tidak increment i — setelah splice posisi i menunjuk ke byte berikutnya secara otomatis
-    }
-
-    return { buf: searchBuf, patched: spliced > 0, count: spliced };
-}
-
-// ===== LOGIN PROXY (loginbp) =====
+// ===== LOGIN PROXY (loginbp) — tanpa selfHandleResponse untuk MajorLogin =====
+// MajorLogin sudah dihandle oleh majorlogin.js sebelum proxy ini di-register.
+// loginProxy hanya handle: GenerateNickname, GetRecommendNickname, MajorRegister, Ping, GetLoginData, dsb.
 const loginProxy = createProxyMiddleware({
     target: GARENA_LOGIN_SERVER,
     changeOrigin: true,
     secure: false,
     selfHandleResponse: true,
-    onProxyReq: (proxyReq, req, res) => {
-        const host = new URL(GARENA_LOGIN_SERVER).host;
-        proxyReq.setHeader('Host', host);
+    onProxyReq: (proxyReq, req) => {
+        proxyReq.setHeader('Host',   new URL(GARENA_LOGIN_SERVER).host);
         proxyReq.setHeader('Origin', GARENA_LOGIN_SERVER);
-
-        if (req.headers['user-agent'])       proxyReq.setHeader('User-Agent', req.headers['user-agent']);
-        if (req.headers['accept-language'])  proxyReq.setHeader('Accept-Language', req.headers['accept-language']);
-        // JANGAN forward accept-encoding — supaya loginbp kirim plain binary
-        // bukan gzip, sehingga patchBlacklist bisa baca proto langsung
         proxyReq.removeHeader('accept-encoding');
         proxyReq.setHeader('Accept-Encoding', 'identity');
-        if (req.headers['accept'])           proxyReq.setHeader('Accept', req.headers['accept']);
-        if (req.headers['connection'])       proxyReq.setHeader('Connection', req.headers['connection']);
-        if (req.headers['content-type'])     proxyReq.setHeader('Content-Type', req.headers['content-type']);
-
+        ['user-agent','accept-language','accept','connection','content-type'].forEach(h => {
+            if (req.headers[h]) proxyReq.setHeader(h, req.headers[h]);
+        });
         if (Buffer.isBuffer(req.body) && req.body.length > 0) {
             proxyReq.setHeader('Content-Length', req.body.length);
             proxyReq.write(req.body);
@@ -612,169 +316,39 @@ const loginProxy = createProxyMiddleware({
         proxyRes.on('end', () => {
             let raw = Buffer.concat(chunks);
             const statusCode = proxyRes.statusCode;
-            const encoding = (proxyRes.headers['content-encoding'] || '').toLowerCase();
-
-            // Decompress kalau masih compressed (safety net)
-            if (encoding === 'gzip' || encoding === 'deflate') {
-                try {
-                    const zlib = require('zlib');
-                    raw = encoding === 'gzip'
-                        ? zlib.gunzipSync(raw)
-                        : zlib.inflateSync(raw);
-                } catch (e) {
-                    console.log(`[LOGIN] Decompress error: ${e.message}`);
-                }
-            }
 
             console.log(`[LOGIN] ${statusCode} ${req.method} ${req.path} (${raw.length}b)`);
 
-            // ── MajorLogin: patch blacklist + server_url ──────────────────
-            if (req.path === '/MajorLogin' && statusCode === 200) {
-                // ── Step 1: Patch blacklist (binary splice field 12, tag 0x62) ──────
-                const blResult = patchBlacklist(raw);
-                if (blResult.patched) {
-                    raw = blResult.buf;
-                    console.log(`[LOGIN] MajorLogin blacklist spliced x${blResult.count}`);
-                }
-
-                // ── Step 2: Zero-out tp_url dan ffanti_url via CONTENT SEARCH ────────
-                // JANGAN splice by field number tag — tag byte bisa muncul di dalam
-                // content field lain (false positive → corrupt buffer).
-                // Zero-out by content prefix: cari string actual, mundur baca varint,
-                // set varint=0 + zero content. Buffer length tidak berubah → aman.
-                // tp_url / ffanti_url isinya: "csoversea.stronghold.freefiremobile.com;..."
-                const ANTICHEAT_PREFIXES = [
-                    'csoversea.stronghold',   // tp_url / ffanti_url ID server
-                    'stronghold.freefire',     // fallback stronghold domain
-                    'gin.freefiremobile.com',  // GIN direct
-                    'ffanti.freefiremobile',   // FFAnti
-                    'ggp.freefiremobile',      // GGP
-                ];
-                for (const prefix of ANTICHEAT_PREFIXES) {
-                    // Loop sampai semua instance di-zero (tp_url & ffanti_url bisa identik)
-                    let loopLimit = 5;
-                    while (loopLimit-- > 0) {
-                        const r = zeroOutStringField(raw, prefix);
-                        if (!r.patched) break;
-                        raw = r.buf;
-                        console.log(`[LOGIN] MajorLogin zero-out: "${prefix}"`);
-                    }
-                }
-
-                // ── Step 3: Patch server_url: ganti clientbp → proxy ────────────────
-                // supaya GetLoginData lewat proxy → GIN/ban patches jalan
-                // ── server_url replace: clientbp → proxy ────────────────────────
-                // Search content "https://clientbp.ggpolarbear.com" lalu replace
-                // dengan proxy URL. Pakai zeroOutStringField approach tapi splice+replace.
-                // PENTING: lakukan SETELAH semua zero-out di atas supaya buffer stabil.
-                const CLIENTBP_STR  = 'https://clientbp.ggpolarbear.com';
-                const PROXY_STR     = MY_IP.replace(/[\/]+$/, ''); // tanpa trailing slash
-                const clientbpBytes = Buffer.from(CLIENTBP_STR, 'utf8');
-                const proxyBytes    = Buffer.from(PROXY_STR,    'utf8');
-
-                function encodeVarintLocal(n) {
-                    const bytes = [];
-                    while (n > 0x7F) { bytes.push((n & 0x7F) | 0x80); n >>= 7; }
-                    bytes.push(n & 0x7F);
-                    return Buffer.from(bytes);
-                }
-
-                const srvPos = raw.indexOf(clientbpBytes);
-                if (srvPos !== -1) {
-                    const oldLen    = clientbpBytes.length;   // 32
-                    const newLen    = proxyBytes.length;
-                    const newLenVar = encodeVarintLocal(newLen);
-
-                    // Decode length varint sebelum string (1 atau 2 bytes)
-                    let lenStart = -1;
-                    // Coba 1-byte varint
-                    if (srvPos >= 1 && raw[srvPos - 1] === oldLen) {
-                        lenStart = srvPos - 1;
-                    }
-                    // Coba 2-byte varint (oldLen >= 128, tidak mungkin untuk 32, tapi safety)
-                    else if (srvPos >= 2) {
-                        const b0 = raw[srvPos - 2], b1 = raw[srvPos - 1];
-                        if ((b0 & 0x80) && !(b1 & 0x80)) {
-                            const decoded = (b0 & 0x7F) | ((b1 & 0x7F) << 7);
-                            if (decoded === oldLen) lenStart = srvPos - 2;
-                        }
-                    }
-
-                    if (lenStart !== -1) {
-                        // Validasi: byte sebelum lenStart harus proto tag wiretype 2
-                        // (field_num << 3 | 2) — cek bit paling rendah 3 = 0b010
-                        const tagByte = lenStart > 0 ? raw[lenStart - 1] : -1;
-                        const validTag = tagByte !== -1 && (tagByte & 0x07) === 2;
-                        if (validTag) {
-                            const before = raw.slice(0, lenStart);
-                            const after  = raw.slice(srvPos + oldLen);
-                            raw = Buffer.concat([before, newLenVar, proxyBytes, after]);
-                            console.log(`[LOGIN] server_url: "${CLIENTBP_STR}"(${oldLen}b) → proxy(${newLen}b)`);
-                        } else {
-                            // Tag byte tidak valid → coba fallback zeroOut then re-search
-                            console.log(`[LOGIN] server_url: tag byte 0x${tagByte.toString(16)} bukan wiretype 2 → skip`);
-                        }
-                    } else {
-                        console.log(`[LOGIN] server_url: varint not found @ 0x${srvPos.toString(16)}`);
-                    }
-                } else {
-                    // clientbp tidak ditemukan, mungkin sudah di-patch sebelumnya
-                    // Cek apakah proxy URL sudah ada (retry scenario)
-                    if (!raw.includes(proxyBytes)) {
-                        console.log('[LOGIN] server_url: clientbp not found in binary');
-                    }
-                }
-
-                const headers = { ...proxyRes.headers };
-                delete headers['content-encoding'];
-                headers['content-length'] = raw.length;
-                res.writeHead(statusCode, headers);
-                return res.end(raw);
-            }
-
-            // GetLoginData: binary proto → forward as-is
-            // JANGAN patch binary (patchBinaryGin) → menyebabkan ProtoException
-            // blacklist di GetLoginData sudah di-handle via MajorLogin proto patches
-            if (req.path === '/GetLoginData') {
-                // Patch blacklist kalau ada (splice field 12 dari binary)
-                const blGLD = patchBlacklist(raw);
-                if (blGLD.patched) {
-                    raw = blGLD.buf;
-                    console.log(`[LOGIN] GetLoginData blacklist spliced x${blGLD.count}`);
-                }
-                const hdrs = { ...proxyRes.headers };
-                delete hdrs['content-encoding'];
-                hdrs['content-length'] = raw.length;
-                res.writeHead(statusCode, hdrs);
-                return res.end(raw);
-            }
-
+            // GenerateNickname fallback
             if (req.path === '/GenerateNickname' && statusCode >= 400) {
-                const fallback = generateFallbackNickname();
-                const body = JSON.stringify({ code: 0, nickname: fallback });
+                const body = JSON.stringify({ code: 0, nickname: generateFallbackNickname() });
                 res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
                 return res.end(body);
             }
 
+            // GetRecommendNickname fallback
             if (req.path === '/GetRecommendNickname' && statusCode >= 400) {
                 const names = Array.from({length: 5}, () => generateFallbackNickname());
-                const body = JSON.stringify({ code: 0, nickname_list: names });
+                const body  = JSON.stringify({ code: 0, nickname_list: names });
                 res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
                 return res.end(body);
             }
 
-            if (req.path === '/MajorRegister' && (statusCode === 400 || statusCode === 500)) {
-                let bodyStr = '';
-                try { bodyStr = raw.toString('utf8'); } catch {}
-                if (bodyStr.includes('INVALID_NAME') || bodyStr.includes('invalid_name') || statusCode >= 500) {
-                    console.log(`[LOGIN] MajorRegister patched`);
-                    const fakeUid = Math.floor(17000000000 + Math.random() * 999999999);
-                    const body = JSON.stringify({ code: 0, account_id: fakeUid, region: 'ID' });
-                    res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
-                    return res.end(body);
-                }
+            // MajorRegister fallback
+            if (req.path === '/MajorRegister' && (statusCode === 400 || statusCode >= 500)) {
+                try {
+                    const bodyStr = raw.toString('utf8');
+                    if (bodyStr.includes('INVALID_NAME') || bodyStr.includes('invalid_name') || statusCode >= 500) {
+                        const uid  = Math.floor(17000000000 + Math.random() * 999999999);
+                        const body = JSON.stringify({ code: 0, account_id: uid, region: 'ID' });
+                        res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+                        return res.end(body);
+                    }
+                } catch (_) {}
             }
 
+            // GetLoginData dan semua endpoint loginbp lain — forward as-is
+            // JANGAN binary patch GetLoginData: proto binary, patch binary corrupt offset
             const headers = { ...proxyRes.headers };
             delete headers['content-encoding'];
             headers['content-length'] = raw.length;
@@ -788,81 +362,40 @@ const loginProxy = createProxyMiddleware({
     }
 });
 
-const clientProxy = createClientProxyWithBanPatch();
+const clientProxy = createClientProxy();
 
 function init(app) {
     app.all('*', (req, res, next) => {
+        // Skip CDN, static routes, API routes yang sudah dihandle module lain
         if (req.path.startsWith('/cdn/')) return next();
         if (req.path === '/ver.php' || req.path === '/api/gamevar' || req.path === '/localconfig.json') return next();
         if (req.path.startsWith('/api/') || req.path.startsWith('/telegram')) return next();
         if (req.path.match(/\.(jpg|png|gif|css|js|html?)$/i)) return next();
 
+        // Telemetry spoof
         if (isTelemetryPath(req.path)) {
             const isBin = (req.headers['content-type'] || '').includes('octet-stream');
-            console.log(`[SPOOF] ${req.method} ${req.path} → 200 OK (telemetry blocked)`);
             return sendSpoofOK(res, isBin);
         }
 
-        const ua = req.headers['user-agent'] || 'unknown';
-        console.log(`[FORWARD] ${req.method} ${req.path} (UA: ${ua.substring(0,30)}...)`);
+        // MajorLogin sudah dihandle oleh majorlogin.js (register sebelum proxy.init)
+        // Jangan route ke sini, kalau sampai ke sini berarti majorlogin.js belum di-init
 
-        // Routing berdasarkan log asli — semua endpoint yang game panggil
-        // clientbp: semua gameplay, data, social, ranking, store
-        // loginbp: MajorLogin, Register, Newbie, Ping (login flow)
-
-        // TELEMETRY di clientbp — spoof, jangan forward
-        const CLIENT_TELEMETRY = [
-            '/CheckHackBehavior', '/CheckNeedUpdateGPToken',
-            '/ReportEventPushInfo',
-        ];
-        if (CLIENT_TELEMETRY.some(p => req.path === p)) {
-            return sendSpoofOK(res, false);
-        }
-
-        // LOGIN endpoints → loginProxy (termasuk MajorLogin yang di-patch di onProxyRes)
+        // loginbp endpoints
         const LOGIN_PATHS = [
-            '/MajorLogin',
-            '/MajorRegister',
-            '/GenerateNickname',
-            '/GetRecommendNickname',
-            '/GetAccountBriefInfoBeforeLogin',
-            '/ChooseNewbieChoice',
-            '/ChooseRegion',
-            '/Register', '/CreateAccount',
-            '/Ping',
+            '/MajorRegister', '/GenerateNickname', '/GetRecommendNickname',
+            '/GetAccountBriefInfoBeforeLogin', '/ChooseNewbieChoice', '/ChooseRegion',
+            '/Register', '/CreateAccount', '/Ping', '/GetLoginData',
         ];
         if (LOGIN_PATHS.some(p => req.path === p || req.path.startsWith(p))) {
             return loginProxy(req, res, next);
         }
 
-        // GetLoginData: forward ke loginbp (bukan clientbp)
-        // Response = binary proto EGLJDBDMENB → forward as-is tanpa binary patch
-        // (binary patch menyebabkan ProtoException: Sub-message not read correctly)
-        // GIN di-disable dari MajorLogin patch (tp_url, ffanti_url, ff_anti_config_desc di-splice)
-        if (req.path === '/GetLoginData') {
-            return loginProxy(req, res, next);
-        }
-
-        // SEMUA endpoint clientbp → clientProxy (patch GIN + ban)
-        // Berdasarkan log: semua Get*, Login*, Init*, Update*, Send*, Notify*,
-        // Logout, Tailor*, Veteran*, dll — semua dari clientbp
+        // Semua lainnya → clientbp
         return clientProxy(req, res, next);
     });
 
-    app.get('/api/proxy/status', (req, res) => {
-        res.json({
-            status: 'online',
-            mode: 'speed_sensi',
-            targets: {
-                login: GARENA_LOGIN_SERVER,
-                client: GARENA_CLIENT_SERVER,
-                cdn: 'handled_by_cdn_module'
-            },
-            timestamp: Date.now()
-        });
-    });
-
-    console.log('[PROXY] Forward mode (speed+sensi only — no skin/mail inject)');
+    console.log('[PROXY] Active — no binary surgery, MajorLogin via majorlogin.js');
 }
 
 module.exports = { init, loginProxy, clientProxy, patchGinUrl, patchStringLevelGin };

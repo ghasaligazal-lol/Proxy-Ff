@@ -3,13 +3,14 @@ const express      = require('express');
 const path         = require('path');
 const fs           = require('fs');
 const cookieParser = require('cookie-parser');
-const https        = require('https');
 
 const app  = express();
 const PORT = process.env.PORT || 3030;
 
 // ============ MODULES LOADER ============
-const SKIP_MODULES = new Set(['auth', 'keys', 'getkey', 'telegram', 'skin', 'guest', 'newbie', '404', 'user-agent', 'majorlogin']);
+// BUGFIX: hapus 'majorlogin' dari SKIP_MODULES — sebelumnya di-skip sehingga
+// tidak pernah di-load sama sekali, MajorLogin jatuh ke proxy binary surgery.
+const SKIP_MODULES = new Set(['auth', 'keys', 'getkey', 'telegram', 'skin', 'guest', 'newbie', '404', 'user-agent']);
 
 function loadModules() {
     const modulesPath = path.join(__dirname, 'modules');
@@ -100,21 +101,22 @@ app.all('*', (req, res, next) => {
         'checkhack', 'libhash', 'ahlreport',
     ];
     if (SPOOF_KEYWORDS.some(k => p.includes(k))) {
-        console.log(`[SPOOF-WILDCARD] ${req.method} ${req.path} → blocked`);
         return spoofOK(req, res);
     }
     next();
 });
 
 // ============ MODULES INIT ============
-if (modules.config)     modules.config.init(app);
-if (modules.tglog)      modules.tglog.init(app);
-if (modules.protobuf)   modules.protobuf.init(app);
-if (modules.cdn)        modules.cdn.init(app);
-if (modules.ping)       modules.ping.init(app);
-if (modules.gamevar)    modules.gamevar.init(app);
-if (modules.routes)     modules.routes.init(app);
-if (modules.proxy)      modules.proxy.init(app);  // catch-all — HARUS PALING AKHIR
+// Urutan penting: config dulu, lalu fitur, lalu majorlogin, lalu proxy (catch-all terakhir)
+if (modules.config)      modules.config.init(app);
+if (modules.tglog)       modules.tglog.init(app);
+if (modules.protobuf)    modules.protobuf.init(app);
+if (modules.cdn)         modules.cdn.init(app);
+if (modules.ping)        modules.ping.init(app);
+if (modules.gamevar)     modules.gamevar.init(app);
+if (modules.routes)      modules.routes.init(app);
+if (modules.majorlogin)  modules.majorlogin.init(app);  // BUGFIX: harus sebelum proxy
+if (modules.proxy)       modules.proxy.init(app);        // catch-all — HARUS PALING AKHIR
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`[SERVER] Running on port ${PORT}`);
