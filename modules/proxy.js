@@ -293,6 +293,34 @@ function _zeroField(obj, field, replacement, depth) {
     }
 }
 
+// ===== BINARY GIN PATCH =====
+// GetLoginData response = protobuf binary (bukan JSON)
+// Patch in-place: zero-out GIN hostname strings dalam binary
+const GIN_HOSTS_BINARY = [
+    Buffer.from('gin.freefiremobile.com',   'utf8'),
+    Buffer.from('ffanti.freefiremobile.com','utf8'),
+    Buffer.from('gin2.freefiremobile.com',  'utf8'),
+    Buffer.from('ggp.freefiremobile.com',   'utf8'),
+];
+
+function patchBinaryGin(buf) {
+    let patched = false;
+    const out = Buffer.from(buf); // copy
+    for (const host of GIN_HOSTS_BINARY) {
+        let idx = 0;
+        while (true) {
+            const pos = out.indexOf(host, idx);
+            if (pos === -1) break;
+            // Zero-out: ganti dengan spasi (0x20) supaya string valid tapi tidak resolve
+            out.fill(0x20, pos, pos + host.length);
+            patched = true;
+            console.log();
+            idx = pos + host.length;
+        }
+    }
+    return { buf: out, patched };
+}
+
 // ===== IMAGE URL PATCH =====
 const PROXY_HOST_URL = MY_IP.replace(/\/$/, '');
 const GARENA_IMG_DOMAINS = [
@@ -365,7 +393,11 @@ function createClientProxyWithBanPatch() {
             delete headers['transfer-encoding'];
 
             try {
-                const rawBody = await collectResponseBody(proxyRes);
+                let rawBody = await collectResponseBody(proxyRes);
+
+                // Binary patch GIN untuk semua response (termasuk protobuf binary)
+                const binResult = patchBinaryGin(rawBody);
+                if (binResult.patched) rawBody = binResult.buf;
 
                 if (contentType.includes('application/json')) {
                     let parsed;
