@@ -162,16 +162,29 @@ function init(app) {
                         obj.ffanti_url = '';
                     }
 
-                    // ff_anti_config_desc → disable semua
+                    // ff_anti_config_desc → disable semua (OB55: mtp_lite_data_enable, ffm_enable, ffo_enable aktif)
                     if (obj.ff_anti_config_desc) {
                         obj.ff_anti_config_desc.enable               = false;
                         obj.ff_anti_config_desc.config_url           = '';
                         obj.ff_anti_config_desc.hpe_enable           = false;
                         obj.ff_anti_config_desc.ffi_enable           = false;
-                        obj.ff_anti_config_desc.mtp_lite_data_enable = false;
-                        obj.ff_anti_config_desc.ffm_enable           = false;
-                        obj.ff_anti_config_desc.ffo_enable           = false;
-                        patchLog.push('ff_anti_config_desc disabled');
+                        obj.ff_anti_config_desc.mtp_lite_data_enable = false;  // OB55: sebelumnya true
+                        obj.ff_anti_config_desc.ffm_enable           = false;  // OB55: sebelumnya true
+                        obj.ff_anti_config_desc.ffo_enable           = false;  // OB55: sebelumnya true
+                        obj.ff_anti_config_desc.region               = '';
+                        patchLog.push('ff_anti_config_desc disabled (OB55)');
+                    }
+
+                    // OB55: ano_url (field ANOAAHKLDLA) → clear supaya ANO tidak connect
+                    if (obj.ano_url !== undefined && obj.ano_url !== null) {
+                        patchLog.push('ano_url cleared');
+                        obj.ano_url = '';
+                    }
+
+                    // OB55: GLPGCIJFDEB (grtc url) → clear
+                    if (obj.GLPGCIJFDEB !== undefined) {
+                        obj.GLPGCIJFDEB = '';
+                        patchLog.push('GLPGCIJFDEB (grtc) cleared');
                     }
 
                     // blacklist → clear ban

@@ -63,6 +63,13 @@ function getGamevarLines() {
         "ANODisabledClientVariant,ANODisabledClientVariant,string,ClientUsingVersion_MAX_HPE;ClientUsingVersion_FFI;ClientUsingVersion_MAX;ClientUsingVersion_NORMAL,,",
         "ANOEmulatorCheckDisbaledClientVariant,ANOEmulatorCheckDisbaledClientVariant,string,ClientUsingVersion_FFI;ClientUsingVersion_MAX;ClientUsingVersion_NORMAL,,",
         "EnableMtpLiteDataRegion,EnableMtpLiteDataRegion,string,,,",
+        // OB55: disable FFM/FFO anticheat baru
+        "EnableFFMCheat,EnableFFMCheat,bool,false,,",
+        "EnableFFOCheat,EnableFFOCheat,bool,false,,",
+        "EnableFFMDetect,EnableFFMDetect,bool,false,,",
+        "EnableFFODetect,EnableFFODetect,bool,false,,",
+        "FFMReportLevel,FFMReportLevel,int,0,,",
+        "FFOReportLevel,FFOReportLevel,int,0,,",
 
         // ── GIN/GGP disable (wajib) ─────────────────────────────────────────
         "DisableGinReport,DisableGinReport,bool,true,,",
@@ -126,11 +133,14 @@ function getGamevarLines() {
         'X4ScopeMaxSetting', 'X8ScopeMaxSetting', 'FreeLookMaxSetting'
     ];
     for (const k of sensiKeys) {
-        lines.push(`${k},${k},float,9.5,,`);
+        const val = (s[k] !== undefined && !isNaN(parseFloat(s[k]))) ? parseFloat(s[k]) : 9.5;
+        lines.push(`${k},${k},float,${val},,`);
     }
 
-    // ── RunSpeed fixed 4.6 ─────────────────────────────────────────────────
-    lines.push('RunSpeed,,float,4.6,,');
+    // ── RunSpeed dynamic dari dashboard (null = skip inject) ───────────────
+    if (cfg.runSpeed !== null && cfg.runSpeed !== undefined && !isNaN(parseFloat(cfg.runSpeed))) {
+        lines.push(`RunSpeed,,float,${parseFloat(cfg.runSpeed)},,`);
+    }
 
     return lines;
 }
@@ -193,7 +203,7 @@ function getVerConfig(clientIp = '74.125.24.139', myDomain = MY_IP, gameVersion 
         "is_server_open":                    true,
         "is_update_btn_show":                false,
         "is_use_multi_download":             true,
-        "latest_release_version":            releaseVersion || "OB54",   // auto dari query ?release_version=
+        "latest_release_version":            releaseVersion || "OB55",   // auto dari query ?release_version=
         "login_download_optionalpack":       "optionalclothres:shaders|optionalpetres:optionalpetres_commonab_shader|optionallobbyres:",
         "login_failed_count":                4,
         "login_notice":                      "Welcome to Proxy Server!",
@@ -213,9 +223,9 @@ function getVerConfig(clientIp = '74.125.24.139', myDomain = MY_IP, gameVersion 
         "patchnote_url":                     "https://whatsapp.com/channel/0029VbBnIVuCMY0POm5gqO1P",
         "quality_level":                     0,
         "graphic_level":                     0,
-        "remote_option_version":             "optionallocres:50|optionalavatarres:791|optionalclothres:1228|optionalfootballres:27|optionalfullscreencgres:319|optionalhuntinggroundres:246|optionalinfection:125|optionalingameres:503|optionallobbyres:640|optionallonewolfres:86|optionallonewolfstrikeoutres:59|optionalludores:42|optionalmap1res:385|optionalmap2res:156|optionalmap4res:139|optionalmaphippores:118|optionalmapres:357|optionalnewblast:163|optionalpetres:910|optionalrushb:108|optionalrushingpetsres:84|optionalsnowduelres:65|optionalsocialres:223|optionaltrainingres:297|optionalugcres:844|optionalvoiceres:344|optionalwerewolves:153|optionalwerunres:92|optionalmapponyres:204|optionalugcoldparadiseres:34|optionalmultiregionres:29",
-        "remote_option_version_astc":        "optionallocres:50|optionalavatarres:753|optionalclothres:1228|optionalfootballres:29|optionalfullscreencgres:306|optionalhuntinggroundres:216|optionalinfection:124|optionalingameres:461|optionallobbyres:640|optionallonewolfres:206|optionallonewolfstrikeoutres:155|optionalludores:175|optionalmap1res:385|optionalmap2res:192|optionalmap4res:175|optionalmaphippores:120|optionalmapres:391|optionalnewblast:162|optionalpetres:910|optionalrushb:241|optionalrushingpetsres:217|optionalsnowduelres:65|optionalsocialres:215|optionaltrainingres:267|optionalugcres:786|optionalvoiceres:379|optionalwerewolves:286|optionalwerunres:81|optionalmapponyres:204|optionalugcoldparadiseres:33|optionalmultiregionres:27",
-        "remote_version":                    gameVersion || "1.130.22",  // auto dari query ?version=
+        "remote_option_version":             "optionallocres:51|optionalavatarres:744|optionalclothres:1187|optionalfootballres:47|optionalfullscreencgres:334|optionalhuntinggroundres:178|optionalinfection:121|optionalingameres:480|optionallobbyres:634|optionallonewolfres:77|optionallonewolfstrikeoutres:23|optionalludores:40|optionalmap1res:391|optionalmap2res:125|optionalmap4res:110|optionalmaphippores:90|optionalmapres:343|optionalnewblast:138|optionalpetres:876|optionalrushb:123|optionalrushingpetsres:88|optionalsnowduelres:59|optionaltrainingres:88|optionalugcres:551|optionalvoiceres:360|optionalwerewolves:173|optionalmapponyres:200|optionalsocialres:111|optionalwerunres:83|optionalugcoldparadiseres:32|optionalmultiregionres:25",
+        "remote_option_version_astc":        "optionallocres:51|optionalavatarres:747|optionalclothres:1187|optionalfootballres:38|optionalfullscreencgres:318|optionalhuntinggroundres:178|optionalinfection:116|optionalingameres:449|optionallobbyres:617|optionallonewolfres:139|optionallonewolfstrikeoutres:96|optionalludores:144|optionalmap1res:391|optionalmap2res:159|optionalmap4res:144|optionalmaphippores:92|optionalmapres:377|optionalnewblast:138|optionalpetres:876|optionalrushb:227|optionalrushingpetsres:192|optionalsnowduelres:59|optionaltrainingres:84|optionalugcres:521|optionalvoiceres:393|optionalwerewolves:277|optionalmapponyres:200|optionalsocialres:106|optionalwerunres:74|optionalugcoldparadiseres:32|optionalmultiregionres:26",
+        "remote_version":                    gameVersion || "2.132.3",  // auto dari query ?version=
         "res_url":                           "https://dl.gmc.freefiremobile.com/live/ABHotUpdates/",
         "server_url":                        myDomain,
         "should_check_ab_exist":             true,

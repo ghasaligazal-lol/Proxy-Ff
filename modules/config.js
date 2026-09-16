@@ -6,7 +6,10 @@ const path = require('path');
 
 const CONFIG_PATH = path.join(__dirname, '..', 'db', 'gameconfig.json');
 
+// FIX: tambah bodyMode ke DEFAULTS supaya persist setelah restart
+const VALID_MODES = new Set(['full', 'hs_only', 'esp']);
 const DEFAULTS = {
+    bodyMode: 'full',
     runSpeed: null,
     sensi: {
         SensitivityMaxSetting:   9.5,
@@ -56,6 +59,9 @@ function init(app) {
             }
             if (typeof body !== 'object' || !body) body = {};
 
+            // FIX: validasi dan simpan bodyMode
+            const bodyMode = VALID_MODES.has(body.bodyMode) ? body.bodyMode : 'full';
+
             // Validasi runSpeed (0–10)
             let runSpeed = null;
             if (body.runSpeed !== null && body.runSpeed !== undefined && body.runSpeed !== '') {
@@ -75,7 +81,7 @@ function init(app) {
                 sensi[k] = (!isNaN(v) && v >= 0 && v <= 999.99) ? v : 9.5;
             }
 
-            const cfg = { runSpeed, sensi };
+            const cfg = { bodyMode, runSpeed, sensi };
             if (save(cfg)) {
                 console.log('[CONFIG] Saved:', JSON.stringify(cfg));
                 res.json({ ok: true, config: cfg });

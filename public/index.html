@@ -336,8 +336,9 @@ body::before {
 .toast.err { border-color: rgba(244,66,98,.35); color: var(--red); }
 
 /* ── Speed panel animation ── */
+/* FIX: max-height 160px terlalu kecil — naik ke 220px supaya slider tidak kepotong */
 #speedPanel { overflow: hidden; transition: max-height .25s cubic-bezier(.4,0,.2,1), opacity .2s; max-height: 0; opacity: 0; padding-top: 0 !important; }
-#speedPanel.open { max-height: 160px; opacity: 1; padding-top: 12px !important; }
+#speedPanel.open { max-height: 220px; opacity: 1; padding-top: 12px !important; }
 </style>
 </head>
 <body>
@@ -478,35 +479,36 @@ body::before {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="14.5" y2="14.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
             Sensitivity
         </div>
+        <!-- FIX: min="0" (konsisten sama validasi backend >= 0), bukan min="1" -->
         <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Maks sensitivity per scope · default 9.5 · maks 999.99</div>
         <div class="sensi-grid">
             <div class="sensi-item">
                 <label>Free Look</label>
-                <input type="number" class="num-input" id="s_FreeLook" min="1" max="999.99" step="0.1" value="9.5">
+                <input type="number" class="num-input" id="s_FreeLook" min="0" max="999.99" step="0.1" value="9.5">
             </div>
             <div class="sensi-item">
                 <label>1P (Hip Fire)</label>
-                <input type="number" class="num-input" id="s_1P" min="1" max="999.99" step="0.1" value="9.5">
+                <input type="number" class="num-input" id="s_1P" min="0" max="999.99" step="0.1" value="9.5">
             </div>
             <div class="sensi-item">
                 <label>Scope ×1</label>
-                <input type="number" class="num-input" id="s_X1" min="1" max="999.99" step="0.1" value="9.5">
+                <input type="number" class="num-input" id="s_X1" min="0" max="999.99" step="0.1" value="9.5">
             </div>
             <div class="sensi-item">
                 <label>Scope ×2</label>
-                <input type="number" class="num-input" id="s_X2" min="1" max="999.99" step="0.1" value="9.5">
+                <input type="number" class="num-input" id="s_X2" min="0" max="999.99" step="0.1" value="9.5">
             </div>
             <div class="sensi-item">
                 <label>Scope ×4</label>
-                <input type="number" class="num-input" id="s_X4" min="1" max="999.99" step="0.1" value="9.5">
+                <input type="number" class="num-input" id="s_X4" min="0" max="999.99" step="0.1" value="9.5">
             </div>
             <div class="sensi-item">
                 <label>Scope ×8</label>
-                <input type="number" class="num-input" id="s_X8" min="1" max="999.99" step="0.1" value="9.5">
+                <input type="number" class="num-input" id="s_X8" min="0" max="999.99" step="0.1" value="9.5">
             </div>
             <div class="sensi-item" style="grid-column:1/-1">
                 <label>General Max</label>
-                <input type="number" class="num-input" id="s_General" min="1" max="999.99" step="0.1" value="9.5" style="width:100%">
+                <input type="number" class="num-input" id="s_General" min="0" max="999.99" step="0.1" value="9.5" style="width:100%">
             </div>
         </div>
     </div>
@@ -566,6 +568,8 @@ function syncInput() {
     document.getElementById('speedVal').value = document.getElementById('speedSlider').value;
 }
 
+// FIX: _currentMode default 'full', dan setMode sekarang juga handle
+// cards disable/enable dengan benar
 let _currentMode = 'full';
 function setMode(mode) {
     _currentMode = mode;
@@ -592,13 +596,21 @@ async function loadConfig() {
     try {
         const r = await fetch('/api/config');
         const d = await r.json();
-        if (d.bodyMode) setMode(d.bodyMode);
+
+        // FIX: bodyMode dari backend di-apply, fallback ke 'full' kalau tidak ada
+        setMode(d.bodyMode || 'full');
+
         if (d.runSpeed != null) {
             document.getElementById('speedToggle').checked = true;
             document.getElementById('speedPanel').classList.add('open');
             document.getElementById('speedVal').value = d.runSpeed;
             document.getElementById('speedSlider').value = d.runSpeed;
+        } else {
+            // FIX: kalau runSpeed null, pastikan toggle off dan panel tertutup
+            document.getElementById('speedToggle').checked = false;
+            document.getElementById('speedPanel').classList.remove('open');
         }
+
         const s = d.sensi || {};
         setVal('s_General',  s.SensitivityMaxSetting,   9.5);
         setVal('s_1P',       s.Sensitivity1PMaxSetting, 9.5);
@@ -627,6 +639,8 @@ async function saveConfig() {
         return;
     }
     document.getElementById('speedVal').classList.remove('error');
+
+    // FIX: sertakan bodyMode di payload supaya backend simpan dan persist setelah restart
     const payload = {
         bodyMode: _currentMode,
         runSpeed: speedOn ? speedRaw : null,
@@ -673,26 +687,19 @@ function getNum(id, def) {
 }
 
 async function loadDevice() {
-    // ── Device name — ambil dari UA client-side (lebih akurat dari server) ──
-    // FF WebView UA format: "Dalvik/... (Linux; U; Android X.X; <MODEL> Build/...)"
-    // atau browser: "Mozilla/... (Linux; Android X; <MODEL>) AppleWebKit/..."
     function getDeviceName() {
         const ua = navigator.userAgent;
-        // Android: ambil model dari dalam kurung
         let m = ua.match(/\(Linux;\s*(?:U;\s*)?Android\s*[\d.]+;\s*([^)]+?)\s*(?:Build\/[^)]+)?\)/i);
         if (m) {
             let model = m[1].trim();
-            // Buang "wv" suffix WebView
             model = model.replace(/\s*wv\s*$/i, '').trim();
             if (model && model !== 'armv8l' && !model.startsWith('Linux')) return model;
         }
-        // Fallback: coba format Dalvik
         m = ua.match(/;\s*([A-Za-z0-9 _\-]+?)\s*Build\//i);
         if (m) {
             const model = m[1].trim();
             if (model && model.length > 2 && !model.startsWith('Android') && model !== 'armv8l') return model;
         }
-        // iPhone
         if (/iPhone/i.test(ua)) return 'iPhone';
         if (/iPad/i.test(ua))   return 'iPad';
         return 'Android Device';
@@ -709,7 +716,6 @@ async function loadDevice() {
     document.getElementById('dDev').textContent  = getDeviceName();
     document.getElementById('dPlat').textContent = getPlatform();
 
-    // ── IP + Geo dari server ──
     try {
         const r = await fetch('/api/device');
         const d = await r.json();
@@ -722,7 +728,6 @@ async function loadDevice() {
         document.getElementById('dIsp').textContent  = '—';
     }
 
-    // ── Baterai — Battery Status API ──
     try {
         if ('getBattery' in navigator) {
             const batt = await navigator.getBattery();

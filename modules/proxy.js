@@ -168,6 +168,15 @@ function patchGinUrl(jsonObj) {
         }
     }
     zeroFieldRecursive(jsonObj, 'ban_list_url', '', 0);
+
+    // OB55: ANOAAHKLDLA = 1 di GetLoginData → set 0 supaya ANO tidak aktif
+    if (jsonObj && jsonObj['ANOAAHKLDLA'] !== undefined) {
+        jsonObj['ANOAAHKLDLA'] = 0;
+    }
+    // OB55: GLPGCIJFDEB (grtc url) → kosongkan
+    if (jsonObj && jsonObj['GLPGCIJFDEB'] !== undefined) {
+        jsonObj['GLPGCIJFDEB'] = '';
+    }
 }
 
 function patchAbnormalData(jsonObj) {
@@ -382,11 +391,17 @@ function init(app) {
         // Jangan route ke sini, kalau sampai ke sini berarti majorlogin.js belum di-init
 
         // loginbp endpoints
+        // CATATAN: /MajorLogin TIDAK ada di sini — sudah dihandle majorlogin.js (register sebelum proxy.init)
         const LOGIN_PATHS = [
             '/MajorRegister', '/GenerateNickname', '/GetRecommendNickname',
             '/GetAccountBriefInfoBeforeLogin', '/ChooseNewbieChoice', '/ChooseRegion',
             '/Register', '/CreateAccount', '/Ping', '/GetLoginData',
         ];
+        if (req.path === '/MajorLogin') {
+            // Harusnya sudah ditangkap majorlogin.js — kalau sampai sini, log warning dan forward raw
+            console.warn('[PROXY] WARNING: /MajorLogin lolos ke proxy.js! majorlogin.js mungkin belum init.');
+            return loginProxy(req, res, next);
+        }
         if (LOGIN_PATHS.some(p => req.path === p || req.path.startsWith(p))) {
             return loginProxy(req, res, next);
         }
