@@ -1,30 +1,136 @@
 'use strict';
-// modules/majorlogin.js — v10 OB55
+// modules/majorlogin.js — v11 OB55
 //
-// Changelog v10:
-//   - Proto: tambah connection_seed_enabled (field 36) dan connection_seed (field 37) — OB55 baru
-//   - Patch: connection_seed_enabled=false, connection_seed='' supaya integrity check bypass
-//   - Tidak ada size sanity check (dihapus sejak v9)
+// FIX v11: Ganti pendekatan dari full decode→re-encode ke HYBRID:
+//   - Decode proto untuk READ saja (logging, detect ban)
+//   - Binary patch langsung di rawBuf untuk field yang perlu diubah
+//   - TIDAK re-encode seluruh message → ak/aiv/field unknown AMAN
+//
+// Root cause v10: protobufjs encode ulang RAFIN → ak/aiv (field bytes) hilang
+// karena proto3 zero-value optimization atau Uint8Array vs Buffer type mismatch.
+// Game cek ak/aiv → null → tampilkan UIAccountForbiddenPopWndController.
 
 const https    = require('https');
 const protobuf = require('protobufjs');
 const path     = require('path');
 const tglog    = require('./tglog');
 
-const PROXY_URL = (process.env.PROXY_URL || 'https://proxy-reza-kontolodon-memek-luu.up.railway.app/').replace(/\/$/, '');
-
 let RAFIN = null;
 
 protobuf.load(path.join(__dirname, '..', 'MajorLoginRes.proto'))
     .then(root => {
         RAFIN = root.lookupType('freefire.RAFIN');
-        console.log('[MAJORLOGIN] v10 OB55 Proto loaded OK');
-        tglog.send('✅ <b>Server Start v10 OB55</b>\nProto loaded OK');
+        console.log('[MAJORLOGIN] v11 OB55 Proto loaded OK (READ-ONLY mode)');
+        tglog.send('✅ <b>Server Start v11 OB55</b>\nHybrid patch — ak/aiv safe');
     })
     .catch(err => {
         console.error('[MAJORLOGIN] Proto load FAILED:', err.message);
-        tglog.send(`❌ <b>Proto FAILED</b>\n${err.message}`);
     });
+
+// ── Binary patch helpers ──────────────────────────────────────────────────────
+
+function readVarint(buf, pos) {
+    let result = BigInt(0), shift = BigInt(0);
+    while (pos < buf.length) {
+        const b = buf[pos++];
+        result |= BigInt(b & 0x7F) << shift;
+        shift += BigInt(7);
+        if (!(b & 0x80)) break;
+    }
+    const n = Number(result);
+    return { value: Number.isSafeInteger(n) ? n : result, pos };
+}
+
+function encodeVarint(n) {
+    const parts = [];
+    if (typeof n === 'bigint') {
+        do { let b = Number(n & BigInt(0x7F)); n >>= BigInt(7); if (n) b |= 0x80; parts.push(b); } while (n);
+    } else {
+        do { let b = n & 0x7F; n >>>= 7; if (n) b |= 0x80; parts.push(b); } while (n);
+    }
+    return Buffer.from(parts);
+}
+
+function encodeLenField(fieldNum, contentBuf) {
+    const tag = encodeVarint((fieldNum << 3) | 2);
+    const len = encodeVarint(contentBuf.length);
+    return Buffer.concat([tag, len, contentBuf]);
+}
+
+/**
+ * patchBinaryRAFIN — patch rawBuf langsung field by field tanpa re-encode
+ * Field yang di-patch:
+ *   field 12 (blacklist)         : splice-out seluruh TLV
+ *   field 14 (tp_url)            : splice-out
+ *   field 16 (ano_url)           : splice-out
+ *   field 24 (ffanti_url)        : splice-out
+ *   field 25 (ff_anti_config)    : splice-out
+ *   field 36 (connection_seed_enabled) : set bool = false (varint 0)
+ *   field 37 (connection_seed)   : splice-out
+ *   field 10 (server_url)        : PASS-THROUGH (biarkan loginbp asli)
+ *   field 22 (ak), 23 (aiv)     : PASS-THROUGH (WAJIB untuk koneksi)
+ */
+function patchBinaryRAFIN(buf) {
+    const chunks   = [];
+    const patches  = [];
+    let   pos      = 0;
+
+    // Field yang di-splice (hapus seluruh TLV)
+    const SPLICE_FIELDS = new Set([12, 14, 16, 24, 25, 37]);
+
+    while (pos < buf.length) {
+        const tagStart = pos;
+        const tv       = readVarint(buf, pos);
+        pos = tv.pos;
+        if (pos > buf.length) { chunks.push(buf.slice(tagStart)); break; }
+
+        const tag      = typeof tv.value === 'bigint' ? Number(tv.value) : tv.value;
+        const fieldNum = tag >>> 3;
+        const wireType = tag & 0x07;
+
+        if (wireType === 0) {
+            // Varint field
+            const vv = readVarint(buf, pos);
+            pos = vv.pos;
+
+            if (fieldNum === 36) {
+                // connection_seed_enabled → force false (varint 0)
+                const tagBuf = encodeVarint((36 << 3) | 0);
+                chunks.push(Buffer.concat([tagBuf, Buffer.from([0x00])]));
+                patches.push('connection_seed_enabled=false');
+            } else {
+                chunks.push(buf.slice(tagStart, pos));
+            }
+        } else if (wireType === 2) {
+            // Length-delimited field
+            const lv = readVarint(buf, pos);
+            const contentStart = lv.pos;
+            const contentEnd   = contentStart + (typeof lv.value === 'bigint' ? Number(lv.value) : lv.value);
+            pos = contentEnd;
+
+            if (SPLICE_FIELDS.has(fieldNum)) {
+                // Splice-out: jangan push ke chunks
+                const label = {12:'blacklist',14:'tp_url',16:'ano_url',24:'ffanti_url',25:'ff_anti_config',37:'connection_seed'}[fieldNum];
+                patches.push(`${label} removed`);
+            } else {
+                // Pass-through verbatim (termasuk ak/aiv/server_url/semua field lain)
+                chunks.push(buf.slice(tagStart, pos));
+            }
+        } else if (wireType === 1) {
+            pos += 8;
+            chunks.push(buf.slice(tagStart, pos));
+        } else if (wireType === 5) {
+            pos += 4;
+            chunks.push(buf.slice(tagStart, pos));
+        } else {
+            // Unknown wire type → stop, push sisa sebagai-is
+            chunks.push(buf.slice(tagStart));
+            break;
+        }
+    }
+
+    return { buf: Buffer.concat(chunks), patches };
+}
 
 function decodeReqFields(buf) {
     const out = {};
@@ -94,120 +200,47 @@ function init(app) {
                     }
                 }
 
-                // Proto belum loaded → pass-through
-                if (!RAFIN) {
-                    console.error('[MAJORLOGIN] RAFIN not loaded → pass-through');
-                    const h = { ...proxyRes.headers, 'content-length': rawBuf.length };
-                    delete h['transfer-encoding'];
-                    res.writeHead(proxyRes.statusCode, h);
-                    return res.end(rawBuf);
+                // ── READ-ONLY decode untuk logging & ban detect ───────────────
+                let uid = '?', region = '?', token = '?', ttl = 0;
+                let banStr = null;
+
+                if (RAFIN) {
+                    try {
+                        const decoded = RAFIN.decode(rawBuf);
+                        const obj     = RAFIN.toObject(decoded, {
+                            defaults: false, longs: String, enums: Number,
+                            bytes: Buffer, keepCase: true,
+                        });
+                        uid    = obj.account_id  || '?';
+                        region = obj.lock_region || '?';
+                        token  = (obj.token || '').substring(0, 20) + '...';
+                        ttl    = obj.ttl || 0;
+                        if (obj.blacklist && obj.blacklist.ban_reason && obj.blacklist.ban_reason !== 0) {
+                            const reason = BAN_REASON_MAP[obj.blacklist.ban_reason] || `code_${obj.blacklist.ban_reason}`;
+                            banStr = `🚫 BAN detected: ${reason}`;
+                        }
+                    } catch (e) {
+                        console.log('[MAJORLOGIN] read-only decode warn:', e.message);
+                    }
                 }
 
+                // ── Binary patch (tidak re-encode, ak/aiv AMAN) ───────────────
                 let outBuf   = rawBuf;
-                let uid = '?', region = '?', token = '?', ttl = 0;
-                let patchLog = [];
-                let banStr   = null;
+                let patches  = [];
 
                 try {
-                    const decoded = RAFIN.decode(rawBuf);
-                    const obj     = RAFIN.toObject(decoded, {
-                        defaults: false,
-                        longs:    String,
-                        enums:    Number,
-                        bytes:    Buffer,
-                        keepCase: true,
-                    });
-
-                    uid    = obj.account_id  || '?';
-                    region = obj.lock_region || '?';
-                    token  = (obj.token || '').substring(0, 20) + '...';
-                    ttl    = obj.ttl || 0;
-
-                    if (obj.blacklist && obj.blacklist.ban_reason && obj.blacklist.ban_reason !== 0) {
-                        const reason = BAN_REASON_MAP[obj.blacklist.ban_reason] || `code_${obj.blacklist.ban_reason}`;
-                        banStr = `🚫 BAN detected: ${reason}`;
-                    }
-
-                    // --- PATCHES ---
-
-                    // server_url → proxy
-                    if (obj.server_url && obj.server_url !== PROXY_URL) {
-                        patchLog.push('server_url patched');
-                        obj.server_url = PROXY_URL;
-                    }
-
-                    // tp_url → clear
-                    if (obj.tp_url) {
-                        patchLog.push('tp_url cleared');
-                        obj.tp_url = '';
-                    }
-
-                    // ano_url → clear
-                    if (obj.ano_url) {
-                        patchLog.push('ano_url cleared');
-                        obj.ano_url = '';
-                    }
-
-                    // ffanti_url → clear
-                    if (obj.ffanti_url) {
-                        patchLog.push('ffanti_url cleared');
-                        obj.ffanti_url = '';
-                    }
-
-                    // ff_anti_config_desc → disable semua
-                    if (obj.ff_anti_config_desc) {
-                        obj.ff_anti_config_desc.enable               = false;
-                        obj.ff_anti_config_desc.config_url           = '';
-                        obj.ff_anti_config_desc.hpe_enable           = false;
-                        obj.ff_anti_config_desc.ffi_enable           = false;
-                        obj.ff_anti_config_desc.mtp_lite_data_enable = false;
-                        obj.ff_anti_config_desc.ffm_enable           = false;
-                        obj.ff_anti_config_desc.ffo_enable           = false;
-                        patchLog.push('ff_anti_config_desc disabled');
-                    }
-
-                    // blacklist → clear ban
-                    if (obj.blacklist) {
-                        obj.blacklist.ban_reason      = 0;
-                        obj.blacklist.expire_duration = 0;
-                        obj.blacklist.ban_time        = 0;
-                        obj.blacklist.ban_type        = '';
-                        patchLog.push('blacklist cleared');
-                    }
-
-                    // queue_info → force allow
-                    if (obj.queue_info && !obj.queue_info.allow) {
-                        obj.queue_info.allow = true;
-                        patchLog.push('queue forced allow');
-                    }
-
-                    // OB55: connection_seed → disable
-                    if (obj.connection_seed_enabled) {
-                        obj.connection_seed_enabled = false;
-                        patchLog.push('connection_seed_enabled=false');
-                    }
-                    if (obj.connection_seed) {
-                        obj.connection_seed = '';
-                        patchLog.push('connection_seed cleared');
-                    }
-
-                    // --- ENCODE ---
-                    const msg  = RAFIN.fromObject(obj);
-                    const verr = RAFIN.verify(msg);
-                    if (verr) throw new Error('verify: ' + verr);
-
-                    outBuf = Buffer.from(RAFIN.encode(msg).finish());
-                    console.log(`[MAJORLOGIN] v10 uid=${uid} region=${region} ${rawBuf.length}b→${outBuf.length}b patches=[${patchLog.join(', ')}]`);
-
+                    const result = patchBinaryRAFIN(rawBuf);
+                    outBuf   = result.buf;
+                    patches  = result.patches;
+                    console.log(`[MAJORLOGIN] v11 uid=${uid} region=${region} ${rawBuf.length}b→${outBuf.length}b patches=[${patches.join(', ')}]`);
                 } catch (err) {
-                    console.error('[MAJORLOGIN] Patch error:', err.message, '→ pass-through raw');
-                    tglog.send(`⚠️ <b>MajorLogin patch error</b>\n${err.message}\nraw pass-through`);
-                    outBuf   = rawBuf;
-                    patchLog = [`FALLBACK: ${err.message}`];
+                    console.error('[MAJORLOGIN] Binary patch error:', err.message, '→ raw pass-through');
+                    outBuf  = rawBuf;
+                    patches = [`FALLBACK: ${err.message}`];
                 }
 
                 // TG log
-                const lines = [`<b>MajorLogin v10 OB55</b>`, ''];
+                const lines = [`<b>MajorLogin v11 OB55</b>`, ''];
                 lines.push(`👤 UID: <code>${uid}</code>`);
                 lines.push(`🆔 open_id: <code>${reqInfo.open_id || '?'}</code>`);
                 if (reqInfo.client_version) lines.push(`📱 ver: ${reqInfo.client_version}`);
@@ -215,7 +248,7 @@ function init(app) {
                 lines.push(`🌐 ip: ${clientIp}`);
                 lines.push(`🎫 token: <code>${token}</code>`);
                 if (ttl) lines.push(`⏱ ttl: ${ttl}s`);
-                if (patchLog.length) lines.push(`🔧 ${patchLog.join(', ')}`);
+                if (patches.length) lines.push(`🔧 ${patches.join(', ')}`);
                 if (banStr) { lines.push(''); lines.push(banStr); }
                 tglog.send(lines.join('\n'));
 
@@ -242,7 +275,7 @@ function init(app) {
         proxyReq.end();
     });
 
-    console.log('[MAJORLOGIN] v10 OB55 active');
+    console.log('[MAJORLOGIN] v11 OB55 hybrid binary patch active');
 }
 
 module.exports = { init };
