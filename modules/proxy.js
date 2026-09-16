@@ -159,6 +159,23 @@ function patchGinUrl(jsonObj) {
     zeroFieldRecursive(jsonObj, 'is_enable_tcp',     false, 0);
     zeroFieldRecursive(jsonObj, 'is_transfer_report',false, 0);
     zeroFieldRecursive(jsonObj, 'ggp_url',           '',    0);
+    // gin_token ada di nested object GKOKINGAIKO (GetLoginData) — hapus recursive
+    zeroFieldRecursive(jsonObj, 'gin_token',         '',    0);
+    zeroFieldRecursive(jsonObj, 'is_get_feature',    false, 0);
+    zeroFieldRecursive(jsonObj, 'is_get_flag',       false, 0);
+    // GKOKINGAIKO = obfuscated key untuk GIN config di GetLoginData
+    if (jsonObj && jsonObj['GKOKINGAIKO'] !== undefined) {
+        const g = jsonObj['GKOKINGAIKO'];
+        if (g && typeof g === 'object') {
+            g.gin_token         = '';
+            g.is_enable_ggp     = false;
+            g.is_enable_tcp     = false;
+            g.is_report_to_ggp  = false;
+            g.is_transfer_report= false;
+            g.ggp_url           = '';
+            g.ut_flag           = 0;
+        }
+    }
     const ahcd = jsonObj && jsonObj['anti_hack_center_desc'];
     if (ahcd && typeof ahcd === 'object') {
         const inner = ahcd['anti_hack_center_desc'] || ahcd;
@@ -356,13 +373,41 @@ const loginProxy = createProxyMiddleware({
                 } catch (_) {}
             }
 
-            // GetLoginData dan semua endpoint loginbp lain — forward as-is
-            // JANGAN binary patch GetLoginData: proto binary, patch binary corrupt offset
+            // GetLoginData dan semua loginbp endpoint — coba JSON patch, fallback raw
+            // GetLoginData response adalah JSON (bukan binary proto) → kita bisa patch
+            // Field berbahaya: ANOAAHKLDLA=1, is_enable_ggp, is_report_to_ggp, ggp_url,
+            //                  is_enable_tcp, gin_token, GLPGCIJFDEB (grtc url)
+            let outRaw = raw;
+            const contentType = proxyRes.headers['content-type'] || '';
+            const isJson = contentType.includes('application/json') || (() => {
+                // beberapa loginbp response tidak set content-type tapi isinya JSON
+                const s = raw.toString('utf8', 0, 1);
+                return s === '{' || s === '[';
+            })();
+
+            if (isJson && raw.length > 0) {
+                try {
+                    const parsed = JSON.parse(raw.toString('utf8'));
+                    patchGinUrl(parsed);
+                    patchBanInfo(parsed);
+                    // Khusus loginbp: hapus gin_token supaya GIN tidak bisa init
+                    if (parsed.gin_token !== undefined)   parsed.gin_token   = '';
+                    if (parsed.CECNLHCONMI !== undefined) parsed.CECNLHCONMI = '';
+                    // Juga patch nested di semua key
+                    const jsonStr = patchStringLevelGin(JSON.stringify(parsed));
+                    outRaw = Buffer.from(jsonStr, 'utf8');
+                    console.log(`[LOGIN] ${req.path} JSON patched ${raw.length}b→${outRaw.length}b`);
+                } catch (pErr) {
+                    console.log(`[LOGIN] ${req.path} JSON patch skip: ${pErr.message}`);
+                    outRaw = raw;
+                }
+            }
+
             const headers = { ...proxyRes.headers };
             delete headers['content-encoding'];
-            headers['content-length'] = raw.length;
+            headers['content-length'] = outRaw.length;
             res.writeHead(statusCode, headers);
-            res.end(raw);
+            res.end(outRaw);
         });
     },
     onError: (err, req, res) => {

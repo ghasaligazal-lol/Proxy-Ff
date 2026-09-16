@@ -1,8 +1,11 @@
 syntax = "proto3";
 package freefire;
 
-// MajorLoginRes.proto — OB55 COMPLETE
-// Tambah: connection_seed_enabled (field 36), connection_seed (field 37)
+// MajorLoginRes.proto — OB55 COMPLETE + v11 FIX
+//
+// PENTING: Enum BanReason pakai option allow_alias atau cukup sebagai int32
+// supaya protobufjs tidak throw saat verify() (meskipun kita sudah hapus verify()).
+// Enum BanReason_IN_GAME_AUTO_NEW = 1014 harus ada supaya decode tidak drop field.
 
 enum BanReason {
   BAN_REASON_UNKNOWN          = 0;
@@ -27,6 +30,8 @@ message LoginQueueInfo {
   bool   queue_is_full  = 4;
 }
 
+// FfAntiConfigDesc — OB55 COMPLETE
+// Semua field harus ada supaya decode tidak drop dan patch bisa set ke false
 message FfAntiConfigDesc {
   string region               = 1;
   bool   enable               = 2;
@@ -39,6 +44,7 @@ message FfAntiConfigDesc {
   bool   ffo_enable           = 9;
 }
 
+// RAFIN — Full MajorLoginRes OB55
 message RAFIN {
   uint64              account_id               = 1;
   string              lock_region              = 2;
@@ -75,7 +81,7 @@ message RAFIN {
   string              ban_message              = 33;
   uint32              client_debug_flag        = 34;
   string              sdk_platform             = 35;
-  // OB55 NEW FIELDS
   bool                connection_seed_enabled  = 36;
   string              connection_seed          = 37;
+  // Field 38+ unknown — protobufjs akan skip (proto3 lenient)
 }
