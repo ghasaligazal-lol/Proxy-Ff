@@ -8,25 +8,27 @@
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-    --bg:         #070b0f;
-    --surface:    #0d1117;
-    --surface2:   #111820;
-    --surface3:   #161e28;
-    --border:     #1c2530;
-    --border2:    #223040;
-    --text:       #c9d4e0;
-    --muted:      #4e5f70;
-    --muted2:     #38485a;
-    --green:      #00e87e;
-    --green2:     #00c46a;
-    --green-bg:   rgba(0,232,126,0.08);
-    --green-ring: rgba(0,232,126,0.18);
-    --blue:       #3ab4f5;
-    --blue-bg:    rgba(58,180,245,0.08);
-    --amber:      #f5a623;
-    --amber-bg:   rgba(245,166,35,0.09);
-    --red:        #f44262;
-    --red-bg:     rgba(244,66,98,0.09);
+    --bg:         #0a0705;
+    --surface:    #120e0b;
+    --surface2:   #181210;
+    --surface3:   #1e1814;
+    --border:     #2a1e18;
+    --border2:    #3a2a20;
+    --text:       #e0cfc5;
+    --muted:      #6a5248;
+    --muted2:     #4a3830;
+    --accent:     #ff6b2b;
+    --accent2:    #e05520;
+    --accent-bg:  rgba(255,107,43,0.08);
+    --accent-ring:rgba(255,107,43,0.20);
+    --gold:       #ffb347;
+    --gold-bg:    rgba(255,179,71,0.08);
+    --blue:       #5bc4f5;
+    --blue-bg:    rgba(91,196,245,0.08);
+    --red:        #f4425e;
+    --red-bg:     rgba(244,66,94,0.09);
+    --green:      #3ddc84;
+    --green-bg:   rgba(61,220,132,0.08);
 }
 
 html { scroll-behavior: smooth; }
@@ -41,16 +43,15 @@ body {
     font-size: 14px;
 }
 
-/* ── Scanline overlay ── */
 body::before {
     content: '';
     position: fixed; inset: 0; z-index: 0; pointer-events: none;
-    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px);
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.05) 2px, rgba(0,0,0,0.05) 4px);
 }
 
 .wrap { max-width: 480px; margin: 0 auto; padding: 0 16px; position: relative; z-index: 1; }
 
-/* ── Animated Header BG ── */
+/* ── Hero ── */
 .hero-bg {
     position: relative;
     padding: 36px 16px 28px;
@@ -60,50 +61,44 @@ body::before {
 .hero-bg::before {
     content: '';
     position: absolute; inset: 0;
-    background: radial-gradient(ellipse 70% 60% at 50% 0%, rgba(0,232,126,0.12) 0%, transparent 70%);
+    background: radial-gradient(ellipse 70% 60% at 50% 0%, rgba(255,107,43,0.14) 0%, transparent 70%);
     animation: heroPulse 4s ease-in-out infinite;
 }
 @keyframes heroPulse {
     0%,100% { opacity: 0.7; transform: scaleY(1); }
-    50% { opacity: 1; transform: scaleY(1.1); }
+    50%      { opacity: 1;   transform: scaleY(1.12); }
 }
 
-/* ── Status badge ── */
 .badge {
     display: inline-flex; align-items: center; gap: 7px;
-    background: var(--green-bg);
-    border: 1px solid rgba(0,232,126,0.22);
-    color: var(--green);
+    background: var(--accent-bg);
+    border: 1px solid rgba(255,107,43,0.25);
+    color: var(--accent);
     font-size: 10px; font-weight: 700; letter-spacing: .1em;
     padding: 5px 13px; border-radius: 20px;
     margin-bottom: 16px; text-transform: uppercase;
-    position: relative;
 }
 .dot {
     width: 7px; height: 7px; border-radius: 50%;
-    background: var(--green);
-    position: relative;
+    background: var(--accent); position: relative;
 }
 .dot::after {
     content: '';
-    position: absolute; inset: -4px;
-    border-radius: 50%;
-    background: var(--green);
-    opacity: 0;
+    position: absolute; inset: -4px; border-radius: 50%;
+    background: var(--accent); opacity: 0;
     animation: ping 2s cubic-bezier(0,0,0.2,1) infinite;
 }
 @keyframes ping {
-    0% { transform: scale(1); opacity: 0.6; }
+    0%   { transform: scale(1);   opacity: 0.6; }
     100% { transform: scale(2.4); opacity: 0; }
 }
 
 .logo {
     font-size: 32px; font-weight: 900; color: #fff;
-    letter-spacing: -1px; line-height: 1;
-    position: relative;
-    text-shadow: 0 0 40px rgba(0,232,126,0.15);
+    letter-spacing: -1px; line-height: 1; position: relative;
+    text-shadow: 0 0 40px rgba(255,107,43,0.18);
 }
-.logo span { color: var(--green); }
+.logo span { color: var(--accent); }
 .tagline { font-size: 12px; color: var(--muted); margin-top: 6px; letter-spacing: .04em; }
 
 /* ── Cards ── */
@@ -113,15 +108,14 @@ body::before {
     border-radius: 16px;
     padding: 16px 18px;
     margin-bottom: 12px;
-    position: relative;
-    overflow: hidden;
+    position: relative; overflow: hidden;
     transition: border-color .2s;
 }
 .card:hover { border-color: var(--border2); }
 .card::before {
     content: '';
     position: absolute; top: 0; left: 0; right: 0; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(0,232,126,0.15), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255,107,43,0.18), transparent);
 }
 
 .card-head {
@@ -135,71 +129,32 @@ body::before {
 /* ── Info rows ── */
 .info-row {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 9px 0;
-    border-bottom: 1px solid var(--border);
-    font-size: 13px;
-    gap: 12px;
+    padding: 9px 0; border-bottom: 1px solid var(--border);
+    font-size: 13px; gap: 12px;
 }
 .info-row:last-child { border-bottom: none; padding-bottom: 0; }
 .info-row .lbl { color: var(--muted); white-space: nowrap; display: flex; align-items: center; gap: 6px; }
-.info-row .val { color: var(--text); font-weight: 600; text-align: right; word-break: break-all; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
-
-/* ── Mode selector ── */
-.mode-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 9px; }
-.mode-btn {
-    padding: 14px 10px;
-    background: var(--surface2);
-    border: 1.5px solid var(--border2);
-    border-radius: 12px;
-    color: var(--muted);
-    cursor: pointer; text-align: center;
-    transition: all .18s cubic-bezier(.4,0,.2,1);
-    display: flex; flex-direction: column; align-items: center; gap: 6px;
-    position: relative; overflow: hidden;
-}
-.mode-btn::after {
-    content: ''; position: absolute; inset: 0;
-    background: var(--green-bg);
-    opacity: 0; transition: opacity .18s;
-}
-.mode-btn:hover { border-color: var(--green); color: var(--text); }
-.mode-btn:hover::after { opacity: 1; }
-.mode-btn.active {
-    background: var(--green-bg);
-    border-color: var(--green);
-    color: var(--green);
-    box-shadow: 0 0 0 3px var(--green-ring);
-}
-.mode-btn .mode-icon { width: 26px; height: 26px; position: relative; z-index: 1; }
-.mode-btn .mode-name { font-size: 12px; font-weight: 800; position: relative; z-index: 1; }
-.mode-btn .mode-desc { font-size: 10px; color: var(--muted); font-weight: 400; line-height: 1.4; position: relative; z-index: 1; }
-.mode-btn.active .mode-desc { color: rgba(0,232,126,0.65); }
-.mode-btn.active .mode-icon svg { stroke: var(--green); }
+.info-row .val { color: var(--text); font-weight: 600; text-align: right; word-break: break-all; font-family: 'SF Mono','Fira Code',monospace; font-size: 12px; }
 
 /* ── Settings rows ── */
 .setting {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--border);
-    gap: 14px;
+    padding: 12px 0; border-bottom: 1px solid var(--border); gap: 14px;
 }
 .setting:last-child { border-bottom: none; padding-bottom: 0; }
 .setting-info { flex: 1; min-width: 0; }
-.setting-label {
-    font-size: 13px; font-weight: 600; color: #dde8f5;
-    display: flex; align-items: center; gap: 7px;
-}
-.setting-desc { font-size: 11px; color: var(--muted); margin-top: 3px; }
-.setting-ctrl { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.setting-label { font-size: 13px; font-weight: 600; color: #f0e0d5; display: flex; align-items: center; gap: 7px; }
+.setting-desc  { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.setting-ctrl  { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
 /* ── Tag ── */
 .tag {
     font-size: 9px; font-weight: 800; padding: 2px 7px;
     border-radius: 5px; letter-spacing: .06em; text-transform: uppercase;
 }
-.tag-amber { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245,166,35,0.2); }
-.tag-green { background: var(--green-bg); color: var(--green); border: 1px solid rgba(0,232,126,0.2); }
-.tag-blue  { background: var(--blue-bg);  color: var(--blue);  border: 1px solid rgba(58,180,245,0.2); }
+.tag-amber  { background: var(--gold-bg);   color: var(--gold);   border: 1px solid rgba(255,179,71,0.22); }
+.tag-accent { background: var(--accent-bg); color: var(--accent); border: 1px solid rgba(255,107,43,0.22); }
+.tag-blue   { background: var(--blue-bg);   color: var(--blue);   border: 1px solid rgba(91,196,245,0.2); }
 
 /* ── Toggle ── */
 .toggle { position: relative; width: 44px; height: 25px; flex-shrink: 0; }
@@ -217,87 +172,87 @@ body::before {
     transition: transform .2s cubic-bezier(.4,0,.2,1);
     box-shadow: 0 1px 4px rgba(0,0,0,0.4);
 }
-.toggle input:checked + .toggle-track { background: var(--green); }
+.toggle input:checked + .toggle-track { background: var(--accent); }
 .toggle input:checked + .toggle-track::after { transform: translateX(19px); }
 
 /* ── Number input ── */
 .num-input {
     background: var(--surface2);
     border: 1.5px solid var(--border2);
-    border-radius: 9px;
-    color: var(--text);
+    border-radius: 9px; color: var(--text);
     font-size: 14px; font-weight: 700;
-    padding: 8px 10px;
-    width: 84px; text-align: center;
-    outline: none;
-    transition: border-color .15s, box-shadow .15s;
+    padding: 8px 10px; width: 84px; text-align: center;
+    outline: none; transition: border-color .15s, box-shadow .15s;
     -moz-appearance: textfield;
-    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-family: 'SF Mono','Fira Code',monospace;
 }
 .num-input::-webkit-outer-spin-button,
 .num-input::-webkit-inner-spin-button { -webkit-appearance: none; }
-.num-input:focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-ring); }
-.num-input.error { border-color: var(--red) !important; box-shadow: 0 0 0 3px rgba(244,66,98,0.15) !important; }
+.num-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+.num-input.error { border-color: var(--red) !important; box-shadow: 0 0 0 3px rgba(244,66,94,0.15) !important; }
 
 /* ── Slider ── */
-.speed-slider-wrap { margin-top: 12px; }
 .slider {
     -webkit-appearance: none; appearance: none;
     width: 100%; height: 4px;
-    background: var(--border2); border-radius: 2px; outline: none;
-    cursor: pointer;
+    background: var(--border2); border-radius: 2px; outline: none; cursor: pointer;
 }
 .slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 20px; height: 20px; border-radius: 50%;
-    background: var(--green);
-    box-shadow: 0 0 0 3px var(--green-ring), 0 2px 6px rgba(0,0,0,0.4);
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-ring), 0 2px 6px rgba(0,0,0,0.4);
     cursor: pointer; transition: transform .1s;
 }
 .slider::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .slider::-moz-range-thumb {
     width: 20px; height: 20px; border-radius: 50%;
-    background: var(--green); border: none;
-    box-shadow: 0 0 0 3px var(--green-ring);
+    background: var(--accent); border: none;
+    box-shadow: 0 0 0 3px var(--accent-ring);
 }
-.slider-labels {
-    display: flex; justify-content: space-between;
-    font-size: 10px; color: var(--muted); margin-top: 6px;
-}
+.slider-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 6px; }
 
 /* ── Sensi grid ── */
 .sensi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
 .sensi-item label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 5px; }
 .sensi-item .num-input { width: 100%; text-align: left; }
 
+/* ── Speed panel ── */
+#speedPanel {
+    overflow: hidden;
+    transition: max-height .25s cubic-bezier(.4,0,.2,1), opacity .2s;
+    max-height: 0; opacity: 0; padding-top: 0 !important;
+}
+#speedPanel.open { max-height: 220px; opacity: 1; padding-top: 12px !important; }
+
 /* ── Save button ── */
 .btn-save {
     width: 100%; padding: 15px;
-    background: var(--green);
+    background: linear-gradient(135deg, var(--accent) 0%, #e04010 100%);
     border: none; border-radius: 12px;
-    color: #030d07; font-size: 15px; font-weight: 900;
+    color: #fff; font-size: 15px; font-weight: 900;
     cursor: pointer; letter-spacing: .02em;
     display: flex; justify-content: center; align-items: center; gap: 9px;
     transition: filter .15s, transform .1s, box-shadow .15s;
     margin-top: 4px;
-    box-shadow: 0 4px 24px rgba(0,232,126,0.2);
+    box-shadow: 0 4px 24px rgba(255,107,43,0.25);
     position: relative; overflow: hidden;
 }
 .btn-save::before {
     content: '';
     position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 60%);
+    background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 60%);
     pointer-events: none;
 }
-.btn-save:hover { filter: brightness(1.08); box-shadow: 0 6px 32px rgba(0,232,126,0.32); }
+.btn-save:hover  { filter: brightness(1.1); box-shadow: 0 6px 32px rgba(255,107,43,0.4); }
 .btn-save:active { transform: scale(.98); }
 .btn-save:disabled { opacity: .45; cursor: not-allowed; transform: none; filter: none; box-shadow: none; }
 
 /* ── Spin ── */
 .spin {
     width: 17px; height: 17px;
-    border: 2.5px solid rgba(3,13,7,.25);
-    border-top-color: #030d07;
+    border: 2.5px solid rgba(255,255,255,.3);
+    border-top-color: #fff;
     border-radius: 50%;
     animation: rot .6s linear infinite;
     display: none; flex-shrink: 0;
@@ -315,7 +270,7 @@ body::before {
     transition: border-color .15s, background .15s, color .15s;
     text-decoration: none;
 }
-.btn-sm:hover { border-color: var(--green); background: var(--green-bg); color: var(--green); }
+.btn-sm:hover { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
 .btn-sm svg { flex-shrink: 0; }
 
 /* ── Toast ── */
@@ -332,13 +287,8 @@ body::before {
     opacity: 0; pointer-events: none; white-space: nowrap; z-index: 99;
 }
 .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
-.toast.ok  { border-color: rgba(0,232,126,.35); color: var(--green); }
-.toast.err { border-color: rgba(244,66,98,.35); color: var(--red); }
-
-/* ── Speed panel animation ── */
-/* FIX: max-height 160px terlalu kecil — naik ke 220px supaya slider tidak kepotong */
-#speedPanel { overflow: hidden; transition: max-height .25s cubic-bezier(.4,0,.2,1), opacity .2s; max-height: 0; opacity: 0; padding-top: 0 !important; }
-#speedPanel.open { max-height: 220px; opacity: 1; padding-top: 12px !important; }
+.toast.ok   { border-color: rgba(61,220,132,.35);  color: var(--green); }
+.toast.err  { border-color: rgba(244,66,94,.35);   color: var(--red); }
 </style>
 </head>
 <body>
@@ -349,7 +299,7 @@ body::before {
             <span class="dot"></span> Server Online
         </div>
         <div class="logo">PROXY — Reza<span>Nih</span></div>
-        <div class="tagline">Game Config Dashboard</div>
+        <div class="tagline">Game Config Dashboard · OB55</div>
     </div>
 
     <!-- Device Info -->
@@ -402,40 +352,8 @@ body::before {
         </div>
     </div>
 
-    <!-- Body Mode -->
+    <!-- Speed -->
     <div class="card">
-        <div class="card-head">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-            Body Mode
-        </div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Pilih mode untuk client</div>
-        <div class="mode-grid">
-            <button class="mode-btn active" id="mode_full" onclick="setMode('full')">
-                <span class="mode-icon">
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4e5f70" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="icon_full"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                </span>
-                <span class="mode-name">Full Mod</span>
-                <span class="mode-desc">Speed · Sensi · Anti-ban flags inject</span>
-            </button>
-            <button class="mode-btn" id="mode_hs_only" onclick="setMode('hs_only')">
-                <span class="mode-icon">
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4e5f70" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="icon_hs"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="14.5" y2="14.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
-                </span>
-                <span class="mode-name">HS Only</span>
-                <span class="mode-desc">Hanya body headshoot</span>
-            </button>
-            <button class="mode-btn" id="mode_esp" onclick="setMode('esp')">
-                <span class="mode-icon">
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4e5f70" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="icon_esp"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9l6 6M15 9l-6 6"/><circle cx="12" cy="12" r="3"/></svg>
-                </span>
-                <span class="mode-name">Aimbot+ESP</span>
-                <span class="mode-desc">ESP Box · AimAssist · No cache_res</span>
-            </button>
-        </div>
-    </div>
-
-    <!-- Speed Settings -->
-    <div class="card" id="speedCard">
         <div class="card-head">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
             Run Speed
@@ -446,7 +364,7 @@ body::before {
                     Custom Speed
                     <span class="tag tag-amber">MAX 10</span>
                 </div>
-                <div class="setting-desc">Default speed = 4.0</div>
+                <div class="setting-desc">Default 6.0 · aktifkan untuk custom</div>
             </div>
             <div class="setting-ctrl">
                 <label class="toggle">
@@ -459,11 +377,11 @@ body::before {
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                 <span style="font-size:12px;color:var(--muted)">RunSpeed Value</span>
                 <input type="number" class="num-input" id="speedVal"
-                    min="0.1" max="10" step="0.1" value="4.0"
+                    min="0.1" max="10" step="0.1" value="6.0"
                     oninput="syncSlider()">
             </div>
             <input type="range" class="slider" id="speedSlider"
-                min="0.1" max="10" step="0.1" value="4.0"
+                min="0.1" max="10" step="0.1" value="6.0"
                 oninput="syncInput()">
             <div class="slider-labels">
                 <span>0.1 slow</span>
@@ -474,12 +392,11 @@ body::before {
     </div>
 
     <!-- Sensitivity -->
-    <div class="card" id="sensiCard">
+    <div class="card">
         <div class="card-head">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="14.5" y2="14.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
             Sensitivity
         </div>
-        <!-- FIX: min="0" (konsisten sama validasi backend >= 0), bukan min="1" -->
         <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Maks sensitivity per scope · default 9.5 · maks 999.99</div>
         <div class="sensi-grid">
             <div class="sensi-item">
@@ -516,7 +433,7 @@ body::before {
     <!-- Save -->
     <button class="btn-save" id="saveBtn" onclick="saveConfig()">
         <span class="spin" id="saveSpin"></span>
-        <svg id="saveIcon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#030d07" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        <svg id="saveIcon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
         <span id="saveLabel">Simpan Config</span>
     </button>
 
@@ -556,8 +473,7 @@ function showToast(msg, type = 'ok', dur = 2800) {
 
 function onSpeedToggle() {
     const on = document.getElementById('speedToggle').checked;
-    const panel = document.getElementById('speedPanel');
-    panel.classList.toggle('open', on);
+    document.getElementById('speedPanel').classList.toggle('open', on);
 }
 
 function syncSlider() {
@@ -568,57 +484,29 @@ function syncInput() {
     document.getElementById('speedVal').value = document.getElementById('speedSlider').value;
 }
 
-// FIX: _currentMode default 'full', dan setMode sekarang juga handle
-// cards disable/enable dengan benar
-let _currentMode = 'full';
-function setMode(mode) {
-    _currentMode = mode;
-    ['full','hs_only','esp'].forEach(m => {
-        const btn = document.getElementById('mode_'+m);
-        if (btn) btn.classList.toggle('active', m === mode);
-    });
-    const iconMap = { full: 'icon_full', hs_only: 'icon_hs', esp: 'icon_esp' };
-    Object.entries(iconMap).forEach(([m, id]) => {
-        const el = document.getElementById(id);
-        if (el) el.setAttribute('stroke', m === mode ? 'var(--green)' : '#4e5f70');
-    });
-    // Speed & sensi card: hanya aktif di mode full
-    const isFull = mode === 'full';
-    ['speedCard','sensiCard'].forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.style.opacity = isFull ? '1' : '0.45';
-        el.style.pointerEvents = isFull ? '' : 'none';
-    });
-}
-
 async function loadConfig() {
     try {
         const r = await fetch('/api/config');
         const d = await r.json();
 
-        // FIX: bodyMode dari backend di-apply, fallback ke 'full' kalau tidak ada
-        setMode(d.bodyMode || 'full');
-
         if (d.runSpeed != null) {
             document.getElementById('speedToggle').checked = true;
             document.getElementById('speedPanel').classList.add('open');
-            document.getElementById('speedVal').value = d.runSpeed;
+            document.getElementById('speedVal').value    = d.runSpeed;
             document.getElementById('speedSlider').value = d.runSpeed;
         } else {
-            // FIX: kalau runSpeed null, pastikan toggle off dan panel tertutup
             document.getElementById('speedToggle').checked = false;
             document.getElementById('speedPanel').classList.remove('open');
         }
 
         const s = d.sensi || {};
         setVal('s_General',  s.SensitivityMaxSetting,   9.5);
-        setVal('s_1P',       s.Sensitivity1PMaxSetting, 9.5);
-        setVal('s_X1',       s.X1ScopeMaxSetting,       9.5);
-        setVal('s_X2',       s.X2ScopeMaxSetting,       9.5);
-        setVal('s_X4',       s.X4ScopeMaxSetting,       9.5);
-        setVal('s_X8',       s.X8ScopeMaxSetting,       9.5);
-        setVal('s_FreeLook', s.FreeLookMaxSetting,       9.5);
+        setVal('s_1P',       s.Sensitivity1PMaxSetting,  9.5);
+        setVal('s_X1',       s.X1ScopeMaxSetting,        9.5);
+        setVal('s_X2',       s.X2ScopeMaxSetting,        9.5);
+        setVal('s_X4',       s.X4ScopeMaxSetting,        9.5);
+        setVal('s_X8',       s.X8ScopeMaxSetting,        9.5);
+        setVal('s_FreeLook', s.FreeLookMaxSetting,        9.5);
     } catch(e) { console.warn('Load config:', e); }
 }
 
@@ -631,6 +519,7 @@ async function saveConfig() {
     const spin  = document.getElementById('saveSpin');
     const icon  = document.getElementById('saveIcon');
     const label = document.getElementById('saveLabel');
+
     const speedOn  = document.getElementById('speedToggle').checked;
     const speedRaw = parseFloat(document.getElementById('speedVal').value);
     if (speedOn && (isNaN(speedRaw) || speedRaw < 0.1 || speedRaw > 10)) {
@@ -640,9 +529,7 @@ async function saveConfig() {
     }
     document.getElementById('speedVal').classList.remove('error');
 
-    // FIX: sertakan bodyMode di payload supaya backend simpan dan persist setelah restart
     const payload = {
-        bodyMode: _currentMode,
         runSpeed: speedOn ? speedRaw : null,
         sensi: {
             SensitivityMaxSetting:   getNum('s_General',  9.5),
@@ -654,10 +541,12 @@ async function saveConfig() {
             FreeLookMaxSetting:      getNum('s_FreeLook',  9.5),
         }
     };
+
     btn.disabled = true;
     spin.style.display = 'block';
     icon.style.display = 'none';
     label.textContent = 'Menyimpan...';
+
     try {
         const r = await fetch('/api/config', {
             method: 'POST',
@@ -691,8 +580,7 @@ async function loadDevice() {
         const ua = navigator.userAgent;
         let m = ua.match(/\(Linux;\s*(?:U;\s*)?Android\s*[\d.]+;\s*([^)]+?)\s*(?:Build\/[^)]+)?\)/i);
         if (m) {
-            let model = m[1].trim();
-            model = model.replace(/\s*wv\s*$/i, '').trim();
+            let model = m[1].trim().replace(/\s*wv\s*$/i, '').trim();
             if (model && model !== 'armv8l' && !model.startsWith('Linux')) return model;
         }
         m = ua.match(/;\s*([A-Za-z0-9 _\-]+?)\s*Build\//i);
@@ -705,16 +593,10 @@ async function loadDevice() {
         return 'Android Device';
     }
 
-    function getPlatform() {
-        const ua = navigator.userAgent;
-        if (/Android/i.test(ua)) return 'Android';
-        if (/iPhone|iPad/i.test(ua)) return 'iOS';
-        if (/Windows/i.test(ua)) return 'Windows';
-        return navigator.platform || 'Other';
-    }
-
     document.getElementById('dDev').textContent  = getDeviceName();
-    document.getElementById('dPlat').textContent = getPlatform();
+    document.getElementById('dPlat').textContent = /Android/i.test(navigator.userAgent) ? 'Android'
+        : /iPhone|iPad/i.test(navigator.userAgent) ? 'iOS'
+        : navigator.platform || 'Other';
 
     try {
         const r = await fetch('/api/device');
@@ -722,11 +604,7 @@ async function loadDevice() {
         document.getElementById('dIp').textContent   = d.ip || '—';
         document.getElementById('dCity').textContent = d.city && d.country ? `${d.city}, ${d.country}` : (d.city || '—');
         document.getElementById('dIsp').textContent  = d.isp || '—';
-    } catch(_) {
-        document.getElementById('dIp').textContent   = '—';
-        document.getElementById('dCity').textContent = '—';
-        document.getElementById('dIsp').textContent  = '—';
-    }
+    } catch(_) {}
 
     try {
         if ('getBattery' in navigator) {
@@ -742,9 +620,7 @@ async function loadDevice() {
         } else {
             document.getElementById('dBatt').textContent = 'Tidak didukung';
         }
-    } catch(_) {
-        document.getElementById('dBatt').textContent = '—';
-    }
+    } catch(_) { document.getElementById('dBatt').textContent = '—'; }
 }
 
 async function downloadConfig() {

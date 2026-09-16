@@ -1,16 +1,12 @@
 'use strict';
 // modules/config.js — Simpan & baca config dashboard (speed + sensi)
-// bodyMode dihapus — hanya ada 1 mode: speed_sensi
 const fs   = require('fs');
 const path = require('path');
 
 const CONFIG_PATH = path.join(__dirname, '..', 'db', 'gameconfig.json');
 
-// FIX: tambah bodyMode ke DEFAULTS supaya persist setelah restart
-const VALID_MODES = new Set(['full', 'hs_only', 'esp']);
 const DEFAULTS = {
-    bodyMode: 'full',
-    runSpeed: null,
+    runSpeed: 6.0,   // default 6.0 (sebelumnya null → tidak di-inject)
     sensi: {
         SensitivityMaxSetting:   9.5,
         Sensitivity1PMaxSetting: 9.5,
@@ -45,12 +41,12 @@ function save(data) {
 }
 
 function init(app) {
-    // GET config — untuk dashboard
+    // GET config
     app.get('/api/config', (req, res) => {
         res.json(load());
     });
 
-    // POST config — simpan dari dashboard
+    // POST config
     app.post('/api/config', (req, res) => {
         try {
             let body = req.body;
@@ -59,11 +55,8 @@ function init(app) {
             }
             if (typeof body !== 'object' || !body) body = {};
 
-            // FIX: validasi dan simpan bodyMode
-            const bodyMode = VALID_MODES.has(body.bodyMode) ? body.bodyMode : 'full';
-
-            // Validasi runSpeed (0–10)
-            let runSpeed = null;
+            // Validasi runSpeed (0–10, default 6.0)
+            let runSpeed = DEFAULTS.runSpeed;
             if (body.runSpeed !== null && body.runSpeed !== undefined && body.runSpeed !== '') {
                 const v = parseFloat(body.runSpeed);
                 if (!isNaN(v) && v >= 0 && v <= 10) runSpeed = v;
@@ -81,7 +74,7 @@ function init(app) {
                 sensi[k] = (!isNaN(v) && v >= 0 && v <= 999.99) ? v : 9.5;
             }
 
-            const cfg = { bodyMode, runSpeed, sensi };
+            const cfg = { runSpeed, sensi };
             if (save(cfg)) {
                 console.log('[CONFIG] Saved:', JSON.stringify(cfg));
                 res.json({ ok: true, config: cfg });

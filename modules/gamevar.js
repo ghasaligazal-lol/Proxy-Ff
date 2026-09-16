@@ -1,19 +1,15 @@
 'use strict';
-// gamevar.js — Speed + Sensi ONLY mode
-// Mode ini hanya inject RunSpeed dan Sensitivity.
-// Tidak ada cache_res patch → game download asset dari Garena resmi.
-// GIN/anticheat disable tetap ada (wajib untuk bypass).
+// gamevar.js — OB55 FIXED
+// BUG FIX: require('./modules/config') → require('./config') (path relatif dari dalam modules/)
 
 let _cfg = null;
 function getConfig() {
     if (!_cfg) {
-        try { _cfg = require('./modules/config'); } catch (_) { _cfg = null; }
+        try { _cfg = require('./config'); } catch (_) { _cfg = null; }  // FIX: was './modules/config'
     }
-    return _cfg ? _cfg.load() : { runSpeed: null, sensi: {} };
+    return _cfg ? _cfg.load() : { runSpeed: 6.0, sensi: {} };
 }
 
-// ── Gamevar lines ─────────────────────────────────────────────────────────────
-// Hanya var yang valid dikenal client. RunSpeed + Sensi di-inject dynamic dari config.
 function getGamevarLines() {
     const cfg = getConfig();
 
@@ -21,7 +17,7 @@ function getGamevarLines() {
         "var_name,comment,var_type,var_value,var_region,var_platform",
         "var_name,comment,var_type,var_value,var_region,var_platform",
 
-        // ── Base valid vars ──────────────────────────────────────────────────
+        // Base valid vars
         "EnableVariableFFVoiceIDC,EnableVariableFFVoiceIDC,bool,false,,",
         "EnableYieldMutexDuringAsyncLoad,EnableYieldMutexDuringAsyncLoad,bool,false,,",
         "NinthProgressLoadingDuration,NinthProgressLoadingDuration,float,0,,",
@@ -34,11 +30,11 @@ function getGamevarLines() {
         "EnableUGCHalfwayJoin,EnableUGCHalfwayJoin,bool,false,,",
         "LadderMatchSplashRegionOn,LadderMatchSplashRegionOn,string,PK;EUROPE;TH;SG;TW;BR,,",
 
-        // ── Frame rate ──────────────────────────────────────────────────────
+        // Frame rate
         "ShowHighFrameRateSetting,ShowHighFrameRateSetting,bool,true,,",
         "Real60FrameSwitch,Real60FrameSwitch,bool,true,,",
 
-        // ── Movement base ────────────────────────────────────────────────────
+        // Movement
         "SwapWeaponCD,SwapWeaponCD,float,0,,",
         "SwitchWeaponInterval,SwitchWeaponInterval,float,0,,",
         "FreeMoveAngularSpeed,FreeMoveAngularSpeed,float,9999.9,,",
@@ -46,7 +42,7 @@ function getGamevarLines() {
         "FreeMoveAngularSpeedCrouch,FreeMoveAngularSpeedCrouch,float,9999.9,,",
         "FreeMoveAngularSpeedCreep,FreeMoveAngularSpeedCreep,float,9999.9,,",
 
-        // ── Social unlock (akun baru bisa squad langsung) ───────────────────
+        // Social unlock
         "EnableNewPlayerSocialFunction,EnableNewPlayerSocialFunction,bool,true,,",
         "NewPlayerSocialFunctionMaxLevel,NewPlayerSocialFunctionMaxLevel,int,0,,",
         "EnableSocialFunctionByLevel,EnableSocialFunctionByLevel,bool,false,,",
@@ -58,12 +54,13 @@ function getGamevarLines() {
         "NewPlayerGroupLimit,NewPlayerGroupLimit,int,0,,",
         "EnableTeamForNewAccount,EnableTeamForNewAccount,bool,true,,",
 
-        // ── ANO disable ──────────────────────────────────────────────────────
+        // ANO disable
         "ANODisabledRegions,ANODisabledRegions,string,IND;NA;ID;BR;TH;SG;TW;VN;PK;EUROPE;ME;US;RU;SAC;ZA;BD,,",
         "ANODisabledClientVariant,ANODisabledClientVariant,string,ClientUsingVersion_MAX_HPE;ClientUsingVersion_FFI;ClientUsingVersion_MAX;ClientUsingVersion_NORMAL,,",
         "ANOEmulatorCheckDisbaledClientVariant,ANOEmulatorCheckDisbaledClientVariant,string,ClientUsingVersion_FFI;ClientUsingVersion_MAX;ClientUsingVersion_NORMAL,,",
         "EnableMtpLiteDataRegion,EnableMtpLiteDataRegion,string,,,",
-        // OB55: disable FFM/FFO anticheat baru
+
+        // OB55: FFM/FFO anticheat baru
         "EnableFFMCheat,EnableFFMCheat,bool,false,,",
         "EnableFFOCheat,EnableFFOCheat,bool,false,,",
         "EnableFFMDetect,EnableFFMDetect,bool,false,,",
@@ -71,7 +68,11 @@ function getGamevarLines() {
         "FFMReportLevel,FFMReportLevel,int,0,,",
         "FFOReportLevel,FFOReportLevel,int,0,,",
 
-        // ── GIN/GGP disable (wajib) ─────────────────────────────────────────
+        // OB55: connection seed disable
+        "EnableConnectionSeed,EnableConnectionSeed,bool,false,,",
+        "ConnectionSeedCheckLevel,ConnectionSeedCheckLevel,int,0,,",
+
+        // GIN/GGP disable
         "DisableGinReport,DisableGinReport,bool,true,,",
         "DisableGGPReport,DisableGGPReport,bool,true,,",
         "EnableGinReport,EnableGinReport,bool,false,,",
@@ -89,7 +90,7 @@ function getGamevarLines() {
         "DisableGinInfoSend,DisableGinInfoSend,int,1,,",
         "EarlyInitGGP,EarlyInitGGP,bool,false,,",
 
-        // ── Anticheat disable ────────────────────────────────────────────────
+        // Anticheat disable
         "CleanFFAntiState,CleanFFAntiState,bool,true,,",
         "FFAntihackDefenceLevel,FFAntihackDefenceLevel,string,0,,",
         "FFAntihackLightInitOnThread,FFAntihackLightInitOnThread,bool,false,,",
@@ -125,7 +126,7 @@ function getGamevarLines() {
         "AlbumImageAntiModSecs,AlbumImageAntiModSecs,int,0,,",
     ];
 
-    // ── Sensitivity (dynamic dari dashboard) ────────────────────────────────
+    // Sensitivity dynamic dari dashboard
     const s = cfg.sensi || {};
     const sensiKeys = [
         'SensitivityMaxSetting', 'Sensitivity1PMaxSetting',
@@ -137,22 +138,21 @@ function getGamevarLines() {
         lines.push(`${k},${k},float,${val},,`);
     }
 
-    // ── RunSpeed dynamic dari dashboard (null = skip inject) ───────────────
-    if (cfg.runSpeed !== null && cfg.runSpeed !== undefined && !isNaN(parseFloat(cfg.runSpeed))) {
-        lines.push(`RunSpeed,,float,${parseFloat(cfg.runSpeed)},,`);
-    }
+    // RunSpeed dynamic dari dashboard — default 6.0 kalau tidak diset
+    const rs = (cfg.runSpeed !== null && cfg.runSpeed !== undefined && !isNaN(parseFloat(cfg.runSpeed)))
+        ? parseFloat(cfg.runSpeed)
+        : 6.0;  // FIX: default 6.0, dulu null = tidak di-inject sama sekali
+    lines.push(`RunSpeed,,float,${rs},,`);
 
     return lines;
 }
 
-// ============================================================
-const MY_IP       = process.env.PROXY_URL || 'https://proxy-reza-kontolodon-memek-luu.up.railway.app/';
+const MY_IP        = process.env.PROXY_URL || 'https://proxy-reza-kontolodon-memek-luu.up.railway.app/';
 const REDIRECT_URL = 'https://whatsapp.com/channel/0029Vb8eX0Z1NCrYCXEXuu0K';
 
 function getVerConfig(clientIp = '74.125.24.139', myDomain = MY_IP, gameVersion = null, releaseVersion = null) {
     return {
         "abhotupdate_cdn_url":               "https://core-gmc.freefiremobile.com/live/ABHotUpdates/",
-        // speed_sensi mode: tidak override cache_res → game download dari Garena resmi
         "abhotupdate_check":                 "",
         "anti_hack_open":                    false,
         "appstore_url":                      REDIRECT_URL,
@@ -203,7 +203,7 @@ function getVerConfig(clientIp = '74.125.24.139', myDomain = MY_IP, gameVersion 
         "is_server_open":                    true,
         "is_update_btn_show":                false,
         "is_use_multi_download":             true,
-        "latest_release_version":            releaseVersion || "OB55",   // auto dari query ?release_version=
+        "latest_release_version":            releaseVersion || "OB55",
         "login_download_optionalpack":       "optionalclothres:shaders|optionalpetres:optionalpetres_commonab_shader|optionallobbyres:",
         "login_failed_count":                4,
         "login_notice":                      "Welcome to Proxy Server!",
@@ -225,7 +225,7 @@ function getVerConfig(clientIp = '74.125.24.139', myDomain = MY_IP, gameVersion 
         "graphic_level":                     0,
         "remote_option_version":             "optionallocres:51|optionalavatarres:744|optionalclothres:1187|optionalfootballres:47|optionalfullscreencgres:334|optionalhuntinggroundres:178|optionalinfection:121|optionalingameres:480|optionallobbyres:634|optionallonewolfres:77|optionallonewolfstrikeoutres:23|optionalludores:40|optionalmap1res:391|optionalmap2res:125|optionalmap4res:110|optionalmaphippores:90|optionalmapres:343|optionalnewblast:138|optionalpetres:876|optionalrushb:123|optionalrushingpetsres:88|optionalsnowduelres:59|optionaltrainingres:88|optionalugcres:551|optionalvoiceres:360|optionalwerewolves:173|optionalmapponyres:200|optionalsocialres:111|optionalwerunres:83|optionalugcoldparadiseres:32|optionalmultiregionres:25",
         "remote_option_version_astc":        "optionallocres:51|optionalavatarres:747|optionalclothres:1187|optionalfootballres:38|optionalfullscreencgres:318|optionalhuntinggroundres:178|optionalinfection:116|optionalingameres:449|optionallobbyres:617|optionallonewolfres:139|optionallonewolfstrikeoutres:96|optionalludores:144|optionalmap1res:391|optionalmap2res:159|optionalmap4res:144|optionalmaphippores:92|optionalmapres:377|optionalnewblast:138|optionalpetres:876|optionalrushb:227|optionalrushingpetsres:192|optionalsnowduelres:59|optionaltrainingres:84|optionalugcres:521|optionalvoiceres:393|optionalwerewolves:277|optionalmapponyres:200|optionalsocialres:106|optionalwerunres:74|optionalugcoldparadiseres:32|optionalmultiregionres:26",
-        "remote_version":                    gameVersion || "2.132.3",  // auto dari query ?version=
+        "remote_version":                    gameVersion || "2.132.3",
         "res_url":                           "https://dl.gmc.freefiremobile.com/live/ABHotUpdates/",
         "server_url":                        myDomain,
         "should_check_ab_exist":             true,
@@ -248,12 +248,13 @@ function getVerConfig(clientIp = '74.125.24.139', myDomain = MY_IP, gameVersion 
 
 function init(app) {
     app.get('/ver.php', (req, res) => {
-        const rawIp        = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-        const clientIp     = rawIp.split(',')[0].trim().replace('::ffff:', '');
-        const gameVersion  = req.query.version         || null;
-        const releaseVer   = req.query.release_version || null;
-        const config       = getVerConfig(clientIp, MY_IP, gameVersion, releaseVer);
-        console.log(`[GAMEVAR] /ver.php ip=${clientIp} ver=${gameVersion} rel=${releaseVer}`);
+        const rawIp       = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        const clientIp    = rawIp.split(',')[0].trim().replace('::ffff:', '');
+        const gameVersion = req.query.version         || null;
+        const releaseVer  = req.query.release_version || null;
+        const config      = getVerConfig(clientIp, MY_IP, gameVersion, releaseVer);
+        const rs = config.gamevar.match(/RunSpeed,,float,([\d.]+)/);
+        console.log(`[GAMEVAR] /ver.php ip=${clientIp} ver=${gameVersion} rel=${releaseVer} RunSpeed=${rs ? rs[1] : 'N/A'}`);
         res.json(config);
     });
 
@@ -268,16 +269,14 @@ function init(app) {
     });
 
     app.get('/localconfig.json', (req, res) => {
-        const cfg = {
+        res.json({
             verAddr:       MY_IP,
             resetGuest:    true,
-            testCodePatch: false   // speed_sensi: tidak load Assembly patch
-        };
-        res.setHeader('Content-Type', 'application/json');
-        res.json(cfg);
+            testCodePatch: false
+        });
     });
 
-    console.log('[GAMEVAR] Active → /ver.php /api/gamevar /localconfig.json (speed+sensi mode)');
+    console.log('[GAMEVAR] OB55 Active → /ver.php /api/gamevar /localconfig.json');
 }
 
 module.exports = { getVerConfig, getGamevarLines, MY_IP, init };

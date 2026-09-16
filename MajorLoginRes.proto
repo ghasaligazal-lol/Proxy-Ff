@@ -1,10 +1,8 @@
 syntax = "proto3";
 package freefire;
 
-// ============================================================
-// MajorLoginRes.proto — v8 COMPLETE
-// FfAntiConfigDesc: tambah semua field yang terlihat di BackendLog
-// ============================================================
+// MajorLoginRes.proto — OB55 COMPLETE
+// Tambah: connection_seed_enabled (field 36), connection_seed (field 37)
 
 enum BanReason {
   BAN_REASON_UNKNOWN          = 0;
@@ -29,55 +27,55 @@ message LoginQueueInfo {
   bool   queue_is_full  = 4;
 }
 
-// FfAntiConfigDesc — FIXED: tambah semua field dari BackendLog
-// Field numbers dideduksi dari urutan JSON + proto3 convention
 message FfAntiConfigDesc {
-  string region               = 1;  // FIX: ada di BackendLog (sebelumnya tidak ada)
-  bool   enable               = 2;  // sebelumnya field 1
-  string config_url           = 3;  // sebelumnya field 2
-  string version              = 4;  // sebelumnya field 3
-  bool   hpe_enable           = 5;  // FIX: baru
-  bool   ffi_enable           = 6;  // FIX: baru
-  bool   mtp_lite_data_enable = 7;  // FIX: baru
-  bool   ffm_enable           = 8;  // FIX: baru
-  bool   ffo_enable           = 9;  // FIX: baru
+  string region               = 1;
+  bool   enable               = 2;
+  string config_url           = 3;
+  string version              = 4;
+  bool   hpe_enable           = 5;
+  bool   ffi_enable           = 6;
+  bool   mtp_lite_data_enable = 7;
+  bool   ffm_enable           = 8;
+  bool   ffo_enable           = 9;
 }
 
-// RAFIN = full MajorLogin response
 message RAFIN {
-  uint64              account_id            = 1;
-  string              lock_region           = 2;
-  string              noti_region           = 3;
-  string              ip_region             = 4;
-  string              agora_environment     = 5;
-  string              new_active_region     = 6;
-  repeated string     recommend_regions     = 7;
-  string              token                 = 8;
-  uint32              ttl                   = 9;
-  string              server_url            = 10;
-  uint32              emulator_score        = 11;
-  BlacklistInfoRes    blacklist             = 12;
-  LoginQueueInfo      queue_info            = 13;
-  string              tp_url                = 14;
-  uint32              app_server_id         = 15;
-  string              ano_url               = 16;
-  string              ip_city               = 17;
-  string              ip_subdivision        = 18;
-  uint32              kts                   = 19;
-  uint32              ano_port              = 20;
-  int64               timestamp             = 21;
-  bytes               ak                    = 22;
-  bytes               aiv                   = 23;
-  string              ffanti_url            = 24;
-  FfAntiConfigDesc    ff_anti_config_desc   = 25;
-  string              garena_open_id        = 26;
-  uint32              login_count           = 27;
-  string              server_region         = 28;
-  uint32              account_type          = 29;
-  uint32              login_type            = 30;
-  string              device_id             = 31;
-  uint32              is_banned             = 32;
-  string              ban_message           = 33;
-  uint32              client_debug_flag     = 34;
-  string              sdk_platform          = 35;
+  uint64              account_id               = 1;
+  string              lock_region              = 2;
+  string              noti_region              = 3;
+  string              ip_region                = 4;
+  string              agora_environment        = 5;
+  string              new_active_region        = 6;
+  repeated string     recommend_regions        = 7;
+  string              token                    = 8;
+  uint32              ttl                      = 9;
+  string              server_url               = 10;
+  uint32              emulator_score           = 11;
+  BlacklistInfoRes    blacklist                = 12;
+  LoginQueueInfo      queue_info               = 13;
+  string              tp_url                   = 14;
+  uint32              app_server_id            = 15;
+  string              ano_url                  = 16;
+  string              ip_city                  = 17;
+  string              ip_subdivision           = 18;
+  uint32              kts                      = 19;
+  uint32              ano_port                 = 20;
+  int64               timestamp                = 21;
+  bytes               ak                       = 22;
+  bytes               aiv                      = 23;
+  string              ffanti_url               = 24;
+  FfAntiConfigDesc    ff_anti_config_desc      = 25;
+  string              garena_open_id           = 26;
+  uint32              login_count              = 27;
+  string              server_region            = 28;
+  uint32              account_type             = 29;
+  uint32              login_type               = 30;
+  string              device_id                = 31;
+  uint32              is_banned                = 32;
+  string              ban_message              = 33;
+  uint32              client_debug_flag        = 34;
+  string              sdk_platform             = 35;
+  // OB55 NEW FIELDS
+  bool                connection_seed_enabled  = 36;
+  string              connection_seed          = 37;
 }
