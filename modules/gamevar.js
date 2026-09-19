@@ -234,7 +234,7 @@ function getVerConfig(clientIp, myDomain, gameVersion, releaseVersion) {
         "guest_login":                          true,
         "garena_login":                         false,
         "garena_hint":                          false,
-        "login_failed_count":                   2,           // OB55: 2 (sebelumnya 4)
+        "login_failed_count":                   10,
         "login_download_optionalpack":          "optionalclothres:shaders|optionalpetres:optionalpetres_commonab_shader|optionallobbyres:",
         "login_notice":                         "Welcome!",
         "free_rematch":                         true,

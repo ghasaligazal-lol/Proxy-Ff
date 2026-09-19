@@ -61,13 +61,20 @@ function sendSpoofOK(res, isBinary) {
 }
 
 // ===== BAN PATCH =====
-const BAN_INFO_KEY = 'AEBBNFBNIDB';
+const BAN_INFO_KEY   = 'AEBBNFBNIDB';
+const LGEBP_KEY      = 'LGEBPFEFOHC'; // is_in_blacklist field di GetLoginData
 
 function patchBanInfo(jsonObj) {
+    // Patch AEBBNFBNIDB (ban_mode, unban_time)
     if (jsonObj && typeof jsonObj[BAN_INFO_KEY] === 'object' && jsonObj[BAN_INFO_KEY] !== null) {
-        const banInfo = jsonObj[BAN_INFO_KEY];
-        banInfo.ban_mode = 0; banInfo.unban_time = 0; banInfo.hint_string = '';
+        const b = jsonObj[BAN_INFO_KEY];
+        b.ban_mode = 0; b.unban_time = 0; b.hint_string = '';
+        b.ban_time = 0; b.ban_reason = 0; b.ban_type = '';
+        b.expire_duration = 0; b.ban_reason_detail = '';
     }
+    // Patch LGEBPFEFOHC (is_in_blacklist bool di GetLoginData)
+    if (jsonObj && jsonObj[LGEBP_KEY] !== undefined) jsonObj[LGEBP_KEY] = false;
+
     if (jsonObj && Array.isArray(jsonObj.blacklist)) jsonObj.blacklist = [];
     if (jsonObj && jsonObj.blacklist_info !== undefined) jsonObj.blacklist_info = null;
 
@@ -77,16 +84,20 @@ function patchBanInfo(jsonObj) {
         if ('is_in_blacklist' in obj) {
             obj.is_in_blacklist = false; obj.ban_time = 0; obj.ban_reason = 0;
             obj.ban_reason_detail = ''; obj.ban_expire_duration = 0; obj.ban_type = '';
+            if (obj.expire_duration !== undefined) obj.expire_duration = 0;
         }
+        if ('ban_mode' in obj) { obj.ban_mode = 0; }
+        if ('unban_time' in obj) { obj.unban_time = 0; }
         if ('matchmaking_blacklist' in obj) {
             const mbl = obj.matchmaking_blacklist;
             if (typeof mbl === 'number') obj.matchmaking_blacklist = 0;
-            else if (mbl && typeof mbl === 'object' && mbl.is_in_blacklist) {
+            else if (mbl && typeof mbl === 'object') {
                 mbl.is_in_blacklist = false; mbl.ban_time = 0; mbl.ban_reason = 0;
                 mbl.ban_reason_detail = ''; mbl.ban_expire_duration = 0; mbl.ban_type = '';
             }
         }
         if ('championship_is_in_blacklist' in obj) obj.championship_is_in_blacklist = false;
+        if (LGEBP_KEY in obj) obj[LGEBP_KEY] = false;
         for (const k of Object.keys(obj)) zapBL(obj[k], depth + 1);
     }
     zapBL(jsonObj, 0);
@@ -94,9 +105,19 @@ function patchBanInfo(jsonObj) {
 
 function patchMatchmakingBL(jsonObj, urlPath) {
     if (!urlPath.includes('GetMatchmakingBlacklist') || !jsonObj || typeof jsonObj !== 'object') return;
+    // Zero semua kemungkinan struktur blacklist di GetMatchmakingBlacklist
     jsonObj.blacklist = []; jsonObj.blacklist_info = null;
     if (jsonObj.blacklist_list !== undefined) jsonObj.blacklist_list = [];
     if (jsonObj.bl_list !== undefined) jsonObj.bl_list = [];
+    if (jsonObj.is_in_blacklist !== undefined) jsonObj.is_in_blacklist = false;
+    if (jsonObj.ban_time !== undefined) jsonObj.ban_time = 0;
+    if (jsonObj.ban_reason !== undefined) jsonObj.ban_reason = 0;
+    if (jsonObj.matchmaking_blacklist !== undefined) {
+        if (typeof jsonObj.matchmaking_blacklist === 'number') jsonObj.matchmaking_blacklist = 0;
+        else if (typeof jsonObj.matchmaking_blacklist === 'object') {
+            jsonObj.matchmaking_blacklist = { is_in_blacklist: false, ban_time: 0, ban_reason: 0 };
+        }
+    }
 }
 
 // ===== GIN/GGP PATCH =====
