@@ -1,55 +1,46 @@
-# Proxy FF — Speed + Sensi Only (Clean Build)
-
-Mode ini hanya inject **RunSpeed** dan **Sensitivity** ke gamevar.
-Tidak ada cache_res patch, tidak ada hitbox mod, tidak ada skin inject, tidak ada mail inject.
-Asset game didownload langsung dari server Garena resmi → lebih aman.
-
-## Yang Ada
-- ✅ Bypass GIN / GGP / anticheat (wajib untuk proxy)
-- ✅ Ban mode patch (MajorLogin + GetLoginData)
-- ✅ RunSpeed inject (dynamic dari dashboard)
-- ✅ Sensitivity inject (dynamic dari dashboard)
-- ✅ Telemetry / upload spoof
-- ✅ CDN local + proxy ke Garena
-- ✅ Telegram login notification
-
-## Yang Tidak Ada
-- ❌ Skin / emote / avatar inject
-- ❌ Mail inject / fake mail
-- ❌ Login reward fake
-- ❌ Cache_res patch (hitbox mod)
-- ❌ ESP / aimbot
-
-## Konfigurasi
-Edit `.env` atau set env vars di Railway:
-```
-PROXY_URL=https://domain-kamu.railway.app/
-TG_BOT_TOKEN=your_token
-TG_CHAT_ID=your_chat_id
-```
-
-## Dashboard API
-- `GET /api/config` — baca config saat ini
-- `POST /api/config` — simpan config
-
-Body POST:
-```json
-{
-  "runSpeed": 5.5,
-  "sensi": {
-    "SensitivityMaxSetting": 9.5,
-    "Sensitivity1PMaxSetting": 9.5,
-    "X1ScopeMaxSetting": 9.5,
-    "X2ScopeMaxSetting": 9.5,
-    "X4ScopeMaxSetting": 9.5,
-    "X8ScopeMaxSetting": 9.5,
-    "FreeLookMaxSetting": 9.5
-  }
-}
-```
-`runSpeed: null` = tidak inject (default game).
+# FF Proxy by Reza — OB55
 
 ## Deploy Railway
-1. Upload folder ini
-2. Set `PROXY_URL` di Environment Variables
-3. Opsional: `TG_BOT_TOKEN` dan `TG_CHAT_ID`
+1. Upload repo ke GitHub → connect ke Railway
+2. Set env variables:
+   - `PROXY_URL` = URL Railway kamu (contoh: `https://xxx.up.railway.app/`)
+   - `TG_BOT_TOKEN` = token bot Telegram
+   - `TG_CHAT_ID` = chat ID Telegram kamu
+   - `PORT` = 3030 (Railway set otomatis)
+
+## Setup Device (TANPA ROOT)
+1. Download `localconfig.json` dari dashboard → taruh di:
+   `/storage/emulated/0/Android/data/com.dts.freefireth/files/localConfig.json`
+2. Import `BypassReza.json` ke AdAway (blok domain anticheat)
+3. Buka game — ver.php akan hit proxy, bukan Garena
+
+## File Structure
+```
+public/
+  cdn/
+    cache_res           — cache_res file (binary)
+    localconfig.json    — localConfig untuk device
+    libAPKBYPASS.so     — bypass library
+  api/
+    live/
+      ABHotUpdates/
+        fileinfo        — fileinfo dengan hash codepatch diupdate
+  index.html            — dashboard
+```
+
+## Modules
+- `majorlogin.js` — intercept MajorLogin, patch proto, disable anticheat
+- `gamevar.js` — serve ver.php dengan gamevar disable anticheat + RunSpeed
+- `proxy.js` — forward ke loginbp/clientbp, patch JSON ban/GIN
+- `cdn.js` — serve CDN files, intercept fileinfo
+- `ping.js` — serve /Ping dalam format protobuf
+- `config.js` — simpan/baca config speed+sensi dari dashboard
+- `tglog.js` — notifikasi Telegram
+
+## Changelog v2.1.0
+- Fix: `require('../gamevar')` di proxy.js → langsung pakai `process.env.PROXY_URL`
+- Fix: cdn.js tambah handler `/live/ABHotUpdates/android_astc/<ver>/fileinfo`
+- Fix: gamevar config reload fresh dari disk (bukan cache module)
+- Fix: IP FFRTC hardcoded (202.181.82.79 dll) ditambah ke gin domain pattern
+- Fix: protobufjs pinned ke v7 (v8 ada breaking changes)
+- Fix: localconfig.json tambah `testCodePatch: false`

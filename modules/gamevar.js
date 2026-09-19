@@ -2,12 +2,15 @@
 // gamevar.js — OB55 FIXED
 // BUG FIX: require('./modules/config') → require('./config') (path relatif dari dalam modules/)
 
-let _cfg = null;
 function getConfig() {
-    if (!_cfg) {
-        try { _cfg = require('./config'); } catch (_) { _cfg = null; }  // FIX: was './modules/config'
+    try {
+        // FIX: always load fresh dari disk, bukan cache module
+        // supaya perubahan dari dashboard langsung ngefek tanpa restart
+        const cfgMod = require('./config');
+        return cfgMod.load();
+    } catch (_) {
+        return { runSpeed: 6.0, sensi: {} };
     }
-    return _cfg ? _cfg.load() : { runSpeed: 6.0, sensi: {} };
 }
 
 function getGamevarLines() {
@@ -150,99 +153,141 @@ function getGamevarLines() {
 const MY_IP        = process.env.PROXY_URL || 'https://proxy-reza-kontolodon-memek-luu.up.railway.app/';
 const REDIRECT_URL = 'https://whatsapp.com/channel/0029Vb8eX0Z1NCrYCXEXuu0K';
 
-function getVerConfig(clientIp = '74.125.24.139', myDomain = MY_IP, gameVersion = null, releaseVersion = null) {
+function getVerConfig(clientIp, myDomain, gameVersion, releaseVersion) {
+    clientIp       = clientIp       || '74.125.24.139';
+    myDomain       = (myDomain       || MY_IP).replace(/\/$/, '') + '/';
+    gameVersion    = gameVersion    || '1.132.6';
+    releaseVersion = releaseVersion || 'OB55';
+
     return {
-        "abhotupdate_cdn_url":               "https://core-gmc.freefiremobile.com/live/ABHotUpdates/",
-        "abhotupdate_check":                 "",
-        "anti_hack_open":                    false,
-        "appstore_url":                      REDIRECT_URL,
-        "backup_appstore_url":               "",
-        "backup_cdn_url":                    "https://dl.gmc.freefiremobile.com/live/ABHotUpdates/",
-        "billboard_bg_url":                  "https://dl.cdn.freefiremobile.com/common/OB23/version/Patch_Bg.png",
-        "billboard_cdn_url":                 REDIRECT_URL,
-        "billboard_msg":                     "",
-        "cdn_active":                        "https://dl.gmc.freefiremobile.com/",
-        "cdn_ip_list":                       [],
-        "cdn_port":                          6072,
-        "cdn_url":                           "https://dl.gmc.freefiremobile.com/live/ABHotUpdates/",
-        "client_ip":                         clientIp,
-        "code":                              0,
-        "core_ip_list":                      ["0.0.0.0","50.109.27.134","129.226.2.163","129.226.1.13","129.226.1.16"],
-        "core_url":                          "csoversea.castle.freefiremobile.com",
-        "country_code":                      "ID",
-        "device_whitelist_sp_version":       "1.0.0",
-        "device_whitelist_version":          "",
-        "whitelist_mask":                    0,
-        "whitelist_sp_mask":                 0,
-        "whitelist_info":                    "",
-        "whitelist_sp_info":                 "",
-        "enable_clear_mem_when_autopause":   true,
-        "enable_hash_pdcache":               true,
-        "enable_min_height":                 false,
-        "enable_min_resolution_height":      false,
-        "enable_reduce_rate":                false,
-        "enable_unmap_web_view_vm":          false,
-        "force_refresh_restype":             "optionalavatarres",
-        "force_to_restart_app":              false,
-        "free_guest_login":                  true,
-        "free_rematch":                      true,
-        "gamevar":                           getGamevarLines().join("\n"),
-        "garena_hint":                       false,
-        "garena_login":                      false,
-        "gdpr_version":                      1,
-        "ggp_url":                           "",
-        "gop_url":                           "",
-        "grey_update_percent":               0,
-        "guest_login":                       true,
-        "high_frame_default":                0,
-        "hotfile_force_update":              true,
-        "hs_config":                         { "nome": "", "porta": 6072 },
-        "img_cdn_url":                       "https://dl.gmc.freefiremobile.com/common/",
-        "is_firewall_open":                  false,
-        "is_review_server":                  false,
-        "is_server_open":                    true,
-        "is_update_btn_show":                false,
-        "is_use_multi_download":             true,
-        "latest_release_version":            releaseVersion || "OB55",
-        "login_download_optionalpack":       "optionalclothres:shaders|optionalpetres:optionalpetres_commonab_shader|optionallobbyres:",
-        "login_failed_count":                4,
-        "login_notice":                      "Welcome to Proxy Server!",
-        "maintain_msg":                      "",
-        "maintain_url":                      REDIRECT_URL,
-        "maintenance_announcement":          null,
-        "maintenance_region":                null,
-        "max_store":                         "",
-        "max_video":                         "",
-        "max_web":                           "",
-        "min_hint_size":                     1,
-        "multi_region":                      "ID",
-        "need_check_ip_list":                [],
-        "need_track_hotupdate":              true,
-        "network_log_server":                myDomain + "api/network_log",
-        "notice_url":                        myDomain,
-        "patchnote_url":                     "https://whatsapp.com/channel/0029VbBnIVuCMY0POm5gqO1P",
-        "quality_level":                     0,
-        "graphic_level":                     0,
-        "remote_option_version":             "optionallocres:51|optionalavatarres:744|optionalclothres:1187|optionalfootballres:47|optionalfullscreencgres:334|optionalhuntinggroundres:178|optionalinfection:121|optionalingameres:480|optionallobbyres:634|optionallonewolfres:77|optionallonewolfstrikeoutres:23|optionalludores:40|optionalmap1res:391|optionalmap2res:125|optionalmap4res:110|optionalmaphippores:90|optionalmapres:343|optionalnewblast:138|optionalpetres:876|optionalrushb:123|optionalrushingpetsres:88|optionalsnowduelres:59|optionaltrainingres:88|optionalugcres:551|optionalvoiceres:360|optionalwerewolves:173|optionalmapponyres:200|optionalsocialres:111|optionalwerunres:83|optionalugcoldparadiseres:32|optionalmultiregionres:25",
-        "remote_option_version_astc":        "optionallocres:51|optionalavatarres:747|optionalclothres:1187|optionalfootballres:38|optionalfullscreencgres:318|optionalhuntinggroundres:178|optionalinfection:116|optionalingameres:449|optionallobbyres:617|optionallonewolfres:139|optionallonewolfstrikeoutres:96|optionalludores:144|optionalmap1res:391|optionalmap2res:159|optionalmap4res:144|optionalmaphippores:92|optionalmapres:377|optionalnewblast:138|optionalpetres:876|optionalrushb:227|optionalrushingpetsres:192|optionalsnowduelres:59|optionaltrainingres:84|optionalugcres:521|optionalvoiceres:393|optionalwerewolves:277|optionalmapponyres:200|optionalsocialres:106|optionalwerunres:74|optionalugcoldparadiseres:32|optionalmultiregionres:26",
-        "remote_version":                    gameVersion || "2.132.3",
-        "res_url":                           "https://dl.gmc.freefiremobile.com/live/ABHotUpdates/",
-        "server_url":                        myDomain,
-        "should_check_ab_exist":             true,
-        "should_check_ab_load":              false,
-        "should_check_ab_size":              true,
-        "show_high_framerate_UI":            true,
-        "space_required_in_GB":             1.48,
-        "test_url":                          myDomain,
-        "use_background_download":           false,
-        "use_background_download_lobby":     false,
+        // ── Status ────────────────────────────────────────────────────────────
+        "code":                                 0,
+        "is_server_open":                       true,
+        "is_review_server":                     false,
+        "is_firewall_open":                     false,
+        "force_to_restart_app":                 false,
+        "is_update_btn_show":                   false,
+
+        // ── Version ───────────────────────────────────────────────────────────
+        "remote_version":                       gameVersion,
+        "latest_release_version":               releaseVersion,
+
+        // ── Optional resource versions (OB55 from log) ────────────────────────
+        "remote_option_version":                "optionallocres:51|optionalavatarres:832|optionalclothres:1270|optionalfootballres:27|optionalfullscreencgres:319|optionalhuntinggroundres:246|optionalinfection:125|optionalingameres:516|optionallobbyres:667|optionallonewolfres:86|optionallonewolfstrikeoutres:59|optionalludores:42|optionalmap1res:391|optionalmap2res:156|optionalmap4res:139|optionalmaphippores:118|optionalmapres:360|optionalnewblast:163|optionalpetres:943|optionalrushb:108|optionalrushingpetsres:84|optionalsnowduelres:65|optionalsocialres:223|optionaltrainingres:302|optionalugcres:860|optionalvoiceres:349|optionalwerewolves:153|optionalwerunres:92|optionalmapponyres:204|optionalugcoldparadiseres:34|optionalmultiregionres:29",
+        "remote_option_version_astc":           "optionallocres:51|optionalavatarres:794|optionalclothres:1270|optionalfootballres:29|optionalfullscreencgres:306|optionalhuntinggroundres:216|optionalinfection:124|optionalingameres:476|optionallobbyres:668|optionallonewolfres:206|optionallonewolfstrikeoutres:155|optionalludores:175|optionalmap1res:391|optionalmap2res:192|optionalmap4res:175|optionalmaphippores:120|optionalmapres:394|optionalnewblast:162|optionalpetres:943|optionalrushb:241|optionalrushingpetsres:217|optionalsnowduelres:65|optionalsocialres:215|optionaltrainingres:274|optionalugcres:802|optionalvoiceres:384|optionalwerewolves:286|optionalwerunres:81|optionalmapponyres:204|optionalugcoldparadiseres:33|optionalmultiregionres:27",
+
+        // ── CDN ───────────────────────────────────────────────────────────────
+        "cdn_url":                              "https://dl.gmc.freefiremobile.com/live/ABHotUpdates/",
+        "abhotupdate_cdn_url":                  "https://core-gmc.freefiremobile.com/live/ABHotUpdates/",
+        "abhotupdate_check":                    "cache_res;assetindexer;SH-Gpp;assembly-cssharp-patch",
+        "backup_cdn_url":                       "https://dl.gmc.freefiremobile.com/live/ABHotUpdates/",
+        "res_url":                              "https://dl.gmc.freefiremobile.com/live/ABHotUpdates/",
+        "img_cdn_url":                          "https://dl.gmc.freefiremobile.com/common/",
+        "cdn_active":                           "https://dl.gmc.freefiremobile.com/",
+        "cdn_ip_list":                          [],
+        "cdn_port":                             6072,
+
+        // ── Server URLs (proxy intercept) ─────────────────────────────────────
+        "server_url":                           myDomain,
+        "notice_url":                           myDomain,
+        "test_url":                             myDomain,
+        "network_log_server":                   myDomain + "api/network_log",
+        "web_log_server":                       myDomain + "web_log",
+
+        // ── Anticheat (semua di-disable) ──────────────────────────────────────
+        "anti_hack_open":                       false,
+        "ggp_url":                              "",          // dari log: "gin.freefiremobile.com" → kita kosongkan
+        "gop_url":                              "",
+
+        // ── Billboard / patch notes ───────────────────────────────────────────
+        "billboard_cdn_url":                    REDIRECT_URL,
+        "billboard_msg":                        "",
+        "billboard_bg_url":                     "https://dl.cdn.freefiremobile.com/common/OB23/version/Patch_Bg.png",
+        "patchnote_url":                        REDIRECT_URL,
+
+        // ── Client info ───────────────────────────────────────────────────────
+        "client_ip":                            clientIp,
+        "country_code":                         "ID",
+        "multi_region":                         "",
+        "gdpr_version":                         0,
+
+        // ── Store / web ───────────────────────────────────────────────────────
+        "appstore_url":                         REDIRECT_URL,
+        "backup_appstore_url":                  "",
+        "max_store":                            "",
+        "max_web":                              "",
+        "max_video":                            "",
+        "web_url":                              "",
+
+        // ── Maintenance ───────────────────────────────────────────────────────
+        "maintain_msg":                         "",
+        "maintain_url":                         REDIRECT_URL,
+        "maintenance_announcement":             null,
+        "maintenance_region":                   null,
+
+        // ── Network check ─────────────────────────────────────────────────────
+        "need_check_ip_list":                   [],          // dari log: ["202.81.108.9"] → kita kosongkan
+        "need_track_hotupdate":                 true,
+
+        // ── Login ─────────────────────────────────────────────────────────────
+        "free_guest_login":                     true,
+        "guest_login":                          true,
+        "garena_login":                         false,
+        "garena_hint":                          false,
+        "login_failed_count":                   2,           // OB55: 2 (sebelumnya 4)
+        "login_download_optionalpack":          "optionalclothres:shaders|optionalpetres:optionalpetres_commonab_shader|optionallobbyres:",
+        "login_notice":                         "Welcome!",
+        "free_rematch":                         true,
+
+        // ── Download ──────────────────────────────────────────────────────────
+        "use_login_optional_download":          true,
+        "use_background_download":              false,
+        "use_background_download_lobby":        false,
         "use_backgound_download_mem_thredshold": 2.79999995231628,
-        "use_login_optional_download":       true,
-        "use_multithread_hash":              true,
-        "use_regional_gamevar":              true,
-        "web_log_server":                    myDomain + "web_log",
-        "web_url":                           "",
-        "apply_skin":                        0,
+        "is_use_multi_download":                true,
+        "hotfile_force_update":                 true,
+        "use_multithread_hash":                 true,
+
+        // ── Asset bundle check ────────────────────────────────────────────────
+        "should_check_ab_load":                 false,
+        "should_check_ab_exist":                true,
+        "should_check_ab_size":                 true,
+        "enable_hash_pdcache":                  true,
+        "use_regional_gamevar":                 true,
+        "force_refresh_restype":                "optionalavatarres",
+
+        // ── Device / display ──────────────────────────────────────────────────
+        "quality_level":                        0,
+        "graphic_level":                        0,
+        "show_high_framerate_UI":               false,       // OB55: false (sebelumnya true)
+        "high_frame_default":                   0,
+        "enable_clear_mem_when_autopause":      true,
+        "enable_reduce_rate":                   false,
+        "enable_min_resolution_height":         false,
+        "enable_min_height":                    false,
+        "enable_unmap_web_view_vm":             false,
+        "resolution_reduceRate_blit_type":      null,
+        "space_required_in_GB":                 1.48,
+        "min_hint_size":                        1,
+        "apply_skin":                           0,
+
+        // ── Whitelist device ──────────────────────────────────────────────────
+        "device_whitelist_version":             "",
+        "device_whitelist_sp_version":          "",
+        "device_whitelist_priority":            0,
+        "device_whitelist_sp_priority":         0,
+        "whitelist_mask":                       0,
+        "whitelist_info":                       "",
+        "whitelist_sp_mask":                    0,
+        "whitelist_sp_info":                    "",
+
+        // ── Core (game server) ────────────────────────────────────────────────
+        "core_url":                             "csoversea.castle.freefiremobile.com",
+        "core_ip_list":                         ["0.0.0.0","50.109.27.134","129.226.2.163","129.226.1.13","129.226.1.16"],
+        "hs_config":                            { "nome": "", "porta": 6072 },
+
+        // ── Gamevar (anticheat off + speed + sensi) ───────────────────────────
+        "gamevar":                              getGamevarLines().join("\n"),
     };
 }
 

@@ -1,4 +1,5 @@
 {
- "verAddr":"https://proxy-reza-kontolodon-memek-luu.up.railway.app/",
- "resetGuest":true
+  "verAddr": "https://proxy-reza-kontolodon-memek-luu.up.railway.app/",
+  "resetGuest": true,
+  "testCodePatch": false
 }

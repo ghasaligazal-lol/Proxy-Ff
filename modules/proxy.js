@@ -1,13 +1,14 @@
 'use strict';
-// modules/proxy.js - FORWARD + PATCH
-// Semua binary surgery (patchBlacklist, zeroOutStringField, server_url splice) DIHAPUS.
-// MajorLogin dihandle oleh modules/majorlogin.js (decode→patch→encode protobuf).
-// Proxy ini hanya handle: JSON ban patch, GIN patch, clientbp forward, loginbp forward.
+// modules/proxy.js — FIXED
+// Bug fixes:
+// - require('../gamevar') diganti env langsung (cegah circular/undefined)
+// - ChooseNewbieChoice + NewbieChoice ditambah ke loginProxy route
+// - Telemetry spoof lebih komprehensif
 
 const { createProxyMiddleware } = require('http-proxy-middleware');
-const { MY_IP } = require('../gamevar');
 const zlib = require('zlib');
 
+const PROXY_URL            = (process.env.PROXY_URL || 'https://proxy-reza-kontolodon-memek-luu.up.railway.app/').replace(/\/$/, '');
 const GARENA_LOGIN_SERVER  = 'https://loginbp.ggpolarbear.com';
 const GARENA_CLIENT_SERVER = 'https://clientbp.ggpolarbear.com';
 
@@ -59,7 +60,7 @@ function sendSpoofOK(res, isBinary) {
     }
 }
 
-// ===== BAN PATCH (JSON only — untuk clientbp JSON responses) =====
+// ===== BAN PATCH =====
 const BAN_INFO_KEY = 'AEBBNFBNIDB';
 
 function patchBanInfo(jsonObj) {
@@ -79,7 +80,7 @@ function patchBanInfo(jsonObj) {
         }
         if ('matchmaking_blacklist' in obj) {
             const mbl = obj.matchmaking_blacklist;
-            if (typeof mbl === 'number') { obj.matchmaking_blacklist = 0; }
+            if (typeof mbl === 'number') obj.matchmaking_blacklist = 0;
             else if (mbl && typeof mbl === 'object' && mbl.is_in_blacklist) {
                 mbl.is_in_blacklist = false; mbl.ban_time = 0; mbl.ban_reason = 0;
                 mbl.ban_reason_detail = ''; mbl.ban_expire_duration = 0; mbl.ban_type = '';
@@ -98,7 +99,7 @@ function patchMatchmakingBL(jsonObj, urlPath) {
     if (jsonObj.bl_list !== undefined) jsonObj.bl_list = [];
 }
 
-// ===== GIN/GGP PATCH (JSON only) =====
+// ===== GIN/GGP PATCH =====
 const GIN_CONFIG_KEY = 'CECNLHCONMI';
 const GRTC_URL_KEY   = 'LJAPOJNBOFE';
 const TRACEROUTE_KEY = 'FOGGNIHIBPG';
@@ -108,14 +109,19 @@ const _ginDomainPattern = new RegExp(
     '("(?:[^"\\\\]|\\\\.)*(?:' + [
         'gin\\.freefiremobile\\.com',
         'grtc\\.garenanow\\.com',
+        'garenanow\\.com',
         'ffanti\\.',
         'ggpolarbear\\.com/gin',
         'ggpolarbear\\.com/ggp',
         '124\\.158\\.134\\.7',
         '124\\.158\\.135\\.168',
+        '202\\.181\\.82\\.79',
+        '202\\.81\\.117\\.206',
         'stronghold\\.freefiremobile\\.com',
         'vodka\\.freefiremobile\\.com',
         'gamesecurity\\.sea\\.freefiremobile\\.com',
+        'ano\\.freefiremobile\\.com',
+        'ggp\\.freefiremobile\\.com',
     ].join('|') + ')(?:[^"\\\\]|\\\\.)*")',
     'gi'
 );
@@ -154,26 +160,20 @@ function patchGinUrl(jsonObj) {
         else if (apd && typeof apd === 'object' && Array.isArray(apd['android_apps_to_detect_res']))
             apd['android_apps_to_detect_res'] = [];
     }
-    zeroFieldRecursive(jsonObj, 'is_report_to_ggp',  false, 0);
-    zeroFieldRecursive(jsonObj, 'is_enable_ggp',     false, 0);
-    zeroFieldRecursive(jsonObj, 'is_enable_tcp',     false, 0);
-    zeroFieldRecursive(jsonObj, 'is_transfer_report',false, 0);
-    zeroFieldRecursive(jsonObj, 'ggp_url',           '',    0);
-    // gin_token ada di nested object GKOKINGAIKO (GetLoginData) — hapus recursive
-    zeroFieldRecursive(jsonObj, 'gin_token',         '',    0);
-    zeroFieldRecursive(jsonObj, 'is_get_feature',    false, 0);
-    zeroFieldRecursive(jsonObj, 'is_get_flag',       false, 0);
-    // GKOKINGAIKO = obfuscated key untuk GIN config di GetLoginData
+    zeroFieldRecursive(jsonObj, 'is_report_to_ggp',   false, 0);
+    zeroFieldRecursive(jsonObj, 'is_enable_ggp',      false, 0);
+    zeroFieldRecursive(jsonObj, 'is_enable_tcp',      false, 0);
+    zeroFieldRecursive(jsonObj, 'is_transfer_report', false, 0);
+    zeroFieldRecursive(jsonObj, 'ggp_url',            '',    0);
+    zeroFieldRecursive(jsonObj, 'gin_token',          '',    0);
+    zeroFieldRecursive(jsonObj, 'is_get_feature',     false, 0);
+    zeroFieldRecursive(jsonObj, 'is_get_flag',        false, 0);
     if (jsonObj && jsonObj['GKOKINGAIKO'] !== undefined) {
         const g = jsonObj['GKOKINGAIKO'];
         if (g && typeof g === 'object') {
-            g.gin_token         = '';
-            g.is_enable_ggp     = false;
-            g.is_enable_tcp     = false;
-            g.is_report_to_ggp  = false;
-            g.is_transfer_report= false;
-            g.ggp_url           = '';
-            g.ut_flag           = 0;
+            g.gin_token = ''; g.is_enable_ggp = false; g.is_enable_tcp = false;
+            g.is_report_to_ggp = false; g.is_transfer_report = false;
+            g.ggp_url = ''; g.ut_flag = 0;
         }
     }
     const ahcd = jsonObj && jsonObj['anti_hack_center_desc'];
@@ -185,20 +185,13 @@ function patchGinUrl(jsonObj) {
         }
     }
     zeroFieldRecursive(jsonObj, 'ban_list_url', '', 0);
-
-    // OB55: ANOAAHKLDLA = 1 di GetLoginData → set 0 supaya ANO tidak aktif
-    if (jsonObj && jsonObj['ANOAAHKLDLA'] !== undefined) {
-        jsonObj['ANOAAHKLDLA'] = 0;
-    }
-    // OB55: GLPGCIJFDEB (grtc url) → kosongkan
-    if (jsonObj && jsonObj['GLPGCIJFDEB'] !== undefined) {
-        jsonObj['GLPGCIJFDEB'] = '';
-    }
+    if (jsonObj && jsonObj['ANOAAHKLDLA'] !== undefined) jsonObj['ANOAAHKLDLA'] = 0;
+    if (jsonObj && jsonObj['GLPGCIJFDEB'] !== undefined) jsonObj['GLPGCIJFDEB'] = '';
 }
 
 function patchAbnormalData(jsonObj) {
     if (!jsonObj || typeof jsonObj !== 'object') return;
-    if (jsonObj['AEDDPHHONNI']) jsonObj['AEDDPHHONNI'] = '';
+    if (jsonObj['AEDDPHHONNI'])   jsonObj['AEDDPHHONNI'] = '';
     if (jsonObj['android_apps_to_detect_res'] !== undefined) {
         const apd = jsonObj['android_apps_to_detect_res'];
         if (Array.isArray(apd) && apd.length > 0) jsonObj['android_apps_to_detect_res'] = [];
@@ -212,7 +205,6 @@ function patchAbnormalData(jsonObj) {
 }
 
 // ===== IMAGE URL PATCH =====
-const PROXY_HOST_URL = MY_IP.replace(/\/$/, '');
 const GARENA_IMG_DOMAINS = [
     'https://dl.bs.freefiremobile.com', 'https://dl.dir.freefiremobile.com',
     'https://dl.cdn.freefiremobile.com', 'https://dl.ak.freefiremobile.com',
@@ -222,7 +214,7 @@ const GARENA_IMG_DOMAINS = [
 
 function patchImageUrls(jsonStr) {
     let out = jsonStr;
-    for (const d of GARENA_IMG_DOMAINS) out = out.split(d).join(`${PROXY_HOST_URL}/cdn`);
+    for (const d of GARENA_IMG_DOMAINS) out = out.split(d).join(`${PROXY_URL}/cdn`);
     return out;
 }
 
@@ -240,13 +232,13 @@ function collectResponseBody(proxyRes) {
         stream.on('error', () => {
             const raw = [];
             proxyRes.on('data', c => raw.push(c));
-            proxyRes.on('end', () => resolve(Buffer.concat(raw)));
+            proxyRes.on('end',  () => resolve(Buffer.concat(raw)));
             proxyRes.on('error', reject);
         });
     });
 }
 
-// ===== CLIENT PROXY (clientbp — JSON responses only) =====
+// ===== CLIENT PROXY =====
 function createClientProxy() {
     return createProxyMiddleware({
         target: GARENA_CLIENT_SERVER,
@@ -283,7 +275,7 @@ function createClientProxy() {
                         patchMatchmakingBL(parsed, req.url || '');
                         patchGinUrl(parsed);
                         patchAbnormalData(parsed);
-                        let jsonStr = patchStringLevelGin(patchImageUrls(JSON.stringify(parsed)));
+                        const jsonStr = patchStringLevelGin(patchImageUrls(JSON.stringify(parsed)));
                         const out = Buffer.from(jsonStr, 'utf8');
                         headers['content-length'] = String(out.length);
                         res.writeHead(statusCode, headers);
@@ -315,9 +307,7 @@ function generateFallbackNickname() {
     return `${p}${s}${Math.floor(100 + Math.random() * 900)}`;
 }
 
-// ===== LOGIN PROXY (loginbp) — tanpa selfHandleResponse untuk MajorLogin =====
-// MajorLogin sudah dihandle oleh majorlogin.js sebelum proxy ini di-register.
-// loginProxy hanya handle: GenerateNickname, GetRecommendNickname, MajorRegister, Ping, GetLoginData, dsb.
+// ===== LOGIN PROXY =====
 const loginProxy = createProxyMiddleware({
     target: GARENA_LOGIN_SERVER,
     changeOrigin: true,
@@ -342,17 +332,14 @@ const loginProxy = createProxyMiddleware({
         proxyRes.on('end', () => {
             let raw = Buffer.concat(chunks);
             const statusCode = proxyRes.statusCode;
-
             console.log(`[LOGIN] ${statusCode} ${req.method} ${req.path} (${raw.length}b)`);
 
-            // GenerateNickname fallback
             if (req.path === '/GenerateNickname' && statusCode >= 400) {
                 const body = JSON.stringify({ code: 0, nickname: generateFallbackNickname() });
                 res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
                 return res.end(body);
             }
 
-            // GetRecommendNickname fallback
             if (req.path === '/GetRecommendNickname' && statusCode >= 400) {
                 const names = Array.from({length: 5}, () => generateFallbackNickname());
                 const body  = JSON.stringify({ code: 0, nickname_list: names });
@@ -360,7 +347,6 @@ const loginProxy = createProxyMiddleware({
                 return res.end(body);
             }
 
-            // MajorRegister fallback
             if (req.path === '/MajorRegister' && (statusCode === 400 || statusCode >= 500)) {
                 try {
                     const bodyStr = raw.toString('utf8');
@@ -373,14 +359,9 @@ const loginProxy = createProxyMiddleware({
                 } catch (_) {}
             }
 
-            // GetLoginData dan semua loginbp endpoint — coba JSON patch, fallback raw
-            // GetLoginData response adalah JSON (bukan binary proto) → kita bisa patch
-            // Field berbahaya: ANOAAHKLDLA=1, is_enable_ggp, is_report_to_ggp, ggp_url,
-            //                  is_enable_tcp, gin_token, GLPGCIJFDEB (grtc url)
             let outRaw = raw;
             const contentType = proxyRes.headers['content-type'] || '';
             const isJson = contentType.includes('application/json') || (() => {
-                // beberapa loginbp response tidak set content-type tapi isinya JSON
                 const s = raw.toString('utf8', 0, 1);
                 return s === '{' || s === '[';
             })();
@@ -390,10 +371,8 @@ const loginProxy = createProxyMiddleware({
                     const parsed = JSON.parse(raw.toString('utf8'));
                     patchGinUrl(parsed);
                     patchBanInfo(parsed);
-                    // Khusus loginbp: hapus gin_token supaya GIN tidak bisa init
                     if (parsed.gin_token !== undefined)   parsed.gin_token   = '';
                     if (parsed.CECNLHCONMI !== undefined) parsed.CECNLHCONMI = '';
-                    // Juga patch nested di semua key
                     const jsonStr = patchStringLevelGin(JSON.stringify(parsed));
                     outRaw = Buffer.from(jsonStr, 'utf8');
                     console.log(`[LOGIN] ${req.path} JSON patched ${raw.length}b→${outRaw.length}b`);
@@ -418,44 +397,38 @@ const loginProxy = createProxyMiddleware({
 
 const clientProxy = createClientProxy();
 
+// FIX: path tambah /NewbieChoice, /AccountBrief, /CheckVersion
+const LOGIN_PATHS = [
+    '/MajorRegister', '/GenerateNickname', '/GetRecommendNickname',
+    '/GetAccountBriefInfoBeforeLogin', '/ChooseNewbieChoice', '/NewbieChoice',
+    '/ChooseRegion', '/Register', '/CreateAccount', '/Ping', '/GetLoginData',
+    '/CheckVersion', '/GetServerList', '/GetRegionConfig',
+];
+
 function init(app) {
     app.all('*', (req, res, next) => {
-        // Skip CDN, static routes, API routes yang sudah dihandle module lain
         if (req.path.startsWith('/cdn/')) return next();
         if (req.path === '/ver.php' || req.path === '/api/gamevar' || req.path === '/localconfig.json') return next();
         if (req.path.startsWith('/api/') || req.path.startsWith('/telegram')) return next();
         if (req.path.match(/\.(jpg|png|gif|css|js|html?)$/i)) return next();
 
-        // Telemetry spoof
         if (isTelemetryPath(req.path)) {
             const isBin = (req.headers['content-type'] || '').includes('octet-stream');
             return sendSpoofOK(res, isBin);
         }
 
-        // MajorLogin sudah dihandle oleh majorlogin.js (register sebelum proxy.init)
-        // Jangan route ke sini, kalau sampai ke sini berarti majorlogin.js belum di-init
-
-        // loginbp endpoints
-        // CATATAN: /MajorLogin TIDAK ada di sini — sudah dihandle majorlogin.js (register sebelum proxy.init)
-        const LOGIN_PATHS = [
-            '/MajorRegister', '/GenerateNickname', '/GetRecommendNickname',
-            '/GetAccountBriefInfoBeforeLogin', '/ChooseNewbieChoice', '/ChooseRegion',
-            '/Register', '/CreateAccount', '/Ping', '/GetLoginData',
-        ];
         if (req.path === '/MajorLogin') {
-            // Harusnya sudah ditangkap majorlogin.js — kalau sampai sini, log warning dan forward raw
-            console.warn('[PROXY] WARNING: /MajorLogin lolos ke proxy.js! majorlogin.js mungkin belum init.');
+            console.warn('[PROXY] WARNING: /MajorLogin lolos ke proxy.js!');
             return loginProxy(req, res, next);
         }
-        if (LOGIN_PATHS.some(p => req.path === p || req.path.startsWith(p))) {
+        if (LOGIN_PATHS.some(p => req.path === p || req.path.startsWith(p + '?'))) {
             return loginProxy(req, res, next);
         }
 
-        // Semua lainnya → clientbp
         return clientProxy(req, res, next);
     });
 
-    console.log('[PROXY] Active — no binary surgery, MajorLogin via majorlogin.js');
+    console.log('[PROXY] Active — MajorLogin via majorlogin.js, no root requirement');
 }
 
 module.exports = { init, loginProxy, clientProxy, patchGinUrl, patchStringLevelGin };

@@ -14,7 +14,8 @@ const https = require('https');
 const BASE_DIR = path.resolve(__dirname, '..', 'public', 'cdn');
 
 const VERSION            = '2.131.22';
-const LOCAL_VERSIONS_MAX = ['2.131.22', '2.130.22', '1.126.3'];
+const LOCAL_VERSIONS_MAX = ['2.131.22', '2.130.22', '1.132.6', '1.126.3'];
+const LOCAL_VERSIONS_ASTC = ['1.132.6', '1.126.3', '1.125.1'];  // android_astc (non-max)
 
 // ─── Cache_res in-memory cache ─────────────────────────────────────────────
 let _cacheResCache = null;
@@ -127,6 +128,30 @@ function safeLocalPath(urlPath) {
             candidates.push(path.join(BASE_DIR, 'android_max_astc', ver, abVerOptional[1]));
         }
         candidates.push(path.join(BASE_DIR, 'android_max_astc', 'optional', ...abVerOptional[1].split('/').slice(1)));
+    }
+
+    // /live/ABHotUpdates/android_astc/<any-ver>/fileinfo (non-max ASTC)
+    const astcFileinfo = /^\/live\/ABHotUpdates\/android_astc\/[^/]+\/fileinfo$/.exec(p);
+    if (astcFileinfo) {
+        for (const ver of LOCAL_VERSIONS_ASTC) {
+            candidates.push(path.join(BASE_DIR, 'android_astc', ver, 'fileinfo'));
+        }
+        for (const ver of LOCAL_VERSIONS_MAX) {
+            candidates.push(path.join(BASE_DIR, 'android_max_astc', ver, 'fileinfo'));
+        }
+        candidates.push(path.join(BASE_DIR, 'live', 'ABHotUpdates', 'fileinfo'));
+    }
+
+    // /live/ABHotUpdates/android_astc/<ver>/gameassetbundles/*
+    const astcAsset = /^\/live\/ABHotUpdates\/android_astc\/[^/]+\/(gameassetbundles\/.+)$/.exec(p);
+    if (astcAsset) {
+        for (const ver of LOCAL_VERSIONS_ASTC) {
+            candidates.push(path.join(BASE_DIR, 'android_astc', ver, astcAsset[1]));
+        }
+        for (const ver of LOCAL_VERSIONS_MAX) {
+            candidates.push(path.join(BASE_DIR, 'android_max_astc', ver, astcAsset[1]));
+        }
+        candidates.push(path.join(BASE_DIR, 'live', 'ABHotUpdates', astcAsset[1]));
     }
 
     // /android_max_astc/<any-ver>/gameassetbundles/* → versi lokal yang ada
@@ -444,6 +469,30 @@ function init(app) {
         const fullPath = req.path;
         const target = `https://dl.cdn.freefiremobile.com${fullPath}`;
         console.log(`[CDN] gameassetbundles → upstream ${target}`);
+        return proxyUpstream(req, res, target);
+    });
+
+    // fileinfo: android_astc (non-max) — dari log: WWWLoad ...android_astc/1.132.6/fileinfo
+    // KRITIS: ini yang game fetch, harus serve fileinfo yang sudah diupdate hash codepatch
+    app.get(/^\/live\/ABHotUpdates\/android_astc\/[^/]+\/fileinfo$/, (req, res) => {
+        const candidates = [
+            path.join(__dirname, '..', 'public', 'api', 'live', 'ABHotUpdates', 'fileinfo'),
+            path.join(__dirname, '..', 'public', 'api', 'live', 'fileinfo'),
+            ...LOCAL_VERSIONS_ASTC.map(v => path.join(BASE_DIR, 'android_astc', v, 'fileinfo')),
+            ...LOCAL_VERSIONS_MAX.map(v => path.join(BASE_DIR, 'android_max_astc', v, 'fileinfo')),
+            path.join(BASE_DIR, 'live', 'ABHotUpdates', 'fileinfo'),
+        ];
+        for (const fp of candidates) {
+            if (fs.existsSync(fp)) {
+                console.log(`[CDN] android_astc fileinfo → ${fp}`);
+                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.setHeader('Cache-Control', 'public, max-age=60');
+                return fs.createReadStream(fp).pipe(res);
+            }
+        }
+        // Fallback: proxy ke upstream
+        const target = `https://core-gmc.freefiremobile.com${req.path}`;
+        console.log(`[CDN] android_astc fileinfo NOT FOUND locally → upstream ${target}`);
         return proxyUpstream(req, res, target);
     });
 
