@@ -208,6 +208,30 @@ function patchGinUrl(jsonObj) {
     zeroFieldRecursive(jsonObj, 'ban_list_url', '', 0);
     if (jsonObj && jsonObj['ANOAAHKLDLA'] !== undefined) jsonObj['ANOAAHKLDLA'] = 0;
     if (jsonObj && jsonObj['GLPGCIJFDEB'] !== undefined) jsonObj['GLPGCIJFDEB'] = '';
+
+    // PANHADGGJCC = GetLoginData server URL di response MajorLogin / GetLoginData
+    // Harus dikosongkan agar game tidak bypass proxy ke clientbp.ppmainecoonghj.com atau sejenisnya
+    // Game akan fallback ke server_url (PROXY_HOST_URL) untuk GetLoginData
+    if (jsonObj && jsonObj['PANHADGGJCC'] !== undefined) {
+        const panVal = jsonObj['PANHADGGJCC'];
+        // Hanya kosongkan kalau bukan sudah proxy URL kita sendiri
+        if (typeof panVal === 'string' && panVal && !panVal.includes(PROXY_URL.replace(/^https?:\/\//, ''))) {
+            console.log(`[GIN-PATCH] PANHADGGJCC zeroed: ${panVal.substring(0, 60)}`);
+            jsonObj['PANHADGGJCC'] = '';
+        }
+    }
+    // Juga cek nested (kadang ada di sub-object)
+    zeroFieldRecursive(jsonObj, 'PANHADGGJCC', '', 0);
+
+    // LNBMHNCJJNI = server node list (IP game server) — biarkan saja (bukan anticheat)
+    // KDMFKIAJEHC = idnetwork URL → kosongkan
+    if (jsonObj && jsonObj['KDMFKIAJEHC'] !== undefined) jsonObj['KDMFKIAJEHC'] = '';
+    // KFBFABBJECF = sggigateway URL → kosongkan
+    if (jsonObj && jsonObj['KFBFABBJECF'] !== undefined) jsonObj['KFBFABBJECF'] = '';
+    // CPEGPNDCJLF = vodka URL → kosongkan
+    if (jsonObj && jsonObj['CPEGPNDCJLF'] !== undefined) jsonObj['CPEGPNDCJLF'] = '';
+    // DJEHPJBBLML = traceroute list → kosongkan
+    if (jsonObj && Array.isArray(jsonObj['DJEHPJBBLML'])) jsonObj['DJEHPJBBLML'] = [];
 }
 
 function patchAbnormalData(jsonObj) {

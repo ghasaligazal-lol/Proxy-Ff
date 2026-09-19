@@ -6,7 +6,7 @@ const path = require('path');
 const CONFIG_PATH = path.join(__dirname, '..', 'db', 'gameconfig.json');
 
 const DEFAULTS = {
-    runSpeed: 6.0,   // default 6.0 (sebelumnya null → tidak di-inject)
+    runSpeed: 5.0,   // default 6.0 (sebelumnya null → tidak di-inject)
     sensi: {
         SensitivityMaxSetting:   9.5,
         Sensitivity1PMaxSetting: 9.5,
