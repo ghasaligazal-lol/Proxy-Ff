@@ -168,9 +168,13 @@ function init(app) {
                         region = obj.lock_region || '?';
                         token  = (obj.token || '').substring(0, 20) + '...';
                         ttl    = obj.ttl || 0;
-                        if (obj.blacklist?.ban_reason && obj.blacklist.ban_reason !== 0) {
+                        // Deteksi ban: cek blacklist.ban_reason > 0 atau is_banned field
+                        const bl = obj.blacklist;
+                        const banReason = (bl && typeof bl.ban_reason === 'number') ? bl.ban_reason : 0;
+                        const isBannedField32 = (typeof obj.is_banned === 'number') ? obj.is_banned : 0;
+                        if (banReason > 0 || isBannedField32 > 0) {
                             isBanned = true;
-                            banStr = `🚫 BAN: ${BAN_MAP[obj.blacklist.ban_reason]||obj.blacklist.ban_reason} | type: ${obj.blacklist.ban_type||'-'} | expire: ${obj.blacklist.expire_duration||0}s`;
+                            banStr = `🚫 BAN: ${BAN_MAP[banReason]||banReason} | type: ${bl?.ban_type||'-'} | expire: ${bl?.expire_duration||0}s`;
                         }
                     }
                 } catch (_) {}
@@ -179,22 +183,12 @@ function init(app) {
                 // Assembly-CSharp-patch.bytes menonaktifkan signature check di client
                 // sehingga binary yang sudah dimodif tetap diterima game
                 // ── Binary patch RAFIN response ─────────────────────────────
-                // SELALU excise field 10 (server_url) + 11 (tp_url) + 9 (ano_url)
-                // supaya game tidak bypass proxy ke domain baru Garena.
-                // Excise field 12 (blacklist) kalau kena ban.
-                // Assembly-CSharp-patch.bytes sudah disable signature check di client.
+                // HANYA excise field 12 (blacklist) kalau banned.
+                // Field 9/10/11 TIDAK di-excise karena merusak binary signature
+                // → game reject dengan SignatureCheckFailed.
+                // server_url bypass dicegah lewat AdAway block domain + CECNLHCONMI patch.
                 let outBuf = rawBuf;
                 const patchLog = [];
-
-                // Excise server_url field10 — SELALU
-                { const { buf: e, removed } = exciseField(outBuf, 10, 2);
-                  if (removed) { outBuf = e; patchLog.push('server_url-f10-excised'); console.log('[MAJORLOGIN] server_url field10 excised uid='+uid); } }
-                // Excise tp_url field11
-                { const { buf: e, removed } = exciseField(outBuf, 11, 2);
-                  if (removed) { outBuf = e; patchLog.push('tp_url-f11-excised'); } }
-                // Excise ano_url field9
-                { const { buf: e, removed } = exciseField(outBuf, 9, 2);
-                  if (removed) { outBuf = e; patchLog.push('ano_url-f9-excised'); } }
 
                 if (isBanned) {
                     const { buf: excised, removed } = exciseField(outBuf, 12, 2);
