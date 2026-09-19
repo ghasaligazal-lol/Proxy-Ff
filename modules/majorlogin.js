@@ -1,120 +1,99 @@
 'use strict';
-// modules/majorlogin.js — v11
+// modules/majorlogin.js — v12
 //
-// FIX v11 vs v10:
-// 1. RAFIN.verify() DIHAPUS — ini penyebab utama pass-through:
-//    protobufjs verify() strict-check enum values, nilai enum yang tidak
-//    terdefinisi di .proto (misal ban_reason dari server baru) langsung throw
-//    → catch → pass-through raw → SEMUA patch gagal.
-//    proto3 wire format tidak butuh verify() untuk encode dengan benar.
+// FIX v12: SignatureCheckFailed
+// OB55 mengirim signature header (x-gg-sign / x-sign / x-rpc-sign) yang
+// di-compute dari original response body. Proxy re-encode → body berubah →
+// signature invalid → game reject dengan "Response signature check failed".
 //
-// 2. Binary surgery FALLBACK untuk fields kritis (ffanti_url, ffm_enable, ffo_enable):
-//    Kalau decode/encode tetap gagal, minimal jalankan binary surgery pada raw buffer
-//    untuk clear ffanti_url dan force ff_anti_config_desc.enable=false.
-//    Lebih baik patch parsial daripada zero patch.
+// Solusi: STRIP semua signature headers dari response sebelum dikirim ke client.
+// Game akan skip signature check jika header tidak ada.
 //
-// 3. keepCase: false (default) → protobufjs naming canonical, lebih aman saat fromObject.
-//
-// 4. Tambah logging ukuran rawBuf untuk debug kalau pass-through terjadi lagi.
+// Selain itu: tetap pakai proto decode→patch→encode untuk patch blacklist,
+// server_url, ffanti dll. Binary surgery sebagai fallback.
 
 const https    = require('https');
 const protobuf = require('protobufjs');
 const path     = require('path');
 const tglog    = require('./tglog');
 
-const PROXY_URL = (process.env.PROXY_URL || 'https://proxy-reza-kontolodon-memek-luu.up.railway.app/').replace(/\/$/, '');
+const PROXY_URL = (process.env.PROXY_URL || '').replace(/\/$/, '');
+
+// Header signature yang harus di-strip dari response Garena
+const SIG_HEADERS = [
+    'x-gg-sign', 'x-sign', 'x-rpc-sign', 'x-signature',
+    'x-garena-sign', 'x-response-sign', 'x-gg-signature',
+    'x-ff-sign', 'signature',
+];
 
 let RAFIN = null;
 
 protobuf.load(path.join(__dirname, '..', 'MajorLoginRes.proto'))
     .then(root => {
         RAFIN = root.lookupType('freefire.RAFIN');
-        console.log('[MAJORLOGIN] v11 Proto loaded OK');
-        tglog.send('✅ <b>Server Start v11</b>\nProto loaded OK');
+        console.log('[MAJORLOGIN] v12 Proto loaded OK');
     })
-    .catch(err => {
-        console.error('[MAJORLOGIN] Proto load FAILED:', err.message);
-        tglog.send(`❌ <b>Proto FAILED</b>\n${err.message}`);
-    });
+    .catch(err => console.error('[MAJORLOGIN] Proto load FAILED:', err.message));
 
-// Decode request untuk logging saja
 function decodeReqFields(buf) {
     const out = {};
     try {
-        const reader = protobuf.Reader.create(buf);
-        while (reader.pos < reader.len) {
-            const tag      = reader.uint32();
-            const fieldNum = tag >>> 3;
-            const wireType = tag & 0x7;
-            if (wireType === 0) {
-                const val = reader.uint64();
-                if (fieldNum === 98) out.is_vpn = typeof val.toNumber === 'function' ? val.toNumber() : Number(val);
-            } else if (wireType === 2) {
-                const bytes = reader.bytes();
-                const str   = bytes.toString('utf8');
-                if (fieldNum === 22) out.open_id        = str;
-                if (fieldNum === 57) out.client_version = str;
-                if (fieldNum === 20) out.client_ip      = str;
-            } else if (wireType === 5) { reader.fixed32();
-            } else if (wireType === 1) { reader.fixed64();
+        const r = protobuf.Reader.create(buf);
+        while (r.pos < r.len) {
+            const tag = r.uint32();
+            const fn  = tag >>> 3, wt = tag & 7;
+            if (wt === 0) {
+                const v = r.uint64();
+                if (fn === 98) out.is_vpn = typeof v.toNumber === 'function' ? v.toNumber() : Number(v);
+            } else if (wt === 2) {
+                const bytes = r.bytes(), str = bytes.toString('utf8');
+                if (fn === 22) out.open_id        = str;
+                if (fn === 57) out.client_version = str;
+                if (fn === 20) out.client_ip      = str;
+            } else if (wt === 5) { r.fixed32();
+            } else if (wt === 1) { r.fixed64();
             } else { break; }
         }
     } catch (_) {}
     return out;
 }
 
-// ===== BINARY SURGERY FALLBACK =====
-// Dipakai kalau protobuf decode/encode gagal.
-// Clear semua string domain berbahaya dengan null-fill,
-// dan set byte boolean enable=false pada ff_anti_config_desc.
-
+// Binary surgery — null-fill domain berbahaya in-place (ukuran buffer tidak berubah)
 function binaryPatchFallback(buf) {
+    const b = Buffer.from(buf);
     let patched = false;
-    const b = Buffer.from(buf); // copy
-
-    // Pattern: domain stronghold/ffanti/gin — null-fill in-place
-    const DANGER_DOMAINS = [
+    const DANGER = [
         'csoversea.stronghold.freefiremobile.com',
-        'gin.freefiremobile.com',
-        'vodka.freefiremobile.com',
-        'gamesecurity.sea.freefiremobile.com',
-        'ffanti.',
+        'gin.freefiremobile.com', 'vodka.freefiremobile.com',
+        'gamesecurity.sea.freefiremobile.com', 'ffanti.',
     ];
-
-    for (const domain of DANGER_DOMAINS) {
+    for (const domain of DANGER) {
         const needle = Buffer.from(domain, 'utf8');
-        let offset = 0;
-        while (offset < b.length - needle.length) {
-            const idx = b.indexOf(needle, offset);
-            if (idx === -1) break;
-            // null-fill the string content (keep length varint intact — same byte count)
-            b.fill(0x00, idx, idx + needle.length);
-            patched = true;
-            offset = idx + needle.length;
-        }
-    }
-
-    // Clear IP list patterns (stronghold IPs)
-    const DANGER_IPS = ['34.126.76.45', '34.87.177.14', '34.87.170.230', '35.185.183.57'];
-    for (const ip of DANGER_IPS) {
-        const needle = Buffer.from(ip, 'utf8');
-        let offset = 0;
-        while (offset < b.length - needle.length) {
-            const idx = b.indexOf(needle, offset);
+        let off = 0;
+        while (off < b.length - needle.length) {
+            const idx = b.indexOf(needle, off);
             if (idx === -1) break;
             b.fill(0x00, idx, idx + needle.length);
-            patched = true;
-            offset = idx + needle.length;
+            patched = true; off = idx + needle.length;
         }
     }
-
     return { buf: b, patched };
 }
 
-const BAN_REASON_MAP = {
-    0: 'UNKNOWN', 1: 'IN_GAME_AUTO', 2: 'REFUND',
-    3: 'OTHERS',  4: 'SKINMOD', 1014: 'IN_GAME_AUTO_NEW'
-};
+const BAN_MAP = { 0:'UNKNOWN',1:'IN_GAME_AUTO',2:'REFUND',3:'OTHERS',4:'SKINMOD',1014:'IN_GAME_AUTO_NEW' };
+
+// Strip signature headers — returns clean header object
+function stripSigHeaders(headers) {
+    const out = { ...headers };
+    for (const h of SIG_HEADERS) {
+        delete out[h];
+        // juga coba lowercase variants
+        for (const key of Object.keys(out)) {
+            if (key.toLowerCase() === h) delete out[key];
+        }
+    }
+    return out;
+}
 
 function init(app) {
     app.post('/MajorLogin', (req, res) => {
@@ -122,6 +101,7 @@ function init(app) {
         const rawIp    = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
         const clientIp = rawIp.split(',')[0].trim().replace('::ffff:', '');
         const reqInfo  = Buffer.isBuffer(body) && body.length > 0 ? decodeReqFields(body) : {};
+        const proxyUrl = PROXY_URL || `https://${req.headers.host}`;
 
         const options = {
             hostname: 'loginbp.ggpolarbear.com',
@@ -141,169 +121,135 @@ function init(app) {
             proxyRes.on('end', () => {
                 const rawBuf = Buffer.concat(chunks);
 
-                // 404 account_not_found → pass-through
-                if (proxyRes.statusCode === 404) {
-                    const bodyStr = rawBuf.toString('utf8');
-                    if (bodyStr.includes('account_not_found')) {
-                        console.log('[MAJORLOGIN] 404 account_not_found');
-                        tglog.send(`ℹ️ <b>MajorLogin 404</b>\nopen_id: ${reqInfo.open_id || '-'}`);
-                        const h = { ...proxyRes.headers, 'content-length': rawBuf.length };
-                        delete h['transfer-encoding'];
-                        res.writeHead(404, h);
-                        return res.end(rawBuf);
-                    }
+                // Log semua headers dari Garena untuk debug
+                const sigFound = SIG_HEADERS.filter(h =>
+                    Object.keys(proxyRes.headers).some(k => k.toLowerCase() === h)
+                );
+                if (sigFound.length > 0) {
+                    console.log(`[MAJORLOGIN] v12 Signature headers found & stripped: ${sigFound.join(', ')}`);
                 }
 
-                // Proto belum loaded → binary surgery fallback minimal
-                if (!RAFIN) {
-                    console.error('[MAJORLOGIN] RAFIN not loaded → binary fallback');
-                    const { buf: patchedBuf, patched } = binaryPatchFallback(rawBuf);
-                    const outBuf = patched ? patchedBuf : rawBuf;
-                    const h = { ...proxyRes.headers, 'content-length': outBuf.length };
+                // 404 account_not_found → pass-through
+                if (proxyRes.statusCode === 404 && rawBuf.toString('utf8').includes('account_not_found')) {
+                    const h = stripSigHeaders({ ...proxyRes.headers, 'content-length': rawBuf.length });
+                    delete h['transfer-encoding'];
+                    res.writeHead(404, h);
+                    return res.end(rawBuf);
+                }
+
+                if (proxyRes.statusCode !== 200 || rawBuf.length === 0) {
+                    const h = stripSigHeaders({ ...proxyRes.headers, 'content-length': rawBuf.length });
                     delete h['transfer-encoding'];
                     res.writeHead(proxyRes.statusCode, h);
-                    return res.end(outBuf);
+                    return res.end(rawBuf);
                 }
 
-                let outBuf   = null;
+                let outBuf = null;
                 let uid = '?', region = '?', token = '?', ttl = 0;
-                let patchLog = [];
-                let banStr   = null;
-                let decodeOK = false;
+                let patchLog = [], banStr = null, decodeOK = false;
 
-                // ===== ATTEMPT: PROTOBUF DECODE → PATCH → ENCODE =====
-                try {
-                    const decoded = RAFIN.decode(rawBuf);
-                    const obj     = RAFIN.toObject(decoded, {
-                        defaults: false,   // skip default-value fields
-                        longs:    String,
-                        enums:    Number,  // keep as number so we can compare/set
-                        bytes:    Buffer,
-                        keepCase: false,   // canonical camelCase sesuai proto field names
-                    });
+                // ===== PROTO DECODE → PATCH → ENCODE =====
+                if (RAFIN) {
+                    try {
+                        const decoded = RAFIN.decode(rawBuf);
+                        const obj     = RAFIN.toObject(decoded, {
+                            defaults: false, longs: String,
+                            enums: Number, bytes: Buffer, keepCase: false,
+                        });
+                        decodeOK = true;
 
-                    decodeOK = true;
+                        uid    = obj.accountId  || '?';
+                        region = obj.lockRegion || '?';
+                        token  = (obj.token || '').substring(0, 20) + '...';
+                        ttl    = obj.ttl || 0;
 
-                    uid    = obj.accountId  || obj.account_id  || '?';
-                    region = obj.lockRegion || obj.lock_region || '?';
-                    token  = (obj.token || '').substring(0, 20) + '...';
-                    ttl    = obj.ttl || 0;
-
-                    if (obj.blacklist && obj.blacklist.banReason && obj.blacklist.banReason !== 0) {
-                        const reason = BAN_REASON_MAP[obj.blacklist.banReason] || `code_${obj.blacklist.banReason}`;
-                        banStr = `🚫 BAN detected: ${reason}`;
-                    }
-
-                    // --- PATCHES ---
-
-                    // server_url → proxy
-                    const suKey = obj.serverUrl !== undefined ? 'serverUrl' : 'server_url';
-                    if (obj[suKey] && obj[suKey] !== PROXY_URL) {
-                        patchLog.push('server_url→proxy');
-                        obj[suKey] = PROXY_URL;
-                    }
-
-                    // tp_url → clear
-                    const tpKey = obj.tpUrl !== undefined ? 'tpUrl' : 'tp_url';
-                    if (obj[tpKey]) { obj[tpKey] = ''; patchLog.push('tp_url cleared'); }
-
-                    // ano_url → clear
-                    const anoKey = obj.anoUrl !== undefined ? 'anoUrl' : 'ano_url';
-                    if (obj[anoKey]) { obj[anoKey] = ''; patchLog.push('ano_url cleared'); }
-
-                    // ffanti_url → clear
-                    const ffuKey = obj.ffantiUrl !== undefined ? 'ffantiUrl' : 'ffanti_url';
-                    if (obj[ffuKey]) { obj[ffuKey] = ''; patchLog.push('ffanti_url cleared'); }
-
-                    // ff_anti_config_desc → disable semua
-                    const ffdKey = obj.ffAntiConfigDesc !== undefined ? 'ffAntiConfigDesc' : 'ff_anti_config_desc';
-                    if (obj[ffdKey]) {
-                        const ffd = obj[ffdKey];
-                        ffd.enable             = false;
-                        ffd.configUrl          = '';
-                        ffd.config_url         = '';
-                        ffd.hpeEnable          = false;
-                        ffd.hpe_enable         = false;
-                        ffd.ffiEnable          = false;
-                        ffd.ffi_enable         = false;
-                        ffd.mtpLiteDataEnable  = false;
-                        ffd.mtp_lite_data_enable = false;
-                        ffd.ffmEnable          = false;
-                        ffd.ffm_enable         = false;
-                        ffd.ffoEnable          = false;
-                        ffd.ffo_enable         = false;
-                        patchLog.push('ff_anti_config disabled');
-                    }
-
-                    // blacklist → clear ban
-                    const blKey = obj.blacklist ? 'blacklist' : null;
-                    if (blKey && obj[blKey]) {
-                        obj[blKey].banReason      = 0;
-                        obj[blKey].ban_reason      = 0;
-                        obj[blKey].expireDuration  = 0;
-                        obj[blKey].expire_duration = 0;
-                        obj[blKey].banTime         = 0;
-                        obj[blKey].ban_time        = 0;
-                        obj[blKey].banType         = '';
-                        obj[blKey].ban_type        = '';
-                        patchLog.push('blacklist cleared');
-                    }
-
-                    // queue_info → force allow
-                    const qiKey = obj.queueInfo !== undefined ? 'queueInfo' : 'queue_info';
-                    if (obj[qiKey]) {
-                        const qi = obj[qiKey];
-                        if (!qi.allow && !qi.Allow) {
-                            qi.allow = true;
-                            patchLog.push('queue allow forced');
+                        if (obj.blacklist?.banReason && obj.blacklist.banReason !== 0) {
+                            banStr = `🚫 BAN: ${BAN_MAP[obj.blacklist.banReason] || obj.blacklist.banReason}`;
                         }
+
+                        // Patch server_url → proxy
+                        if (obj.serverUrl !== undefined) {
+                            if (obj.serverUrl !== proxyUrl) { obj.serverUrl = proxyUrl; patchLog.push('server_url→proxy'); }
+                        } else if (obj.server_url !== undefined && obj.server_url !== proxyUrl) {
+                            obj.server_url = proxyUrl; patchLog.push('server_url→proxy');
+                        }
+
+                        // Clear tp_url, ano_url, ffanti_url
+                        for (const [k1, k2] of [['tpUrl','tp_url'],['anoUrl','ano_url'],['ffantiUrl','ffanti_url']]) {
+                            const k = obj[k1] !== undefined ? k1 : k2;
+                            if (obj[k]) { obj[k] = ''; patchLog.push(`${k2} cleared`); }
+                        }
+
+                        // Disable ff_anti_config_desc
+                        const ffd = obj.ffAntiConfigDesc || obj.ff_anti_config_desc;
+                        if (ffd) {
+                            for (const k of ['enable','hpeEnable','ffiEnable','mtpLiteDataEnable','ffmEnable','ffoEnable',
+                                             'hpe_enable','ffi_enable','mtp_lite_data_enable','ffm_enable','ffo_enable']) {
+                                ffd[k] = false;
+                            }
+                            for (const k of ['configUrl','config_url']) ffd[k] = '';
+                            patchLog.push('ffanti disabled');
+                        }
+
+                        // Clear blacklist
+                        const bl = obj.blacklist;
+                        if (bl) {
+                            for (const k of ['banReason','ban_reason','expireDuration','expire_duration',
+                                             'banTime','ban_time']) bl[k] = 0;
+                            for (const k of ['banType','ban_type']) bl[k] = '';
+                            patchLog.push('blacklist cleared');
+                        }
+
+                        // Force queue allow
+                        const qi = obj.queueInfo || obj.queue_info;
+                        if (qi && !qi.allow) { qi.allow = true; patchLog.push('queue allow'); }
+
+                        // Disable connection seed (OB55)
+                        for (const k of ['connectionSeedEnabled','connection_seed_enabled']) {
+                            if (obj[k]) { obj[k] = false; patchLog.push('conn_seed=false'); break; }
+                        }
+                        for (const k of ['connectionSeed','connection_seed']) {
+                            if (obj[k]) { obj[k] = ''; break; }
+                        }
+
+                        // Encode — TANPA verify()
+                        outBuf = Buffer.from(RAFIN.encode(RAFIN.fromObject(obj)).finish());
+                        console.log(`[MAJORLOGIN] v12 proto OK uid=${uid} ${rawBuf.length}b→${outBuf.length}b [${patchLog.join(', ')}]`);
+
+                    } catch (err) {
+                        console.error('[MAJORLOGIN] v12 proto error:', err.message, '→ binary fallback');
+                        const { buf, patched } = binaryPatchFallback(rawBuf);
+                        outBuf = buf;
+                        patchLog = [`fallback: binary_surgery=${patched}`];
                     }
-
-                    // connection_seed → disable (OB55)
-                    const cseKey = obj.connectionSeedEnabled !== undefined ? 'connectionSeedEnabled' : 'connection_seed_enabled';
-                    if (obj[cseKey]) { obj[cseKey] = false; patchLog.push('conn_seed_enabled=false'); }
-                    const csKey = obj.connectionSeed !== undefined ? 'connectionSeed' : 'connection_seed';
-                    if (obj[csKey]) { obj[csKey] = ''; patchLog.push('conn_seed cleared'); }
-
-                    // --- ENCODE (TANPA verify() — ini yang bikin bug sebelumnya) ---
-                    const msg  = RAFIN.fromObject(obj);
-                    // TIDAK ada RAFIN.verify(msg) di sini — verify strict-check enum values
-                    // dan bisa throw untuk enum unknown (misalnya ban_reason baru dari server)
-                    outBuf = Buffer.from(RAFIN.encode(msg).finish());
-
-                    console.log(`[MAJORLOGIN] v11 uid=${uid} region=${region} ${rawBuf.length}b→${outBuf.length}b patches=[${patchLog.join(', ')}]`);
-
-                } catch (encErr) {
-                    // Decode atau encode gagal → binary surgery fallback
-                    console.error('[MAJORLOGIN] Proto patch error:', encErr.message, '→ binary fallback');
-                    tglog.send(`⚠️ <b>MajorLogin proto error</b>\n${encErr.message}\n→ binary surgery fallback\nrawBuf=${rawBuf.length}b decodeOK=${decodeOK}`);
-
-                    const { buf: patchedBuf, patched } = binaryPatchFallback(rawBuf);
-                    outBuf   = patchedBuf;
-                    patchLog = [`FALLBACK(${encErr.message.substring(0, 50)}): binary_surgery=${patched}`];
-
-                    // Fallback tidak bisa patch server_url — log agar ketahuan
-                    if (!patched) {
-                        console.error('[MAJORLOGIN] Binary fallback: no dangerous domains found in raw buf');
-                    }
+                } else {
+                    // RAFIN belum load → binary fallback
+                    const { buf, patched } = binaryPatchFallback(rawBuf);
+                    outBuf = buf;
+                    patchLog = [`no_proto: binary_surgery=${patched}`];
                 }
 
                 // TG log
-                const lines = [`<b>MajorLogin v11</b>`, ''];
+                const lines = [`<b>MajorLogin v12</b>`, ''];
                 lines.push(`👤 UID: <code>${uid}</code>`);
                 lines.push(`🆔 open_id: <code>${reqInfo.open_id || '?'}</code>`);
-                if (reqInfo.client_version) lines.push(`📱 ver: ${reqInfo.client_version}`);
-                lines.push(`🌏 region: ${region}`);
-                lines.push(`🌐 ip: ${clientIp}`);
-                lines.push(`🎫 token: <code>${token}</code>`);
-                if (ttl) lines.push(`⏱ ttl: ${ttl}s`);
+                if (reqInfo.client_version) lines.push(`📱 ${reqInfo.client_version}`);
+                lines.push(`🌏 ${region} | 🌐 ${clientIp}`);
+                lines.push(`🎫 <code>${token}</code>`);
+                if (ttl) lines.push(`⏱ ${ttl}s`);
                 if (patchLog.length) lines.push(`🔧 ${patchLog.join(', ')}`);
+                if (sigFound?.length) lines.push(`🔑 sig stripped: ${sigFound.join(', ')}`);
                 if (banStr) { lines.push(''); lines.push(banStr); }
                 tglog.send(lines.join('\n'));
 
-                const outHeaders = { ...proxyRes.headers, 'content-length': outBuf.length };
+                // Strip signature headers sebelum kirim ke client
+                const outHeaders = stripSigHeaders({
+                    ...proxyRes.headers,
+                    'content-length': outBuf.length,
+                });
                 delete outHeaders['transfer-encoding'];
                 delete outHeaders['content-encoding'];
+
                 res.writeHead(proxyRes.statusCode, outHeaders);
                 res.end(outBuf);
             });
@@ -316,7 +262,7 @@ function init(app) {
 
         proxyReq.on('error', err => {
             console.error('[MAJORLOGIN] Proxy error:', err.message);
-            tglog.send(`❌ <b>MajorLogin Proxy Error</b>\n${err.message}`);
+            tglog.send(`❌ <b>MajorLogin Error</b>\n${err.message}`);
             if (!res.headersSent) res.status(502).send('MajorLogin Proxy Error');
         });
 
@@ -324,7 +270,7 @@ function init(app) {
         proxyReq.end();
     });
 
-    console.log('[MAJORLOGIN] v11 active — no verify(), dual-key patch, binary fallback');
+    console.log('[MAJORLOGIN] v12 active — sig headers stripped, proto decode/encode, binary fallback');
 }
 
 module.exports = { init };
