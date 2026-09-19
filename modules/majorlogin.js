@@ -178,11 +178,26 @@ function init(app) {
                 // ── Jika banned: excise field 12 (blacklist) dari binary ──────
                 // Assembly-CSharp-patch.bytes menonaktifkan signature check di client
                 // sehingga binary yang sudah dimodif tetap diterima game
+                // ── Binary patch RAFIN response ─────────────────────────────
+                // SELALU excise field 10 (server_url) + 11 (tp_url) + 9 (ano_url)
+                // supaya game tidak bypass proxy ke domain baru Garena.
+                // Excise field 12 (blacklist) kalau kena ban.
+                // Assembly-CSharp-patch.bytes sudah disable signature check di client.
                 let outBuf = rawBuf;
                 const patchLog = [];
 
+                // Excise server_url field10 — SELALU
+                { const { buf: e, removed } = exciseField(outBuf, 10, 2);
+                  if (removed) { outBuf = e; patchLog.push('server_url-f10-excised'); console.log('[MAJORLOGIN] server_url field10 excised uid='+uid); } }
+                // Excise tp_url field11
+                { const { buf: e, removed } = exciseField(outBuf, 11, 2);
+                  if (removed) { outBuf = e; patchLog.push('tp_url-f11-excised'); } }
+                // Excise ano_url field9
+                { const { buf: e, removed } = exciseField(outBuf, 9, 2);
+                  if (removed) { outBuf = e; patchLog.push('ano_url-f9-excised'); } }
+
                 if (isBanned) {
-                    const { buf: excised, removed } = exciseField(rawBuf, 12, 2);
+                    const { buf: excised, removed } = exciseField(outBuf, 12, 2);
                     if (removed) {
                         outBuf = excised;
                         patchLog.push(`blacklist field12 excised (${rawBuf.length}b→${outBuf.length}b)`);

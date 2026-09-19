@@ -1,0 +1,1230 @@
+{
+  "sources": [
+    {
+      "label": "AdAway official hosts",
+      "url": "https://adaway.org/hosts.txt",
+      "enabled": true,
+      "allow": false,
+      "redirect": false
+    },
+    {
+      "label": "AdAway official hosts",
+      "url": "https://raw.githubusercontent.com/nguyenxuanlocuytin-pixelmond/my-files/refs/heads/main/hosts_original.txt",
+      "enabled": true,
+      "allow": false,
+      "redirect": false
+    },
+    {
+      "label": "Pete Lowe blocklist hosts",
+      "url": "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext",
+      "enabled": true,
+      "allow": false,
+      "redirect": false
+    },
+    {
+      "label": "StevenBlack unified hosts",
+      "url": "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
+      "enabled": true,
+      "allow": false,
+      "redirect": false
+    },
+    {
+      "label": "AdGuard DNS filter",
+      "url": "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt",
+      "enabled": true,
+      "allow": false,
+      "redirect": false
+    },
+    {
+      "label": "1Hosts Lite",
+      "url": "https://raw.githubusercontent.com/badmojr/1Hosts/master/Lite/hosts.txt",
+      "enabled": true,
+      "allow": false,
+      "redirect": false
+    },
+    {
+      "label": "GoodbyeAds",
+      "url": "https://raw.githubusercontent.com/jerryn70/GoodbyeAds/master/Hosts/GoodbyeAds.txt",
+      "enabled": true,
+      "allow": false,
+      "redirect": false
+    },
+    {
+      "label": "hBlock",
+      "url": "https://hblock.molinero.dev/hosts",
+      "enabled": true,
+      "allow": false,
+      "redirect": false
+    },
+    {
+      "label": "Dan Pollock hosts",
+      "url": "https://someonewhocares.org/hosts/zero/hosts",
+      "enabled": true,
+      "allow": false,
+      "redirect": false
+    },
+    {
+      "label": "Credit: By RezaGanteng",
+      "url": "https://whatsapp.com/channel/0029Vb8eX0Z1NCrYCXEXuu0K",
+      "enabled": true,
+      "allow": false,
+      "redirect": false
+    }
+  ],
+  "blocked": [
+    {
+      "host": "gin.freefireind.in",
+      "enabled": true
+    },
+    {
+      "host": "gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "na.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "sg.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "br.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "id.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "th.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "vn.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "eu.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "latam.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "me.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "sac.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "us.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "ru.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "in.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "pk.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "bd.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "my.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "ph.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "tw.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "kr.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "jp.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "cn.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "hk.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "mo.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "aus.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "nz.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "sa.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "mena.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "af.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "eg.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "tr.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "mx.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "ar.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "co.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "pe.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "cl.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "ff.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "ff.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "ff.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "ff.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "ff.garena.ph",
+      "enabled": true
+    },
+    {
+      "host": "ff.garena.th",
+      "enabled": true
+    },
+    {
+      "host": "ff.garena.my",
+      "enabled": true
+    },
+    {
+      "host": "ff.garena.sg",
+      "enabled": true
+    },
+    {
+      "host": "ff.garena.tw",
+      "enabled": true
+    },
+    {
+      "host": "ff.garena.com.br",
+      "enabled": true
+    },
+    {
+      "host": "ff.garena.mx",
+      "enabled": true
+    },
+    {
+      "host": "ff.garena.ru",
+      "enabled": true
+    },
+    {
+      "host": "freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "freefiremobile-a.akamaihd.net",
+      "enabled": true
+    },
+    {
+      "host": "freefiremobile.download.akamai.com",
+      "enabled": true
+    },
+    {
+      "host": "ffclient.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "ffclient.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "ffclient.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "ffclient.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "ffcdn.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "ffcdn.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "ffcdn.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "ffcdn.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "ffprod.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "ffprod.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "ffprod.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "ffprod.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "anticheat.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "anticheat.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "anticheat.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "anticheat.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "anticheat.garena.ph",
+      "enabled": true
+    },
+    {
+      "host": "security.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "security.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "security.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "security.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.us.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.asia.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.eu.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.br.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.sa.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.in.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.id.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.th.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.vn.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.ru.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.mena.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.latam.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.sg.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.ph.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.my.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.pk.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.bd.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.eg.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.tr.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "gamesecurity.au.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "hotro.ff.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "hotro.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "hotro.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "hotro.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "support.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "support.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "support.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "support.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "cs.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "cs.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "cs.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "cs.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "telemetry.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "telemetry.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "telemetry.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "telemetry.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "analytics.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "analytics.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "analytics.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "analytics.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "track.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "track.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "track.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "track.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "log.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "log.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "log.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "log.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "crash.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "crash.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "crash.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "crash.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "bugly.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "garena.com",
+      "enabled": true
+    },
+    {
+      "host": "garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "garena.in",
+      "enabled": true
+    },
+    {
+      "host": "garena.ph",
+      "enabled": true
+    },
+    {
+      "host": "garena.th",
+      "enabled": true
+    },
+    {
+      "host": "garena.my",
+      "enabled": true
+    },
+    {
+      "host": "garena.sg",
+      "enabled": true
+    },
+    {
+      "host": "garena.tw",
+      "enabled": true
+    },
+    {
+      "host": "garena.com.br",
+      "enabled": true
+    },
+    {
+      "host": "garena.mx",
+      "enabled": true
+    },
+    {
+      "host": "garena.ru",
+      "enabled": true
+    },
+    {
+      "host": "dns.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "dns.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "dns.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "dns.garena.ph",
+      "enabled": true
+    },
+    {
+      "host": "dns.garena.th",
+      "enabled": true
+    },
+    {
+      "host": "dns.garena.my",
+      "enabled": true
+    },
+    {
+      "host": "dns.garena.sg",
+      "enabled": true
+    },
+    {
+      "host": "dns.garena.tw",
+      "enabled": true
+    },
+    {
+      "host": "dns.garena.com.br",
+      "enabled": true
+    },
+    {
+      "host": "dns.garena.mx",
+      "enabled": true
+    },
+    {
+      "host": "dns.garena.ru",
+      "enabled": true
+    },
+    {
+      "host": "dns1.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns2.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns3.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns4.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "ns1.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "ns2.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "ns3.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "ns4.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "resolver.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "resolver.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "resolver.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "resolver.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "dns.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns1.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns2.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "ns1.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "ns2.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "resolver.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.ff.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.ff.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "dns.ff.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "dns.ff.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "dns.ffclient.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.ffcdn.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.ffprod.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.anticheat.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.security.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.gamesecurity.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.id.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.sg.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.na.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.br.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.eu.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.latam.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.me.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.sac.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.us.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.ru.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.in.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.pk.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.bd.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.my.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.ph.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.tw.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.kr.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.jp.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.cn.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.hk.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.mo.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.aus.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.nz.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.sa.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.mena.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.af.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.eg.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.tr.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.mx.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.ar.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.co.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.pe.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.cl.gin.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.gin.freefireind.in",
+      "enabled": true
+    },
+    {
+      "host": "dns.freefireind.in",
+      "enabled": true
+    },
+    {
+      "host": "dns.ff.garena.ph",
+      "enabled": true
+    },
+    {
+      "host": "dns.ff.garena.th",
+      "enabled": true
+    },
+    {
+      "host": "dns.ff.garena.my",
+      "enabled": true
+    },
+    {
+      "host": "dns.ff.garena.sg",
+      "enabled": true
+    },
+    {
+      "host": "dns.ff.garena.tw",
+      "enabled": true
+    },
+    {
+      "host": "dns.ff.garena.com.br",
+      "enabled": true
+    },
+    {
+      "host": "dns.ff.garena.mx",
+      "enabled": true
+    },
+    {
+      "host": "dns.ff.garena.ru",
+      "enabled": true
+    },
+    {
+      "host": "dns.hotro.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.hotro.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "dns.hotro.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "dns.support.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.support.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "dns.support.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "dns.support.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "dns.cs.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.cs.garena.vn",
+      "enabled": true
+    },
+    {
+      "host": "dns.cs.garena.co.id",
+      "enabled": true
+    },
+    {
+      "host": "dns.cs.garena.in",
+      "enabled": true
+    },
+    {
+      "host": "dns.telemetry.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.analytics.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.track.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.log.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.crash.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "dns.bugly.garena.com",
+      "enabled": true
+    },
+    {
+      "host": "grtc.garenanow.com",
+      "enabled": true
+    },
+    {
+      "host": "ff.dr.grtc.garenanow.com",
+      "enabled": true
+    },
+    {
+      "host": "ff.sdk.grtc.garenanow.com",
+      "enabled": true
+    },
+    {
+      "host": "garenanow.com",
+      "enabled": true
+    },
+    {
+      "host": "version.ggwhitehawk.com",
+      "enabled": true
+    },
+    {
+      "host": "ggwhitehawk.com",
+      "enabled": true
+    },
+    {
+      "host": "ggp.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "id.ggp.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "sg.ggp.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "ano.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "id.ano.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "csoversea.stronghold.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "csoversea.castle.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "stronghold.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "data.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "report.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "upload.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "log.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "event.freefiremobile.com",
+      "enabled": true
+    },
+    {
+      "host": "clientbp.ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "loginbp.ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "gin.ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "id.gin.ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "sg.gin.ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "na.gin.ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "br.gin.ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "eu.gin.ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "th.gin.ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "vn.gin.ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "in.gin.ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "my.gin.ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "ph.gin.ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "ggp.ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "ano.ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "id.ggp.ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "sg.ggp.ppmainecoonghj.com",
+      "enabled": true
+    },
+    {
+      "host": "clientbp.ggblueshark.com",
+      "enabled": true
+    },
+    {
+      "host": "loginbp.ggblueshark.com",
+      "enabled": true
+    },
+    {
+      "host": "ggblueshark.com",
+      "enabled": true
+    },
+    {
+      "host": "gin.ggblueshark.com",
+      "enabled": true
+    },
+    {
+      "host": "id.gin.ggblueshark.com",
+      "enabled": true
+    },
+    {
+      "host": "ggp.ggblueshark.com",
+      "enabled": true
+    },
+    {
+      "host": "clientbp.ggpolarbear.com",
+      "enabled": true
+    },
+    {
+      "host": "loginbp.ggpolarbear.com",
+      "enabled": true
+    }
+  ],
+  "allowed": [],
+  "redirected": []
+}
