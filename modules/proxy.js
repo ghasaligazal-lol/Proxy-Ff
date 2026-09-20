@@ -480,6 +480,23 @@ function init(app) {
             console.warn('[PROXY] WARNING: /MajorLogin lolos ke proxy.js!');
             return loginProxy(req, res, next);
         }
+
+        // ── Spoof ChooseRegion — jangan forward ke Garena ──────────────────
+        // Kalau ChooseRegion dikirim ke Garena → server set region → MajorLogin
+        // berikutnya dapat server_url = clientbp.ppmainecoonghj.com di binary RAFIN
+        // Binary itu tidak bisa dimodif (HMAC/signature) → GetLoginData bypass proxy
+        // Solusi: return fake OK untuk ChooseRegion → server tidak set region
+        // → MajorLogin berikutnya TIDAK dapat server_url di response → aman ✓
+        if (req.path === '/ChooseRegion' || req.path.startsWith('/ChooseRegion?')) {
+            const isBin = (req.headers['content-type'] || '').includes('octet-stream');
+            console.log('[PROXY] ChooseRegion SPOOFED (prevent server_url injection)');
+            if (isBin) {
+                // protobuf OK response kosong
+                return res.status(200).type('application/octet-stream').send(Buffer.from([0x08, 0x00]));
+            }
+            return res.status(200).json({ region: req.body?.region || 'ID', code: 0 });
+        }
+
         if (LOGIN_PATHS.some(p => req.path === p || req.path.startsWith(p + '?'))) {
             return loginProxy(req, res, next);
         }
