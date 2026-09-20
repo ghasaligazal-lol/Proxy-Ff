@@ -240,59 +240,25 @@ function init(app) {
                     }
                 } catch (_) {}
 
-                // Binary surgery
-                let outBuf = rawBuf;
-                const patchLog = [];
+                // PASSTHROUGH — jangan modifikasi body MajorLogin sama sekali
+                // Game verify HMAC signature dari body menggunakan hardcoded key di libil2cpp.so
+                // Setiap byte yang berubah → SignatureCheckFailed
+                // GIN di-disable via gamevar (DisableGinReport, EnableGinConnect=false, dll)
+                // Blacklist di-handle via gamevar + user bisa pakai akun baru
+                const outBuf = rawBuf;
 
-                // [A] server_url (field 10) → excise + inject proxy URL
-                { const { buf: ex } = exciseField(outBuf, 10);
-                  outBuf = injectStringField(ex, 10, proxyUrl);
-                  patchLog.push(`url→proxy`); }
-
-                // [B] blacklist (field 12) → excise jika banned
-                if (isBanned) {
-                    const { buf: ex, found } = exciseField(outBuf, 12);
-                    if (found) { outBuf = ex; patchLog.push('bl excised'); }
-                }
-
-                // [C] tp_url (field 14) → excise
-                { const { buf: ex, found } = exciseField(outBuf, 14);
-                  if (found) { outBuf = ex; patchLog.push('tp excised'); } }
-
-                // [D] ano_url (field 16) → excise
-                { const { buf: ex, found } = exciseField(outBuf, 16);
-                  if (found) { outBuf = ex; patchLog.push('ano excised'); } }
-
-                // [E] ffanti_url (field 24) — FIX: v18 salah excise field 22=AK!
-                { const { buf: ex, found } = exciseField(outBuf, 24);
-                  if (found) { outBuf = ex; patchLog.push('ffanti excised'); } }
-
-                // [F] ff_anti_config_desc (field 25) — FIX: v18 salah excise field 23=AIV!
-                { const { buf: ex, found } = exciseField(outBuf, 25);
-                  if (found) { outBuf = ex; patchLog.push('ffcfg excised'); } }
-
-                // [G] connection_seed_enabled (field 36) — OB55 new
-                { const { buf: ex, found } = exciseField(outBuf, 36);
-                  if (found) { outBuf = ex; patchLog.push('seed_en excised'); } }
-
-                // [H] connection_seed (field 37) — OB55 new
-                { const { buf: ex, found } = exciseField(outBuf, 37);
-                  if (found) { outBuf = ex; patchLog.push('seed excised'); } }
-
-                const lines = [`<b>MajorLogin v18</b>`, ''];
+                const lines = [`<b>MajorLogin v20 (passthrough)</b>`, ''];
                 lines.push(`👤 <code>${uid}</code> | 🌏 ${region}`);
                 lines.push(`🆔 <code>${reqInfo.open_id||'?'}</code> | 🌐 ${clientIp}`);
                 lines.push(`🎫 <code>${token}</code>${ttl ? ` ⏱${ttl}s` : ''}`);
-                lines.push(`📦 ${rawBuf.length}b→${outBuf.length}b`);
-                lines.push(`🔧 ${patchLog.join(' | ')}`);
+                lines.push(`📦 ${rawBuf.length}b (unmodified)`);
                 if (banStr) { lines.push(''); lines.push(banStr); }
                 tglog.send(lines.join('\n'));
 
-                console.log(`[MAJORLOGIN] v19 uid=${uid} ${patchLog.join(', ')}`);
+                console.log(`[MAJORLOGIN] v20 uid=${uid} passthrough ${rawBuf.length}b ban=${isBanned}`);
 
-                const h = { ...proxyRes.headers, 'content-length': outBuf.length };
+                const h = { ...proxyRes.headers };
                 delete h['transfer-encoding'];
-                delete h['content-encoding'];
                 res.writeHead(proxyRes.statusCode, h);
                 res.end(outBuf);
             });
