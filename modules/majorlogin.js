@@ -1,35 +1,79 @@
 'use strict';
-// modules/majorlogin.js — v17
+// modules/majorlogin.js — v18
 //
-// DIAGNOSIS: SignatureCheckFailed kembali muncul saat v16 (excise+inject server_url)
-// Assembly-CSharp-patch.bytes user ini TIDAK disable signature check
-// → body yang dimodif apapun → SignatureCheckFailed
+// ANALISIS:
+// - v17 (pass-through raw): MajorLogin OK, tidak ada SignatureCheckFailed
+//   → .bytes patch SUDAH aktif, sig check disabled di client
+// - v16 (excise+inject): SignatureCheckFailed → saat itu .bytes belum aktif
 //
-// STRATEGI v17: pure pass-through raw, TANPA sentuh body
+// Sekarang .bytes patch sudah aktif → bisa modif binary RAFIN
+// v18: gunakan kembali binary surgery (excise field 10 + inject proxy URL)
 //
-// Lalu bagaimana server_url diatasi?
-// → proxy.js sudah spoof /ChooseRegion → server tidak set lock_region
-// → MajorLogin response dari Garena TIDAK mengandung server_url (field 10 kosong)
-// → game pakai server_url dari ver.php (= proxy) untuk GetLoginData
-//
-// Kalau server_url tetap muncul di response meski ChooseRegion di-spoof:
-// → proxy.js handle Host: clientbp.ppmainecoonghj.com (AdAway redirect)
-// → request GetLoginData tetap lewat proxy meski pakai domain Garena
-//
-// Yang penting: JANGAN sentuh binary RAFIN sama sekali
+// Binary surgery yang dilakukan (aman karena sig check disabled):
+// [A] field 10 (server_url)      → excise + inject proxyUrl
+// [B] field 12 (blacklist)       → excise jika banned
+// [C] field 14 (tp_url)          → excise
+// [D] field 22 (ffanti_url)      → excise
+// [E] field 23 (ff_anti_config)  → excise
 
 const https    = require('https');
 const protobuf = require('protobufjs');
 const path     = require('path');
 const tglog    = require('./tglog');
 
+const PROXY_URL = (process.env.PROXY_URL || '').replace(/\/$/, '');
+
 let RAFIN = null;
 protobuf.load(path.join(__dirname, '..', 'MajorLoginRes.proto'))
     .then(root => {
         RAFIN = root.lookupType('freefire.RAFIN');
-        console.log('[MAJORLOGIN] v17 Proto loaded');
+        console.log('[MAJORLOGIN] v18 Proto loaded');
     })
     .catch(err => console.error('[MAJORLOGIN] Proto load err:', err.message));
+
+function encodeVarint(val) {
+    const out = [];
+    while (val > 0x7f) { out.push((val & 0x7f) | 0x80); val >>>= 7; }
+    out.push(val & 0x7f);
+    return Buffer.from(out);
+}
+
+function readVarint(buf, pos) {
+    let val = 0, shift = 0, bytes = 0;
+    while (pos + bytes < buf.length) {
+        const b = buf[pos + bytes];
+        val |= (b & 0x7f) << shift;
+        bytes++; shift += 7;
+        if (!(b & 0x80)) break;
+        if (shift >= 35) break;
+    }
+    return { val, bytes };
+}
+
+function exciseField(buf, fieldNum) {
+    const tagBuf = encodeVarint((fieldNum << 3) | 2);
+    const out = [];
+    let pos = 0, found = false;
+    while (pos < buf.length) {
+        let match = pos + tagBuf.length <= buf.length;
+        for (let i = 0; i < tagBuf.length && match; i++) {
+            if (buf[pos + i] !== tagBuf[i]) match = false;
+        }
+        if (!match) { out.push(buf[pos]); pos++; continue; }
+        let cur = pos + tagBuf.length;
+        const { val: len, bytes: lb } = readVarint(buf, cur);
+        cur += lb + len;
+        found = true; pos = cur;
+    }
+    return { buf: Buffer.from(out), found };
+}
+
+function injectStringField(buf, fieldNum, value) {
+    const tagBuf    = encodeVarint((fieldNum << 3) | 2);
+    const valBuf    = Buffer.from(value, 'utf8');
+    const lenVarint = encodeVarint(valBuf.length);
+    return Buffer.concat([buf, tagBuf, lenVarint, valBuf]);
+}
 
 function decodeReqFields(buf) {
     const out = {};
@@ -58,6 +102,7 @@ function init(app) {
         const rawIp    = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
         const clientIp = rawIp.split(',')[0].trim().replace('::ffff:', '');
         const reqInfo  = Buffer.isBuffer(body) && body.length > 0 ? decodeReqFields(body) : {};
+        const proxyUrl = PROXY_URL || `https://${req.headers.host}`;
 
         const options = {
             hostname: 'loginbp.ggpolarbear.com',
@@ -75,57 +120,92 @@ function init(app) {
             proxyRes.on('data', c => chunks.push(c));
             proxyRes.on('end', () => {
                 const rawBuf = Buffer.concat(chunks);
-                console.log(`[MAJORLOGIN] v17 pass-through ${rawBuf.length}b status=${proxyRes.statusCode}`);
 
-                // ── Decode hanya untuk logging — TIDAK re-encode ─────────────
+                if (proxyRes.statusCode === 404 && rawBuf.toString('utf8').includes('account_not_found')) {
+                    const h = { ...proxyRes.headers, 'content-length': rawBuf.length };
+                    delete h['transfer-encoding'];
+                    res.writeHead(404, h); return res.end(rawBuf);
+                }
+
+                if (proxyRes.statusCode !== 200 || rawBuf.length === 0) {
+                    const h = { ...proxyRes.headers, 'content-length': rawBuf.length };
+                    delete h['transfer-encoding'];
+                    res.writeHead(proxyRes.statusCode, h); return res.end(rawBuf);
+                }
+
+                // Decode untuk log + deteksi ban
                 let uid = '?', region = '?', token = '?', ttl = 0;
-                let banStr = null, serverUrl = '?';
-                if (RAFIN && rawBuf.length > 0 && proxyRes.statusCode === 200) {
-                    try {
+                let banStr = null, isBanned = false, origUrl = '?';
+                try {
+                    if (RAFIN) {
                         const obj = RAFIN.toObject(RAFIN.decode(rawBuf), {
                             defaults: false, longs: String, enums: Number,
                             bytes: Buffer, keepCase: true,
                         });
-                        uid       = obj.account_id  || '?';
-                        region    = obj.lock_region || '?';
-                        token     = (obj.token || '').substring(0, 20) + '...';
-                        ttl       = obj.ttl || 0;
-                        serverUrl = obj.server_url || '(empty)';
+                        uid     = obj.account_id  || '?';
+                        region  = obj.lock_region || '?';
+                        token   = (obj.token || '').substring(0, 20) + '...';
+                        ttl     = obj.ttl || 0;
+                        origUrl = obj.server_url  || '(empty)';
                         if (obj.blacklist?.ban_reason && obj.blacklist.ban_reason !== 0) {
-                            banStr = `🚫 BAN: ${BAN_MAP[obj.blacklist.ban_reason]||obj.blacklist.ban_reason} type:${obj.blacklist.ban_type||'-'}`;
+                            isBanned = true;
+                            banStr = `🚫 BAN: ${BAN_MAP[obj.blacklist.ban_reason]||obj.blacklist.ban_reason}`;
                         }
-                    } catch (_) {}
+                    }
+                } catch (_) {}
+
+                // Binary surgery
+                let outBuf = rawBuf;
+                const patchLog = [];
+
+                // [A] server_url → proxy
+                { const { buf: ex } = exciseField(outBuf, 10);
+                  outBuf = injectStringField(ex, 10, proxyUrl);
+                  patchLog.push(`url:${origUrl.replace('https://','').substring(0,20)}→proxy`); }
+
+                // [B] blacklist → excise jika banned
+                if (isBanned) {
+                    const { buf: ex, found } = exciseField(outBuf, 12);
+                    if (found) { outBuf = ex; patchLog.push('bl excised'); }
                 }
 
-                const lines = [`<b>MajorLogin v17 (raw)</b>`, ''];
+                // [C] tp_url
+                { const { buf: ex, found } = exciseField(outBuf, 14);
+                  if (found) { outBuf = ex; patchLog.push('tp excised'); } }
+
+                // [D] ffanti_url
+                { const { buf: ex, found } = exciseField(outBuf, 22);
+                  if (found) { outBuf = ex; patchLog.push('ffanti excised'); } }
+
+                // [E] ff_anti_config_desc
+                { const { buf: ex, found } = exciseField(outBuf, 23);
+                  if (found) { outBuf = ex; patchLog.push('ffcfg excised'); } }
+
+                const lines = [`<b>MajorLogin v18</b>`, ''];
                 lines.push(`👤 <code>${uid}</code> | 🌏 ${region}`);
                 lines.push(`🆔 <code>${reqInfo.open_id||'?'}</code> | 🌐 ${clientIp}`);
                 lines.push(`🎫 <code>${token}</code>${ttl ? ` ⏱${ttl}s` : ''}`);
-                lines.push(`🔗 server_url: ${serverUrl}`);
-                lines.push(`📦 ${rawBuf.length}b`);
+                lines.push(`📦 ${rawBuf.length}b→${outBuf.length}b`);
+                lines.push(`🔧 ${patchLog.join(' | ')}`);
                 if (banStr) { lines.push(''); lines.push(banStr); }
                 tglog.send(lines.join('\n'));
 
-                // ── Pass-through RAW tanpa modifikasi apapun ─────────────────
-                const h = {
-                    ...proxyRes.headers,
-                    'content-length': rawBuf.length,
-                };
+                console.log(`[MAJORLOGIN] v18 uid=${uid} ${patchLog.join(', ')}`);
+
+                const h = { ...proxyRes.headers, 'content-length': outBuf.length };
                 delete h['transfer-encoding'];
                 delete h['content-encoding'];
                 res.writeHead(proxyRes.statusCode, h);
-                res.end(rawBuf);
+                res.end(outBuf);
             });
 
             proxyRes.on('error', err => {
-                console.error('[MAJORLOGIN] err:', err.message);
                 if (!res.headersSent) res.status(502).send('Error');
             });
         });
 
         proxyReq.on('error', err => {
-            console.error('[MAJORLOGIN] proxy err:', err.message);
-            tglog.send(`❌ MajorLogin v17: ${err.message}`);
+            tglog.send(`❌ MajorLogin v18: ${err.message}`);
             if (!res.headersSent) res.status(502).send('Proxy Error');
         });
 
@@ -133,7 +213,7 @@ function init(app) {
         proxyReq.end();
     });
 
-    console.log('[MAJORLOGIN] v17 active — pure pass-through, no body modification');
+    console.log('[MAJORLOGIN] v18 active — binary surgery: excise+inject server_url');
 }
 
 module.exports = { init };
