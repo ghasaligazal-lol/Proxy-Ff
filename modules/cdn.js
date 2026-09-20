@@ -312,6 +312,40 @@ function proxyUpstream(req, res, target, attempt) {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 function init(app) {
 
+
+    // ─── Hotpatchs routes (format: /hotpatchs/<hash>/<path>) ────────────────
+    // Sama dengan struktur server 203.57.85.108:7777
+    // /hotpatchs/<hash>/android_astc/<ver>/fileinfo
+    // /hotpatchs/<hash>/android_astc/<ver>/gameassetbundles/<file>
+    app.get(/^\/hotpatchs\/[a-f0-9]+\/(.+)$/, (req, res) => {
+        const subpath = req.params[0];  // e.g. android_astc/1.132.6/fileinfo
+        const fsPath  = path.join(__dirname, '..', 'public', 'hotpatchs',
+                            req.path.replace(/^\/hotpatchs\//, ''));
+        
+        // Decode ~2F→/, ~2B→+, ~3D→= (format FF CDN encoding)
+        const decoded = fsPath.replace(/~2F/g, '/').replace(/~2B/g, '+').replace(/~3D/g, '=');
+        
+        let filePath = null;
+        for (const fp of [fsPath, decoded]) {
+            if (fs.existsSync(fp) && fs.statSync(fp).isFile()) {
+                filePath = fp;
+                break;
+            }
+        }
+        
+        if (!filePath) {
+            console.log('[HOTPATCHS] MISS:', req.path);
+            return res.status(404).send('Not found');
+        }
+        
+        console.log('[HOTPATCHS] HIT:', filePath);
+        const isFileinfo = subpath.endsWith('fileinfo');
+        res.setHeader('Content-Type', isFileinfo ? 'text/plain; charset=utf-8' : 'application/octet-stream');
+        res.setHeader('Cache-Control', 'public, max-age=60');
+        res.setHeader('Accept-Ranges', 'bytes');
+        return sendLocal(req, res, filePath);
+    });
+
     // /cdn/cache_res — in-memory cache (utama)
     app.get('/cdn/cache_res', (req, res) => {
         const buf = getCacheResBuffer();

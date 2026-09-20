@@ -350,7 +350,7 @@ function createClientProxy() {
                         // Patch server URL fields di GetLoginData
                         for (const k of Object.keys(parsed)) {
                             if (typeof parsed[k] === 'string' &&
-                                parsed[k].includes('clientbp.ppmainecoonghj.com')) {
+                                parsed[k].includes('clientbp.ppmainecoonghj.com') || parsed[k].includes('loginbp.ppmainecoonghj.com')) {
                                 parsed[k] = PROXY_URL;
                             }
                         }
@@ -544,7 +544,7 @@ function init(app) {
         // Game kirim request dengan Host: clientbp.ppmainecoonghj.com
         // Proxy perlu detect Host header dan route ke clientProxy
         const hostHeader = (req.headers['host'] || '').toLowerCase();
-        const isClientBpHost = hostHeader.includes('clientbp.') || 
+        const isClientBpHost = hostHeader.includes('clientbp.') || hostHeader.includes('loginbp.ppmainecoonghj') || 
                                hostHeader.includes('ppmainecoonghj') ||
                                hostHeader.includes('ggpolarbear') ||
                                hostHeader.includes('ggblueshark');
