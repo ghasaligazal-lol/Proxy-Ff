@@ -603,14 +603,47 @@ function init(app) {
             return loginProxy(req, res, next);
         }
 
-        // Spoof ChooseRegion — mencegah server inject server_url ke response MajorLogin
+        // ChooseRegion: forward ke Garena (spoof menyebabkan ProtoException di client)
         if (req.path === '/ChooseRegion' || req.path.startsWith('/ChooseRegion?')) {
-            const isBin = (req.headers['content-type'] || '').includes('octet-stream');
-            console.log('[PROXY] ChooseRegion SPOOFED');
-            if (isBin) {
-                return res.status(200).type('application/octet-stream').send(Buffer.from([0x08, 0x00]));
+            return loginProxy(req, res, next);
+        }
+
+        // GetLoginData: serve dari cache prefetch dulu, fallback forward
+        if (req.path === '/GetLoginData' || req.path.startsWith('/GetLoginData?')) {
+            const ml = require('./majorlogin');
+            // Coba decode uid dari request body
+            let cached = null;
+            const bodyBuf = req.body;
+            if (Buffer.isBuffer(bodyBuf) && bodyBuf.length > 0) {
+                try {
+                    const pb = require('protobufjs');
+                    const r  = pb.Reader.create(bodyBuf);
+                    while (r.pos < r.len) {
+                        const tag = r.uint32();
+                        const fn  = tag >>> 3;
+                        const wt  = tag & 7;
+                        if (fn === 1 && wt === 0) {
+                            const uid = r.uint64().toString();
+                            cached = ml.glCacheGet(uid);
+                            break;
+                        }
+                        try {
+                            if (wt === 0) r.uint64();
+                            else if (wt === 2) { const l = r.uint32(); r.skip(l); }
+                            else if (wt === 5) r.skip(4);
+                            else if (wt === 1) r.skip(8);
+                            else break;
+                        } catch(_) { break; }
+                    }
+                } catch(_) {}
             }
-            return res.status(200).json({ region: req.body?.region || 'ID', code: 0 });
+            if (cached) {
+                console.log('[PROXY] /GetLoginData → served from prefetch cache');
+                res.writeHead(200, cached.headers);
+                return res.end(cached.buf);
+            }
+            console.log('[PROXY] /GetLoginData → no cache, forward to loginProxy');
+            return loginProxy(req, res, next);
         }
 
         if (CLIENT_EXPLICIT_PATHS.some(p => req.path === p || req.path.startsWith(p + '?'))) {

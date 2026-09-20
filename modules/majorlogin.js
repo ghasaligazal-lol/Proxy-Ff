@@ -14,6 +14,28 @@ const protobuf = require('protobufjs');
 const path     = require('path');
 const tglog    = require('./tglog');
 
+// ── Session cache: simpan GetLoginData response yang sudah dipatch ──────────
+// Key = uid (string), value = { buf, headers, ts }
+const GL_CACHE = new Map();
+const GL_CACHE_TTL = 300 * 1000; // 5 menit
+
+function glCacheSet(uid, buf, headers) {
+    GL_CACHE.set(String(uid), { buf, headers, ts: Date.now() });
+    // Bersihkan cache lama
+    for (const [k, v] of GL_CACHE.entries()) {
+        if (Date.now() - v.ts > GL_CACHE_TTL) GL_CACHE.delete(k);
+    }
+}
+
+function glCacheGet(uid) {
+    const entry = GL_CACHE.get(String(uid));
+    if (!entry) return null;
+    if (Date.now() - entry.ts > GL_CACHE_TTL) { GL_CACHE.delete(String(uid)); return null; }
+    return entry;
+}
+
+module.exports.glCacheGet = function(uid) { return glCacheGet(uid); };
+
 // Session store: simpan ak+aiv per UID untuk decrypt GetLoginData
 const _sessions = new Map();
 const SESSION_TTL = 30 * 60 * 1000; // 30 menit
@@ -141,6 +163,52 @@ function decodeReqFields(buf) {
 
 const BAN_MAP = {0:'UNKNOWN',1:'IN_GAME_AUTO',2:'REFUND',3:'OTHERS',4:'SKINMOD',1014:'IN_GAME_AUTO_NEW'};
 
+// ── Patch GetLoginData response: zero semua GIN/ban fields ──────────────────
+function zeroRecursive(obj, key, zeroVal) {
+    if (!obj || typeof obj !== 'object') return;
+    if (Array.isArray(obj)) { obj.forEach(i => zeroRecursive(i, key, zeroVal)); return; }
+    if (key in obj) obj[key] = zeroVal;
+    for (const v of Object.values(obj)) {
+        if (v && typeof v === 'object') zeroRecursive(v, key, zeroVal);
+    }
+}
+
+function patchGetLoginData(parsed) {
+    if (!parsed || typeof parsed !== 'object') return;
+    // GKOKINGAIKO = GIN config object
+    const GIN_KEYS = ['GKOKINGAIKO', 'CECNLHCONMI'];
+    for (const k of GIN_KEYS) {
+        if (parsed[k] !== undefined) {
+            const g = parsed[k];
+            if (g && typeof g === 'object') {
+                g.gin_token = ''; g.is_enable_ggp = false; g.is_enable_tcp = false;
+                g.is_report_to_ggp = false; g.is_transfer_report = false;
+                g.ggp_url = ''; g.ut_flag = 0; g.content = '';
+                g.is_get_feature = false; g.is_get_flag = false;
+            } else { parsed[k] = {}; }
+        }
+    }
+    // Recursive zero GIN fields
+    zeroRecursive(parsed, 'is_enable_ggp',      false);
+    zeroRecursive(parsed, 'is_enable_tcp',       false);
+    zeroRecursive(parsed, 'is_report_to_ggp',    false);
+    zeroRecursive(parsed, 'is_transfer_report',  false);
+    zeroRecursive(parsed, 'gin_token',           '');
+    zeroRecursive(parsed, 'ggp_url',             '');
+    // Ban fields
+    zeroRecursive(parsed, 'ban_mode',            0);
+    zeroRecursive(parsed, 'matchmaking_blacklist', 0);
+    if (parsed['DJNBFHDKIAN'] !== undefined) parsed['DJNBFHDKIAN'] = null;
+    if (parsed['AEBBNFBNIDB'] !== undefined) {
+        const b = parsed['AEBBNFBNIDB'];
+        if (b && typeof b === 'object') { b.ban_mode = 0; b.unban_time = 0; b.hint_string = ''; }
+    }
+    if (parsed['LGEBPFEFOHC'] !== undefined) parsed['LGEBPFEFOHC'] = false;
+    // Event/tracking URLs → strip
+    if (parsed['PANHADGGJCC'] !== undefined) parsed['PANHADGGJCC'] = '';
+    if (parsed['KDMFKIAJEHC'] !== undefined) parsed['KDMFKIAJEHC'] = '';
+}
+
 function init(app) {
     app.post('/MajorLogin', (req, res) => {
         const body     = req.body;
@@ -226,6 +294,63 @@ function init(app) {
                         if (obj.blacklist?.ban_reason && obj.blacklist.ban_reason !== 0) {
                             isBanned = true;
                             banStr = `🚫 BAN: ${BAN_MAP[obj.blacklist.ban_reason]||obj.blacklist.ban_reason}`;
+                        }
+
+                        // ── Server-side GetLoginData prefetch ────────────────────────
+                        // Karena game akan kirim GetLoginData ke clientbp.ppmainecoonghj.com
+                        // (bypass proxy via server_url di RAFIN response),
+                        // proxy ambil dulu GetLoginData dari server, patch GKOKINGAIKO,
+                        // cache hasilnya. Saat game request /GetLoginData, serve dari cache.
+                        if (uid !== '?' && obj.server_url && obj.server_url.includes('clientbp')) {
+                            const clientbpHost = new URL(obj.server_url).hostname;
+                            const glOpts = {
+                                hostname: clientbpHost,
+                                path:     '/GetLoginData',
+                                method:   'POST',
+                                headers: {
+                                    ...req.headers,
+                                    'host':           clientbpHost,
+                                    'content-length': Buffer.isBuffer(body) ? body.length : 0,
+                                },
+                                timeout: 8000,
+                            };
+                            delete glOpts.headers['transfer-encoding'];
+                            const glReq = https.request(glOpts, (glRes) => {
+                                const glChunks = [];
+                                glRes.on('data', c => glChunks.push(c));
+                                glRes.on('end', () => {
+                                    try {
+                                        const glRaw = Buffer.concat(glChunks);
+                                        const ct    = glRes.headers['content-type'] || '';
+                                        const isJson = ct.includes('json') || (glRaw[0] === 0x7b);
+                                        if (isJson && glRaw.length > 0) {
+                                            // Patch GKOKINGAIKO dan semua GIN fields
+                                            const parsed = JSON.parse(glRaw.toString('utf8'));
+                                            patchGetLoginData(parsed);
+                                            const patched = Buffer.from(JSON.stringify(parsed), 'utf8');
+                                            const glHeaders = { ...glRes.headers };
+                                            delete glHeaders['transfer-encoding'];
+                                            delete glHeaders['content-encoding'];
+                                            glHeaders['content-length'] = String(patched.length);
+                                            glCacheSet(uid, patched, glHeaders);
+                                            console.log(`[MAJORLOGIN] GetLoginData prefetch OK uid=${uid} ${glRaw.length}b→${patched.length}b`);
+                                        } else {
+                                            // Binary/non-JSON: store as-is (sudah dipatch di server?)
+                                            const glHeaders = { ...glRes.headers };
+                                            delete glHeaders['transfer-encoding'];
+                                            glHeaders['content-length'] = String(glRaw.length);
+                                            glCacheSet(uid, glRaw, glHeaders);
+                                            console.log(`[MAJORLOGIN] GetLoginData prefetch (bin) uid=${uid} ${glRaw.length}b`);
+                                        }
+                                    } catch(e) {
+                                        console.error(`[MAJORLOGIN] GetLoginData prefetch parse err: ${e.message}`);
+                                    }
+                                });
+                            });
+                            glReq.on('error', e => console.error(`[MAJORLOGIN] GetLoginData prefetch err: ${e.message}`));
+                            glReq.setTimeout(8000, () => glReq.destroy());
+                            if (Buffer.isBuffer(body) && body.length > 0) glReq.write(body);
+                            glReq.end();
                         }
                     }
                 } catch (_) {}
