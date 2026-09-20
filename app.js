@@ -34,8 +34,9 @@ const modules = loadModules();
 
 // ============ MIDDLEWARE ============
 app.use(express.raw({ type: '*/*', limit: '10mb' }));
-app.use(express.static('public'));
 app.use(cookieParser());
+// FIX: express.static dipasang SETELAH cdn.init agar /hotpatchs/ routes di cdn.js
+// diprioritaskan → lihat bawah di MODULES INIT section
 
 // ============ TELEMETRY / UPLOAD SPOOF ============
 const SPOOF_PATHS = [
@@ -107,11 +108,15 @@ app.all('*', (req, res, next) => {
 });
 
 // ============ MODULES INIT ============
-// Urutan penting: config dulu, lalu fitur, lalu majorlogin, lalu proxy (catch-all terakhir)
+// FIX URUTAN: cdn HARUS dulu sebelum express.static agar /hotpatchs/ routes
+// tidak di-intercept oleh express.static terlebih dahulu (404 assembly-csharp-patch fix)
 if (modules.config)      modules.config.init(app);
 if (modules.tglog)       modules.tglog.init(app);
 if (modules.protobuf)    modules.protobuf.init(app);
-if (modules.cdn)         modules.cdn.init(app);
+if (modules.cdn)         modules.cdn.init(app);  // HARUS sebelum express.static
+// FIX: express.static dipasang di sini, SETELAH cdn.init, sehingga /hotpatchs/
+// dan /cdn/ routes di cdn.js sudah registered dan diprioritaskan
+app.use(express.static('public'));
 if (modules.ping)        modules.ping.init(app);
 if (modules.gamevar)     modules.gamevar.init(app);
 if (modules.routes)      modules.routes.init(app);
