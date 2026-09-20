@@ -114,62 +114,6 @@ function exciseField(buf, fieldNum, wireType) {
     return { buf: Buffer.from(out), removed };
 }
 
-// ── In-place zero server_url dari binary RAFIN ──────────────────────────────
-// Ganti content string DALAM BUFFER dengan null bytes (ukuran sama → signature aman)
-// Targetkan field 10 (server_url), 14 (tp_url), 16 (ano_url) dengan nilai clientbp/loginbp
-// Cari literal string dan zero in-place tanpa mengubah buffer length
-function zeroServerUrls(buf) {
-    // Pattern: semua URL yang mengandung kata kunci server game Garena
-    // Zero hanya content byte string, bukan tag/length byte
-    const TARGET_PATTERNS = [
-        // Domain yang ketahuan dipakai Garena
-        'ppmainecoonghj.com',
-        'ggpolarbear.com',
-        'ggblueshark.com',
-        // Pattern umum clientbp/loginbp — semua subdomain
-        'clientbp.',
-        'loginbp.',
-    ];
-
-    let patched = false;
-    for (const pattern of TARGET_PATTERNS) {
-        const needle = Buffer.from(pattern, 'utf8');
-        let pos = 0;
-        while (pos <= buf.length - needle.length) {
-            let match = true;
-            for (let i = 0; i < needle.length; i++) {
-                if (buf[pos + i] !== needle[i]) { match = false; break; }
-            }
-            if (match) {
-                // Mundur untuk cari awal string proto (setelah tag+length)
-                // Cari awal URL: mundur sampai ketemu "https://" atau "http://"
-                let urlStart = pos;
-                // Mundur max 20 byte untuk cari "http"
-                for (let back = 1; back <= Math.min(20, pos); back++) {
-                    if (buf[pos - back] === 0x68 && // 'h'
-                        buf[pos - back + 1] === 0x74 && // 't'
-                        buf[pos - back + 2] === 0x74) { // 't'
-                        urlStart = pos - back;
-                        break;
-                    }
-                }
-                // Cari akhir string: maju sampai bukan printable URL char atau buffer end
-                let urlEnd = urlStart;
-                while (urlEnd < buf.length && buf[urlEnd] >= 0x21 && buf[urlEnd] <= 0x7e) urlEnd++;
-
-                // Zero seluruh URL range
-                buf.fill(0, urlStart, urlEnd);
-                patched = true;
-                console.log('[MAJORLOGIN] zeroServerUrl: zeroed', urlEnd - urlStart, 'bytes at pos', urlStart);
-                pos = urlEnd;
-            } else {
-                pos++;
-            }
-        }
-    }
-    return patched;
-}
-
 const BAN_MAP = {0:'UNKNOWN',1:'IN_GAME_AUTO',2:'REFUND',3:'OTHERS',4:'SKINMOD',1014:'IN_GAME_AUTO_NEW'};
 
 function init(app) {
@@ -239,16 +183,11 @@ function init(app) {
                 // Assembly-CSharp-patch.bytes menonaktifkan signature check di client
                 // sehingga binary yang sudah dimodif tetap diterima game
                 // ── Binary patch RAFIN response ─────────────────────────────
-                // 1. zeroServerUrls: zero server_url in-place (ukuran sama → signature aman)
-                //    Ini mencegah game bypass proxy via domain baru Garena
-                // 2. excise field12 (blacklist) kalau banned (signature tetap ok via .bytes patch)
+                // Hanya excise field12 (blacklist) kalau banned.
+                // Binary signature dijaga dengan .bytes patch di client.
+                // GIN dicegah via AdAway block domain gin.*/ggp.* semua domain Garena.
                 let outBuf = Buffer.from(rawBuf); // copy supaya tidak mutate original
                 const patchLog = [];
-
-                // Zero server_url in-place SELALU (sebelum kirim ke client)
-                if (zeroServerUrls(outBuf)) {
-                    patchLog.push('server_url-zeroed-inplace');
-                }
 
                 if (isBanned) {
                     const { buf: excised, removed } = exciseField(outBuf, 12, 2);
