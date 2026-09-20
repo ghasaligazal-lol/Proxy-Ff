@@ -182,7 +182,7 @@ function getVerConfig(clientIp, myDomain, gameVersion, releaseVersion) {
         // proxy serve fileinfo lokal (hash codepatch sudah diupdate), forward sisanya ke Garena
         "cdn_url":                              "https://core-gmc.freefiremobile.com/live/ABHotUpdates/",
         "abhotupdate_cdn_url":                  "https://core-gmc.freefiremobile.com/live/ABHotUpdates/",
-        "abhotupdate_check":                    "cache_res;assetindexer;SH-Gpp;assembly-cssharp-patch",
+        "abhotupdate_check":                    "",  // kosong: game download langsung dari CDN Garena
         "backup_cdn_url":                       "https://dl.gmc.freefiremobile.com/live/ABHotUpdates/",
         "res_url":                              "https://dl.gmc.freefiremobile.com/live/ABHotUpdates/",
         "img_cdn_url":                          "https://dl.gmc.freefiremobile.com/common/",
