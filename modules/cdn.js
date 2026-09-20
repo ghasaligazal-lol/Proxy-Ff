@@ -476,8 +476,10 @@ function init(app) {
     // KRITIS: ini yang game fetch, harus serve fileinfo yang sudah diupdate hash codepatch
     app.get(/^\/live\/ABHotUpdates\/android_astc\/[^/]+\/fileinfo$/, (req, res) => {
         const candidates = [
+            // Prioritas: fileinfo lokal dengan hash codepatch sudah diupdate
             path.join(__dirname, '..', 'public', 'api', 'live', 'ABHotUpdates', 'fileinfo'),
             path.join(__dirname, '..', 'public', 'api', 'live', 'fileinfo'),
+            path.join(BASE_DIR, 'fileinfo'),
             ...LOCAL_VERSIONS_ASTC.map(v => path.join(BASE_DIR, 'android_astc', v, 'fileinfo')),
             ...LOCAL_VERSIONS_MAX.map(v => path.join(BASE_DIR, 'android_max_astc', v, 'fileinfo')),
             path.join(BASE_DIR, 'live', 'ABHotUpdates', 'fileinfo'),

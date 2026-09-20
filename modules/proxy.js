@@ -443,11 +443,19 @@ const loginProxy = createProxyMiddleware({
 const clientProxy = createClientProxy();
 
 // FIX: path tambah /NewbieChoice, /AccountBrief, /CheckVersion
+// loginbp.ggpolarbear.com endpoints (account registration & region flow)
 const LOGIN_PATHS = [
     '/MajorRegister', '/GenerateNickname', '/GetRecommendNickname',
     '/GetAccountBriefInfoBeforeLogin', '/ChooseNewbieChoice', '/NewbieChoice',
-    '/ChooseRegion', '/Register', '/CreateAccount', '/Ping', '/GetLoginData',
+    '/ChooseRegion', '/Register', '/CreateAccount',
     '/CheckVersion', '/GetServerList', '/GetRegionConfig',
+];
+
+// clientbp endpoints yang perlu proxy tapi BUKAN loginbp
+// GetLoginData, Ping, AccountPersonalShow → clientbp.ppmainecoonghj.com
+const CLIENT_EXPLICIT_PATHS = [
+    '/GetLoginData', '/Ping', '/AccountPersonalShow', '/GetPersonalShow',
+    '/GetPlayerAccountPersonalShowGet', '/GetRoleBasicInfo',
 ];
 
 function init(app) {
@@ -495,6 +503,10 @@ function init(app) {
                 return res.status(200).type('application/octet-stream').send(Buffer.from([0x08, 0x00]));
             }
             return res.status(200).json({ region: req.body?.region || 'ID', code: 0 });
+        }
+
+        if (CLIENT_EXPLICIT_PATHS.some(p => req.path === p || req.path.startsWith(p + '?'))) {
+            return clientProxy(req, res, next);
         }
 
         if (LOGIN_PATHS.some(p => req.path === p || req.path.startsWith(p + '?'))) {

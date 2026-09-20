@@ -1,20 +1,17 @@
 'use strict';
-// modules/majorlogin.js — v18
+// modules/majorlogin.js — v19
 //
-// ANALISIS:
-// - v17 (pass-through raw): MajorLogin OK, tidak ada SignatureCheckFailed
-//   → .bytes patch SUDAH aktif, sig check disabled di client
-// - v16 (excise+inject): SignatureCheckFailed → saat itu .bytes belum aktif
+// FIX v19: field numbers excise diperbaiki sesuai proto:
+// [A] field 10  (server_url)          → excise + inject proxyUrl
+// [B] field 12  (blacklist)           → excise jika banned
+// [C] field 14  (tp_url)              → excise
+// [D] field 16  (ano_url)             → excise
+// [E] field 24  (ffanti_url)          → excise  ← FIX (v18 salah excise field 22=AK!)
+// [F] field 25  (ff_anti_config_desc) → excise  ← FIX (v18 salah excise field 23=AIV!)
+// [G] field 36  (connection_seed_enabled) → excise (OB55)
+// [H] field 37  (connection_seed)         → excise (OB55)
 //
-// Sekarang .bytes patch sudah aktif → bisa modif binary RAFIN
-// v18: gunakan kembali binary surgery (excise field 10 + inject proxy URL)
-//
-// Binary surgery yang dilakukan (aman karena sig check disabled):
-// [A] field 10 (server_url)      → excise + inject proxyUrl
-// [B] field 12 (blacklist)       → excise jika banned
-// [C] field 14 (tp_url)          → excise
-// [D] field 22 (ffanti_url)      → excise
-// [E] field 23 (ff_anti_config)  → excise
+// Field 22 (ak) dan field 23 (aiv) adalah encryption keys → JANGAN di-excise!
 
 const https    = require('https');
 const protobuf = require('protobufjs');
@@ -27,7 +24,7 @@ let RAFIN = null;
 protobuf.load(path.join(__dirname, '..', 'MajorLoginRes.proto'))
     .then(root => {
         RAFIN = root.lookupType('freefire.RAFIN');
-        console.log('[MAJORLOGIN] v18 Proto loaded');
+        console.log('[MAJORLOGIN] v19 Proto loaded');
     })
     .catch(err => console.error('[MAJORLOGIN] Proto load err:', err.message));
 
@@ -158,28 +155,40 @@ function init(app) {
                 let outBuf = rawBuf;
                 const patchLog = [];
 
-                // [A] server_url → proxy
+                // [A] server_url (field 10) → excise + inject proxy URL
                 { const { buf: ex } = exciseField(outBuf, 10);
                   outBuf = injectStringField(ex, 10, proxyUrl);
-                  patchLog.push(`url:${origUrl.replace('https://','').substring(0,20)}→proxy`); }
+                  patchLog.push(`url→proxy`); }
 
-                // [B] blacklist → excise jika banned
+                // [B] blacklist (field 12) → excise jika banned
                 if (isBanned) {
                     const { buf: ex, found } = exciseField(outBuf, 12);
                     if (found) { outBuf = ex; patchLog.push('bl excised'); }
                 }
 
-                // [C] tp_url
+                // [C] tp_url (field 14) → excise
                 { const { buf: ex, found } = exciseField(outBuf, 14);
                   if (found) { outBuf = ex; patchLog.push('tp excised'); } }
 
-                // [D] ffanti_url
-                { const { buf: ex, found } = exciseField(outBuf, 22);
+                // [D] ano_url (field 16) → excise
+                { const { buf: ex, found } = exciseField(outBuf, 16);
+                  if (found) { outBuf = ex; patchLog.push('ano excised'); } }
+
+                // [E] ffanti_url (field 24) — FIX: v18 salah excise field 22=AK!
+                { const { buf: ex, found } = exciseField(outBuf, 24);
                   if (found) { outBuf = ex; patchLog.push('ffanti excised'); } }
 
-                // [E] ff_anti_config_desc
-                { const { buf: ex, found } = exciseField(outBuf, 23);
+                // [F] ff_anti_config_desc (field 25) — FIX: v18 salah excise field 23=AIV!
+                { const { buf: ex, found } = exciseField(outBuf, 25);
                   if (found) { outBuf = ex; patchLog.push('ffcfg excised'); } }
+
+                // [G] connection_seed_enabled (field 36) — OB55 new
+                { const { buf: ex, found } = exciseField(outBuf, 36);
+                  if (found) { outBuf = ex; patchLog.push('seed_en excised'); } }
+
+                // [H] connection_seed (field 37) — OB55 new
+                { const { buf: ex, found } = exciseField(outBuf, 37);
+                  if (found) { outBuf = ex; patchLog.push('seed excised'); } }
 
                 const lines = [`<b>MajorLogin v18</b>`, ''];
                 lines.push(`👤 <code>${uid}</code> | 🌏 ${region}`);
@@ -190,7 +199,7 @@ function init(app) {
                 if (banStr) { lines.push(''); lines.push(banStr); }
                 tglog.send(lines.join('\n'));
 
-                console.log(`[MAJORLOGIN] v18 uid=${uid} ${patchLog.join(', ')}`);
+                console.log(`[MAJORLOGIN] v19 uid=${uid} ${patchLog.join(', ')}`);
 
                 const h = { ...proxyRes.headers, 'content-length': outBuf.length };
                 delete h['transfer-encoding'];
@@ -213,7 +222,7 @@ function init(app) {
         proxyReq.end();
     });
 
-    console.log('[MAJORLOGIN] v18 active — binary surgery: excise+inject server_url');
+    console.log('[MAJORLOGIN] v19 active — binary surgery: field nums fixed');
 }
 
 module.exports = { init };
