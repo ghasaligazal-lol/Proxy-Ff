@@ -1,11 +1,7 @@
 'use strict';
 // modules/cdn.js
-// Struktur CDN ikutin Jun (dl-xpanel.junofficial.web.id):
-//   /cdn/android_max_astc/<ver>/gameassetbundles/  — asset ASTC per versi
-//   /cdn/IconCDN/android/                          — icon weapon/skin
-//   /cdn/live/ABHotUpdates/                        — hotupdate patch
-//   /cdn/cache_res                                 — cache_res utama (in-memory)
-//   /cdn/info                                      — fileinfo plain text
+// Serve lokal: cache_res, fileinfo, codepatch, hotpatchs
+// TIDAK download asset game — semua gameassetbundles (kecuali codepatch) diproxy ke Garena CDN
 
 const path  = require('path');
 const fs    = require('fs');
@@ -13,16 +9,15 @@ const https = require('https');
 
 const BASE_DIR = path.resolve(__dirname, '..', 'public', 'cdn');
 
-const VERSION            = '2.131.22';
-const LOCAL_VERSIONS_MAX = ['2.131.22', '2.130.22', '1.132.6', '1.126.3'];
-const LOCAL_VERSIONS_ASTC = ['1.132.6', '1.126.3', '1.125.1'];  // android_astc (non-max)
+const VERSION             = '1.132.6';  // FIX: sync dengan gamevar.js default version
+const LOCAL_VERSIONS_MAX  = ['2.131.22', '2.130.22', '1.132.6', '1.126.3'];
+const LOCAL_VERSIONS_ASTC = ['1.132.6', '1.126.3', '1.125.1'];
 
 // ─── Cache_res in-memory cache ─────────────────────────────────────────────
 let _cacheResCache = null;
 let _cacheResMtime = 0;
 
 function getCacheResBuffer() {
-    // Cari cache_res di CDN folder utama
     const candidates = [
         path.join(BASE_DIR, 'cache_res'),
         path.join(BASE_DIR, 'android_max_astc', VERSION, 'gameassetbundles', 'cache_res'),
@@ -55,6 +50,7 @@ let _infoMtime = 0;
 function getInfoContent() {
     const candidates = [
         path.join(BASE_DIR, 'live', 'ABHotUpdates', 'fileinfo'),
+        path.join(__dirname, '..', 'public', 'api', 'live', 'ABHotUpdates', 'fileinfo'),
         path.join(__dirname, '..', 'public', 'api', 'live', 'fileinfo'),
     ];
     for (const fp of candidates) {
@@ -89,13 +85,10 @@ function safeLocalPath(urlPath) {
     if (p.includes('\0') || p.includes('..')) return null;
 
     const candidates = [
-        // Match langsung
         path.join(BASE_DIR, p.replace(/^\/+/, '')),
-        // Strip /live/ABHotUpdates prefix
         path.join(BASE_DIR, p.replace(/^\/live\/ABHotUpdates\/?/, '')),
     ];
 
-    // /live/ABHotUpdates/gameassetbundles/* → android_max_astc/<ver>/gameassetbundles/*
     const abMatch = /^\/live\/ABHotUpdates\/(gameassetbundles\/.+)$/.exec(p);
     if (abMatch) {
         for (const ver of LOCAL_VERSIONS_MAX) {
@@ -103,7 +96,6 @@ function safeLocalPath(urlPath) {
         }
     }
 
-    // /live/ABHotUpdates/android_max_astc/<any-ver>/fileinfo → android_max_astc/<local-ver>/fileinfo
     const abVerFileinfo = /^\/live\/ABHotUpdates\/android_max_astc\/[^/]+\/fileinfo$/.exec(p);
     if (abVerFileinfo) {
         for (const ver of LOCAL_VERSIONS_MAX) {
@@ -112,7 +104,6 @@ function safeLocalPath(urlPath) {
         candidates.push(path.join(BASE_DIR, 'live', 'ABHotUpdates', 'fileinfo'));
     }
 
-    // /live/ABHotUpdates/android_max_astc/<any-ver>/gameassetbundles/* → android_max_astc/<local-ver>/gameassetbundles/*
     const abVerAsset = /^\/live\/ABHotUpdates\/android_max_astc\/[^/]+\/(gameassetbundles\/.+)$/.exec(p);
     if (abVerAsset) {
         for (const ver of LOCAL_VERSIONS_MAX) {
@@ -121,7 +112,6 @@ function safeLocalPath(urlPath) {
         candidates.push(path.join(BASE_DIR, 'live', 'ABHotUpdates', abVerAsset[1]));
     }
 
-    // /live/ABHotUpdates/android_max_astc/<any-ver>/optional/<type>/<num>/fileinfo
     const abVerOptional = /^\/live\/ABHotUpdates\/android_max_astc\/[^/]+\/(optional\/.+)$/.exec(p);
     if (abVerOptional) {
         for (const ver of LOCAL_VERSIONS_MAX) {
@@ -130,7 +120,6 @@ function safeLocalPath(urlPath) {
         candidates.push(path.join(BASE_DIR, 'android_max_astc', 'optional', ...abVerOptional[1].split('/').slice(1)));
     }
 
-    // /live/ABHotUpdates/android_astc/<any-ver>/fileinfo (non-max ASTC)
     const astcFileinfo = /^\/live\/ABHotUpdates\/android_astc\/[^/]+\/fileinfo$/.exec(p);
     if (astcFileinfo) {
         for (const ver of LOCAL_VERSIONS_ASTC) {
@@ -142,7 +131,6 @@ function safeLocalPath(urlPath) {
         candidates.push(path.join(BASE_DIR, 'live', 'ABHotUpdates', 'fileinfo'));
     }
 
-    // /live/ABHotUpdates/android_astc/<ver>/gameassetbundles/*
     const astcAsset = /^\/live\/ABHotUpdates\/android_astc\/[^/]+\/(gameassetbundles\/.+)$/.exec(p);
     if (astcAsset) {
         for (const ver of LOCAL_VERSIONS_ASTC) {
@@ -154,7 +142,6 @@ function safeLocalPath(urlPath) {
         candidates.push(path.join(BASE_DIR, 'live', 'ABHotUpdates', astcAsset[1]));
     }
 
-    // /android_max_astc/<any-ver>/gameassetbundles/* → versi lokal yang ada
     const maxMatch = /^\/android_max_astc\/[^/]+\/(gameassetbundles\/.+)$/.exec(p);
     if (maxMatch) {
         for (const ver of LOCAL_VERSIONS_MAX) {
@@ -211,11 +198,10 @@ function sendLocal(req, res, filePath) {
     res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`);
     res.setHeader('Content-Length', String(end - start + 1));
     return fs.createReadStream(filePath, { start, end })
-        .on('error', () => { if (!res.headersSent) res.status(500).end(); else res.destroy(); })
+        .on('error', () => { if (!res.headersSent) res.status(500).end(); })
         .pipe(res);
 }
 
-// ─── Buffer send dengan Range support (untuk in-memory cache_res) ─────────────
 function sendBuffer(req, res, buf) {
     const size = buf.length;
 
@@ -256,20 +242,12 @@ function upstreamTarget(reqPath) {
     let p = reqPath;
     if (!p.startsWith('/')) p = '/' + p;
 
-    // IconCDN langsung ke CDN root
     if (p.startsWith('/IconCDN/')) return `https://dl.cdn.freefiremobile.com${p}`;
-
-    // OB<num> path → /common/
     if (/^\/OB\d+\//.test(p)) return `https://dl.cdn.freefiremobile.com/common${p}`;
     if (p.startsWith('/common/')) return `https://dl.cdn.freefiremobile.com${p}`;
-
-    // android_max_astc/ dan android_astc/ → perlu /live/ABHotUpdates/ prefix
-    // Contoh: /android_max_astc/optional/optionalclothres/1228/fileinfo
-    //       → /live/ABHotUpdates/android_max_astc/optional/optionalclothres/1228/fileinfo
     if (p.startsWith('/android_max_astc/') || p.startsWith('/android_astc/')) {
         return `https://dl.cdn.freefiremobile.com/live/ABHotUpdates${p}`;
     }
-
     if (!p.includes('/live/ABHotUpdates/')) p = `/live/ABHotUpdates${p}`;
     p = p.replace(/\/OB54\//g, `/${VERSION}/`);
     return `https://dl.cdn.freefiremobile.com${p}`;
@@ -312,32 +290,40 @@ function proxyUpstream(req, res, target, attempt) {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 function init(app) {
 
-
-    // ─── Hotpatchs routes (format: /hotpatchs/<hash>/<path>) ────────────────
-    // Sama dengan struktur server 203.57.85.108:7777
-    // /hotpatchs/<hash>/android_astc/<ver>/fileinfo
-    // /hotpatchs/<hash>/android_astc/<ver>/gameassetbundles/<file>
+    // ─── Hotpatchs routes ────────────────────────────────────────────────────
+    // Format: /hotpatchs/<hash>/android_astc/<ver>/fileinfo
+    //         /hotpatchs/<hash>/android_astc/<ver>/gameassetbundles/<file>
+    // File di filesystem dengan nama pakai ~ encoding, serve langsung tanpa proxy upstream
     app.get(/^\/hotpatchs\/[a-f0-9]+\/(.+)$/, (req, res) => {
-        const subpath = req.params[0];  // e.g. android_astc/1.132.6/fileinfo
+        const subpath = req.params[0];
         const fsPath  = path.join(__dirname, '..', 'public', 'hotpatchs',
                             req.path.replace(/^\/hotpatchs\//, ''));
-        
-        // Decode ~2F→/, ~2B→+, ~3D→= (format FF CDN encoding)
+
+        // Cek path dengan ~ (literal) dan tanpa ~ (decoded)
+        // CATATAN: ~2F = / jadi decoded path bisa jadi multi-level → pakai path literal dulu
         const decoded = fsPath.replace(/~2F/g, '/').replace(/~2B/g, '+').replace(/~3D/g, '=');
-        
+
         let filePath = null;
-        for (const fp of [fsPath, decoded]) {
-            if (fs.existsSync(fp) && fs.statSync(fp).isFile()) {
-                filePath = fp;
-                break;
-            }
+        // Cek path literal dulu (nama file dengan ~ encoding)
+        if (fs.existsSync(fsPath) && fs.statSync(fsPath).isFile()) {
+            filePath = fsPath;
         }
-        
+        // Jika tidak ketemu, coba decoded (tapi hanya kalau path decoded valid)
+        if (!filePath) {
+            try {
+                const resolved = path.resolve(decoded);
+                const hotpatchBase = path.resolve(__dirname, '..', 'public', 'hotpatchs');
+                if (resolved.startsWith(hotpatchBase) && fs.existsSync(resolved) && fs.statSync(resolved).isFile()) {
+                    filePath = resolved;
+                }
+            } catch (_) {}
+        }
+
         if (!filePath) {
             console.log('[HOTPATCHS] MISS:', req.path);
             return res.status(404).send('Not found');
         }
-        
+
         console.log('[HOTPATCHS] HIT:', filePath);
         const isFileinfo = subpath.endsWith('fileinfo');
         res.setHeader('Content-Type', isFileinfo ? 'text/plain; charset=utf-8' : 'application/octet-stream');
@@ -346,7 +332,7 @@ function init(app) {
         return sendLocal(req, res, filePath);
     });
 
-    // /cdn/cache_res — in-memory cache (utama)
+    // /cdn/cache_res — in-memory cache
     app.get('/cdn/cache_res', (req, res) => {
         const buf = getCacheResBuffer();
         if (!buf) {
@@ -357,7 +343,7 @@ function init(app) {
         return sendBuffer(req, res, buf);
     });
 
-    // /cdn/info & /cdn/live/ABHotUpdates/fileinfo — fileinfo plain text
+    // /cdn/info & /cdn/live/ABHotUpdates/fileinfo
     app.get(['/cdn/info', '/cdn/live/ABHotUpdates/fileinfo'], (req, res) => {
         const content = getInfoContent();
         if (!content) {
@@ -372,10 +358,8 @@ function init(app) {
         return res.status(200).end(buf);
     });
 
-    // /cdn/live/ABHotUpdates/android_max_astc/:ver/fileinfo — path format lama
+    // /cdn/live/ABHotUpdates/android_max_astc/:ver/fileinfo
     app.get('/cdn/live/ABHotUpdates/android_max_astc/:ver/fileinfo', (req, res) => {
-        const ver = req.params.ver.replace(/[^0-9.]/g, '');
-        // Cari fileinfo lokal: versi exact dulu, fallback ke versi lain, fallback ke ABHotUpdates
         const candidates = [
             ...LOCAL_VERSIONS_MAX.map(v => path.join(BASE_DIR, 'android_max_astc', v, 'fileinfo')),
             path.join(BASE_DIR, 'live', 'ABHotUpdates', 'fileinfo'),
@@ -409,16 +393,11 @@ function init(app) {
         return fs.createReadStream(filePath).pipe(res);
     });
 
-    // ─── Versioned gameassetbundles cache_res (SX2 format) ─────────────────────
-    // Game request: /live/ABHotUpdates/android_max_astc/<ver>/gameassetbundles/cache_res.<hash>~3D
-    // Serve file gz dari public/api/live/ABHotUpdates/
+    // versioned cache_res (path dari SX2 format)
     app.get(/^\/live\/ABHotUpdates\/android_max_astc\/[^/]+\/gameassetbundles\/(cache_res\.\S+)$/, (req, res) => {
         const filename = req.params[0];
         const apiDir   = path.join(__dirname, '..', 'public', 'api', 'live', 'ABHotUpdates');
-
-        // Decode: ~2F→/, ~2B→+, ~3D→=
         const decoded = filename.replace(/~2F/g, '/').replace(/~2B/g, '+').replace(/~3D/g, '=');
-        // Coba nama asli (dengan ~) dulu, fallback ke decoded
         const candidates = [
             path.join(apiDir, filename),
             path.join(apiDir, decoded),
@@ -432,26 +411,26 @@ function init(app) {
                 return fs.createReadStream(fp).pipe(res);
             }
         }
-        console.log(`[CDN] versioned cache_res MISS: ${filename}`);
+        // Fallback ke cache_res utama di /public/cdn/cache_res
+        const buf = getCacheResBuffer();
+        if (buf) {
+            console.log(`[CDN] versioned cache_res MISS ${filename} → fallback main cache_res (${buf.length}B)`);
+            return sendBuffer(req, res, buf);
+        }
+        console.log(`[CDN] versioned cache_res MISS: ${filename} (no fallback)`);
         return res.status(404).send('Not found');
     });
 
-    // /live/ABHotUpdates/android_max_astc/optional/<type>/<ver>/fileinfo
-    // PATCH: Sebelumnya proxyUpstream() me-return status apapun dari upstream ke game.
-    // Kalau upstream return 403 → game retry 5x → semua fail → server flag "Data Abnormal".
-    // Fix: coba lokal dulu, proxy upstream dengan fallback 200-empty kalau upstream gagal.
-    // 200-empty = game anggap resource sudah up-to-date, skip download, tidak retry.
+    // optional resources: coba lokal dulu, lalu proxy upstream, spoof 200-empty kalau gagal
     app.get(/^\/live\/ABHotUpdates\/android_max_astc\/optional\//, (req, res) => {
         const fullPath = req.path;
-        const target = `https://dl.cdn.freefiremobile.com${fullPath}`;
-
-        // Coba lokal dulu (kalau ada file hasil download sebelumnya)
         const local = safeLocalPath(fullPath);
         if (local) {
             console.log(`[CDN] optional LOCAL HIT ${local}`);
             return sendLocal(req, res, local);
         }
 
+        const target = `https://dl.cdn.freefiremobile.com${fullPath}`;
         console.log(`[CDN] optional → upstream ${target}`);
         const u = new URL(target);
         const upHeaders = {
@@ -473,9 +452,7 @@ function init(app) {
                 upstreamRes.pipe(res);
                 upstreamRes.on('error', () => { if (!res.headersSent) res.status(502).end(); else res.destroy(); });
             } else {
-                // Upstream error (403/404/5xx) — drain body lalu spoof 200 empty.
-                // Ini mencegah game retry 5x dan trigger "Data Abnormal" flag di server.
-                console.log(`[CDN] optional upstream ${status} ${fullPath} → spoof 200 empty (no retry)`);
+                console.log(`[CDN] optional upstream ${status} ${fullPath} → spoof 200 empty`);
                 upstreamRes.resume();
                 if (!res.headersSent) {
                     res.setHeader('Content-Type', 'application/octet-stream');
@@ -497,20 +474,18 @@ function init(app) {
         });
     });
 
-    // /live/ABHotUpdates/android_max_astc/<ver>/gameassetbundles/<file> (selain cache_res)
-    // → proxy ke Garena CDN
+    // gameassetbundles NON-codepatch → PROXY ke Garena CDN (game download sendiri dari CDN)
+    // Proxy bukan mendownload asset game — hanya meneruskan request dari game ke Garena CDN
     app.get(/^\/live\/ABHotUpdates\/android_max_astc\/[^/]+\/gameassetbundles\/(?!cache_res)/, (req, res) => {
         const fullPath = req.path;
         const target = `https://dl.cdn.freefiremobile.com${fullPath}`;
-        console.log(`[CDN] gameassetbundles → upstream ${target}`);
+        console.log(`[CDN] gameassetbundles passthrough → ${target}`);
         return proxyUpstream(req, res, target);
     });
 
-    // fileinfo: android_astc (non-max) — dari log: WWWLoad ...android_astc/1.132.6/fileinfo
-    // KRITIS: ini yang game fetch, harus serve fileinfo yang sudah diupdate hash codepatch
+    // fileinfo android_astc (non-max)
     app.get(/^\/live\/ABHotUpdates\/android_astc\/[^/]+\/fileinfo$/, (req, res) => {
         const candidates = [
-            // Prioritas: fileinfo lokal dengan hash codepatch sudah diupdate
             path.join(__dirname, '..', 'public', 'api', 'live', 'ABHotUpdates', 'fileinfo'),
             path.join(__dirname, '..', 'public', 'api', 'live', 'fileinfo'),
             path.join(BASE_DIR, 'fileinfo'),
@@ -526,14 +501,12 @@ function init(app) {
                 return fs.createReadStream(fp).pipe(res);
             }
         }
-        // Fallback: proxy ke upstream
         const target = `https://core-gmc.freefiremobile.com${req.path}`;
-        console.log(`[CDN] android_astc fileinfo NOT FOUND locally → upstream ${target}`);
+        console.log(`[CDN] android_astc fileinfo NOT FOUND → upstream ${target}`);
         return proxyUpstream(req, res, target);
     });
 
-    // fileinfo versioned path (SX2 format)
-    // Game request: /live/ABHotUpdates/android_max_astc/<ver>/fileinfo
+    // fileinfo android_max_astc versioned (SX2 format)
     app.get(/^\/live\/ABHotUpdates\/android_max_astc\/[^/]+\/fileinfo$/, (req, res) => {
         const candidates = [
             path.join(__dirname, '..', 'public', 'api', 'live', 'ABHotUpdates', 'fileinfo'),
@@ -551,38 +524,32 @@ function init(app) {
         return res.status(404).send('fileinfo not found');
     });
 
-    // Main CDN handler — /cdn/* catch-all
+    // /cdn/* catch-all — lokal dulu, lalu upstream
     app.use('/cdn', (req, res) => {
         const reqPath = req.path || '/';
         console.log(`[CDN] ${req.method} ${reqPath} range=${req.headers.range || '-'}`);
 
-        // Cek lokal dulu
         const local = safeLocalPath(reqPath);
         if (local) {
             console.log(`[CDN] LOCAL HIT ${local} (${fs.statSync(local).size}B)`);
             return sendLocal(req, res, local);
         }
 
-        // cache_res miss → 404 (tidak di-proxy, harus lokal)
         if (reqPath.includes('cache_res')) {
             console.log(`[CDN] CACHE_RES MISS: ${reqPath}`);
             return res.status(404).send('cache_res not found locally');
         }
 
-        // PATCH: UGC resource miss → passthrough ke origin CDN, jangan 404 langsung.
-        // UGC map resource (ugcres, UGC map bundle) divalidasi oleh ResUpdateDownloadContext
-        // sebelum group join. Kalau file ini 404 → NullRef di AddTagFilesPair → mode 25 masuk
-        // unavailableModes → tidak bisa join team/group.
-        // Spoof 200-empty kalau upstream juga gagal (sama seperti handler optional di atas).
+        // UGC: spoof 200-empty kalau upstream gagal (cegah NullRef saat join group)
         if (reqPath.includes('ugcres') || reqPath.includes('ugc') || reqPath.includes('optionalugc')) {
             const ugcTarget = upstreamTarget(reqPath);
-            console.log(`[CDN] UGC MISS → upstream passthrough ${ugcTarget}`);
+            console.log(`[CDN] UGC MISS → upstream ${ugcTarget}`);
             const u = new URL(ugcTarget);
             const ugcHeaders = {
-                'User-Agent':      req.headers['user-agent'] || 'Dalvik/2.1.0',
-                'Accept':          req.headers.accept || '*/*',
-                'Connection':      'keep-alive',
-                'Host':            u.host,
+                'User-Agent':  req.headers['user-agent'] || 'Dalvik/2.1.0',
+                'Accept':      req.headers.accept || '*/*',
+                'Connection':  'keep-alive',
+                'Host':        u.host,
             };
             if (req.headers.range) ugcHeaders.Range = req.headers.range;
             const r = https.get({ hostname: u.hostname, path: u.pathname + u.search, headers: ugcHeaders, agent: AGENT }, upstreamRes => {

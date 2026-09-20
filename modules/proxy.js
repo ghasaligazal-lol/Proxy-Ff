@@ -1,12 +1,9 @@
 'use strict';
-// modules/proxy.js — FIXED
-// Bug fixes:
-// - require('../gamevar') diganti env langsung (cegah circular/undefined)
-// - ChooseNewbieChoice + NewbieChoice ditambah ke loginProxy route
-// - Telemetry spoof lebih komprehensif
+// modules/proxy.js
 
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const zlib = require('zlib');
+
 // AES session (ak+aiv dari MajorLogin) untuk decrypt GetLoginData
 let _mlMod = null;
 function getMlMod() {
@@ -16,7 +13,7 @@ function getMlMod() {
 
 const PROXY_URL            = (process.env.PROXY_URL || 'https://proxy-reza-kontolodon-memek-luu.up.railway.app/').replace(/\/$/, '');
 const GARENA_LOGIN_SERVER  = 'https://loginbp.ggpolarbear.com';
-const GARENA_CLIENT_SERVER = 'https://clientbp.ppmainecoonghj.com'; // updated Sep 2026
+const GARENA_CLIENT_SERVER = 'https://clientbp.ppmainecoonghj.com';
 
 // ===== TELEMETRY SPOOF =====
 const TELEMETRY_PATHS = [
@@ -67,20 +64,17 @@ function sendSpoofOK(res, isBinary) {
 }
 
 // ===== BAN PATCH =====
-const BAN_INFO_KEY   = 'AEBBNFBNIDB';
-const LGEBP_KEY      = 'LGEBPFEFOHC'; // is_in_blacklist field di GetLoginData
+const BAN_INFO_KEY = 'AEBBNFBNIDB';
+const LGEBP_KEY    = 'LGEBPFEFOHC';
 
 function patchBanInfo(jsonObj) {
-    // Patch AEBBNFBNIDB (ban_mode, unban_time)
     if (jsonObj && typeof jsonObj[BAN_INFO_KEY] === 'object' && jsonObj[BAN_INFO_KEY] !== null) {
         const b = jsonObj[BAN_INFO_KEY];
         b.ban_mode = 0; b.unban_time = 0; b.hint_string = '';
         b.ban_time = 0; b.ban_reason = 0; b.ban_type = '';
         b.expire_duration = 0; b.ban_reason_detail = '';
     }
-    // Patch LGEBPFEFOHC (is_in_blacklist bool di GetLoginData)
     if (jsonObj && jsonObj[LGEBP_KEY] !== undefined) jsonObj[LGEBP_KEY] = false;
-
     if (jsonObj && Array.isArray(jsonObj.blacklist)) jsonObj.blacklist = [];
     if (jsonObj && jsonObj.blacklist_info !== undefined) jsonObj.blacklist_info = null;
 
@@ -92,8 +86,8 @@ function patchBanInfo(jsonObj) {
             obj.ban_reason_detail = ''; obj.ban_expire_duration = 0; obj.ban_type = '';
             if (obj.expire_duration !== undefined) obj.expire_duration = 0;
         }
-        if ('ban_mode' in obj) { obj.ban_mode = 0; }
-        if ('unban_time' in obj) { obj.unban_time = 0; }
+        if ('ban_mode' in obj) obj.ban_mode = 0;
+        if ('unban_time' in obj) obj.unban_time = 0;
         if ('matchmaking_blacklist' in obj) {
             const mbl = obj.matchmaking_blacklist;
             if (typeof mbl === 'number') obj.matchmaking_blacklist = 0;
@@ -111,7 +105,6 @@ function patchBanInfo(jsonObj) {
 
 function patchMatchmakingBL(jsonObj, urlPath) {
     if (!urlPath.includes('GetMatchmakingBlacklist') || !jsonObj || typeof jsonObj !== 'object') return;
-    // Zero semua kemungkinan struktur blacklist di GetMatchmakingBlacklist
     jsonObj.blacklist = []; jsonObj.blacklist_info = null;
     if (jsonObj.blacklist_list !== undefined) jsonObj.blacklist_list = [];
     if (jsonObj.bl_list !== undefined) jsonObj.bl_list = [];
@@ -214,29 +207,17 @@ function patchGinUrl(jsonObj) {
     zeroFieldRecursive(jsonObj, 'ban_list_url', '', 0);
     if (jsonObj && jsonObj['ANOAAHKLDLA'] !== undefined) jsonObj['ANOAAHKLDLA'] = 0;
     if (jsonObj && jsonObj['GLPGCIJFDEB'] !== undefined) jsonObj['GLPGCIJFDEB'] = '';
-
-    // PANHADGGJCC = GetLoginData server URL di response MajorLogin / GetLoginData
-    // Harus dikosongkan agar game tidak bypass proxy ke clientbp.ppmainecoonghj.com atau sejenisnya
-    // Game akan fallback ke server_url (PROXY_HOST_URL) untuk GetLoginData
     if (jsonObj && jsonObj['PANHADGGJCC'] !== undefined) {
         const panVal = jsonObj['PANHADGGJCC'];
-        // Hanya kosongkan kalau bukan sudah proxy URL kita sendiri
         if (typeof panVal === 'string' && panVal && !panVal.includes(PROXY_URL.replace(/^https?:\/\//, ''))) {
             console.log(`[GIN-PATCH] PANHADGGJCC zeroed: ${panVal.substring(0, 60)}`);
             jsonObj['PANHADGGJCC'] = '';
         }
     }
-    // Juga cek nested (kadang ada di sub-object)
     zeroFieldRecursive(jsonObj, 'PANHADGGJCC', '', 0);
-
-    // LNBMHNCJJNI = server node list (IP game server) — biarkan saja (bukan anticheat)
-    // KDMFKIAJEHC = idnetwork URL → kosongkan
     if (jsonObj && jsonObj['KDMFKIAJEHC'] !== undefined) jsonObj['KDMFKIAJEHC'] = '';
-    // KFBFABBJECF = sggigateway URL → kosongkan
     if (jsonObj && jsonObj['KFBFABBJECF'] !== undefined) jsonObj['KFBFABBJECF'] = '';
-    // CPEGPNDCJLF = vodka URL → kosongkan
     if (jsonObj && jsonObj['CPEGPNDCJLF'] !== undefined) jsonObj['CPEGPNDCJLF'] = '';
-    // DJEHPJBBLML = traceroute list → kosongkan
     if (jsonObj && Array.isArray(jsonObj['DJEHPJBBLML'])) jsonObj['DJEHPJBBLML'] = [];
 }
 
@@ -321,12 +302,10 @@ function createClientProxy() {
                 // GetLoginData: response mungkin AES-128-CBC encrypted pakai ak+aiv dari MajorLogin
                 if (req.path === '/GetLoginData' || req.path.startsWith('/GetLoginData?')) {
                     const ml = getMlMod();
-                    // Cari uid dari query atau header X-Account-Id
                     const uid = req.query?.uid || req.query?.account_id ||
                                 req.headers['x-account-id'] || req.headers['x-uid'];
                     let decrypted = null;
 
-                    // Coba decrypt dengan session ak+aiv yang tersimpan
                     if (ml && uid) {
                         const sess = ml.getSession(uid);
                         if (sess) {
@@ -335,7 +314,6 @@ function createClientProxy() {
                         }
                     }
 
-                    // Kalau decrypt gagal / tidak ada session → coba langsung sebagai JSON
                     const bodyToProcess = decrypted || rawBody;
                     let parsed = null;
                     try { parsed = JSON.parse(bodyToProcess.toString('utf8')); } catch (_) {}
@@ -345,12 +323,12 @@ function createClientProxy() {
                         patchGinUrl(parsed);
                         patchAbnormalData(parsed);
 
-                        // Patch LGEBPFEFOHC (is_in_blacklist)
                         if (parsed[LGEBP_KEY] !== undefined) parsed[LGEBP_KEY] = false;
-                        // Patch server URL fields di GetLoginData
+
+                        // FIX BUG #2: Operator precedence — tambahkan kurung agar typeof check wraps OR
                         for (const k of Object.keys(parsed)) {
                             if (typeof parsed[k] === 'string' &&
-                                parsed[k].includes('clientbp.ppmainecoonghj.com') || parsed[k].includes('loginbp.ppmainecoonghj.com')) {
+                                (parsed[k].includes('clientbp.ppmainecoonghj.com') || parsed[k].includes('loginbp.ppmainecoonghj.com'))) {
                                 parsed[k] = PROXY_URL;
                             }
                         }
@@ -358,7 +336,6 @@ function createClientProxy() {
                         const jsonStr = patchStringLevelGin(JSON.stringify(parsed));
                         const outJson = Buffer.from(jsonStr, 'utf8');
 
-                        // Re-encrypt kalau tadi berhasil decrypt
                         if (decrypted && ml) {
                             const sess = ml.getSession(uid);
                             const reenc = sess ? ml.aesEncrypt(outJson, sess.ak, sess.aiv) : null;
@@ -375,7 +352,6 @@ function createClientProxy() {
                         return res.end(outJson);
                     }
 
-                    // Fallback: kirim raw
                     headers['content-length'] = String(rawBody.length);
                     res.writeHead(statusCode, headers);
                     return res.end(rawBody);
@@ -511,8 +487,7 @@ const loginProxy = createProxyMiddleware({
 
 const clientProxy = createClientProxy();
 
-// FIX: path tambah /NewbieChoice, /AccountBrief, /CheckVersion
-// loginbp.ggpolarbear.com endpoints (account registration & region flow)
+// loginbp.ggpolarbear.com endpoints
 const LOGIN_PATHS = [
     '/MajorRegister', '/GenerateNickname', '/GetRecommendNickname',
     '/GetAccountBriefInfoBeforeLogin', '/ChooseNewbieChoice', '/NewbieChoice',
@@ -520,8 +495,7 @@ const LOGIN_PATHS = [
     '/CheckVersion', '/GetServerList', '/GetRegionConfig',
 ];
 
-// clientbp endpoints yang perlu proxy tapi BUKAN loginbp
-// GetLoginData, Ping, AccountPersonalShow → clientbp.ppmainecoonghj.com
+// clientbp endpoints
 const CLIENT_EXPLICIT_PATHS = [
     '/GetLoginData', '/Ping', '/AccountPersonalShow', '/GetPersonalShow',
     '/GetPlayerAccountPersonalShowGet', '/GetRoleBasicInfo',
@@ -529,7 +503,10 @@ const CLIENT_EXPLICIT_PATHS = [
 
 function init(app) {
     app.all('*', (req, res, next) => {
+        // Skip path yang sudah di-handle modul lain
         if (req.path.startsWith('/cdn/')) return next();
+        if (req.path.startsWith('/hotpatchs/')) return next();
+        if (req.path.startsWith('/live/')) return next();
         if (req.path === '/ver.php' || req.path === '/api/gamevar' || req.path === '/localconfig.json') return next();
         if (req.path.startsWith('/api/') || req.path.startsWith('/telegram')) return next();
         if (req.path.match(/\.(jpg|png|gif|css|js|html?)$/i)) return next();
@@ -539,17 +516,15 @@ function init(app) {
             return sendSpoofOK(res, isBin);
         }
 
-        // ── Handle request yang datang via AdAway redirect ──────────────────
-        // AdAway redirect clientbp.ppmainecoonghj.com → IP Railway
-        // Game kirim request dengan Host: clientbp.ppmainecoonghj.com
-        // Proxy perlu detect Host header dan route ke clientProxy
+        // Handle request via AdAway redirect (Host header menunjuk ke Garena server)
         const hostHeader = (req.headers['host'] || '').toLowerCase();
-        const isClientBpHost = hostHeader.includes('clientbp.') || hostHeader.includes('loginbp.ppmainecoonghj') || 
+        const isClientBpHost = hostHeader.includes('clientbp.') ||
+                               hostHeader.includes('loginbp.ppmainecoonghj') ||
                                hostHeader.includes('ppmainecoonghj') ||
                                hostHeader.includes('ggpolarbear') ||
                                hostHeader.includes('ggblueshark');
         if (isClientBpHost && req.path !== '/MajorLogin') {
-            console.log(`[PROXY] AdAway-redirect clientbp req: ${req.method} ${req.path} (Host: ${hostHeader})`);
+            console.log(`[PROXY] AdAway-redirect req: ${req.method} ${req.path} (Host: ${hostHeader})`);
             return clientProxy(req, res, next);
         }
 
@@ -558,17 +533,11 @@ function init(app) {
             return loginProxy(req, res, next);
         }
 
-        // ── Spoof ChooseRegion — jangan forward ke Garena ──────────────────
-        // Kalau ChooseRegion dikirim ke Garena → server set region → MajorLogin
-        // berikutnya dapat server_url = clientbp.ppmainecoonghj.com di binary RAFIN
-        // Binary itu tidak bisa dimodif (HMAC/signature) → GetLoginData bypass proxy
-        // Solusi: return fake OK untuk ChooseRegion → server tidak set region
-        // → MajorLogin berikutnya TIDAK dapat server_url di response → aman ✓
+        // Spoof ChooseRegion — mencegah server inject server_url ke response MajorLogin
         if (req.path === '/ChooseRegion' || req.path.startsWith('/ChooseRegion?')) {
             const isBin = (req.headers['content-type'] || '').includes('octet-stream');
-            console.log('[PROXY] ChooseRegion SPOOFED (prevent server_url injection)');
+            console.log('[PROXY] ChooseRegion SPOOFED');
             if (isBin) {
-                // protobuf OK response kosong
                 return res.status(200).type('application/octet-stream').send(Buffer.from([0x08, 0x00]));
             }
             return res.status(200).json({ region: req.body?.region || 'ID', code: 0 });
@@ -585,7 +554,7 @@ function init(app) {
         return clientProxy(req, res, next);
     });
 
-    console.log('[PROXY] Active — MajorLogin via majorlogin.js, no root requirement');
+    console.log('[PROXY] Active — MajorLogin via majorlogin.js, catch-all last');
 }
 
 module.exports = { init, loginProxy, clientProxy, patchGinUrl, patchStringLevelGin };

@@ -1,17 +1,20 @@
 'use strict';
-// modules/majorlogin.js — v19
+// modules/majorlogin.js — v20
 //
-// FIX v19: field numbers excise diperbaiki sesuai proto:
-// [A] field 10  (server_url)          → excise + inject proxyUrl
-// [B] field 12  (blacklist)           → excise jika banned
-// [C] field 14  (tp_url)              → excise
-// [D] field 16  (ano_url)             → excise
-// [E] field 24  (ffanti_url)          → excise  ← FIX (v18 salah excise field 22=AK!)
-// [F] field 25  (ff_anti_config_desc) → excise  ← FIX (v18 salah excise field 23=AIV!)
+// Field numbers yang di-excise dari MajorLogin response:
+// [A] field 10  (server_url)              → excise + inject proxyUrl
+// [B] field 12  (blacklist)               → excise jika banned
+// [C] field 14  (tp_url)                  → excise
+// [D] field 16  (ano_url)                 → excise
+// [E] field 24  (ffanti_url)              → excise
+// [F] field 25  (ff_anti_config_desc)     → excise
 // [G] field 36  (connection_seed_enabled) → excise (OB55)
 // [H] field 37  (connection_seed)         → excise (OB55)
 //
 // Field 22 (ak) dan field 23 (aiv) adalah encryption keys → JANGAN di-excise!
+//
+// PASSTHROUGH MODE: body tidak dimodifikasi karena game verify HMAC signature.
+// Ban & GIN ditangani via gamevar + patch di response GetLoginData / ver.php.
 
 const https    = require('https');
 const crypto   = require('crypto');
@@ -20,13 +23,11 @@ const path     = require('path');
 const tglog    = require('./tglog');
 
 // Session store: simpan ak+aiv per UID untuk decrypt GetLoginData
-// { uid: { ak: Buffer, aiv: Buffer, ts: Date.now() } }
 const _sessions = new Map();
 const SESSION_TTL = 30 * 60 * 1000; // 30 menit
 
 function storeSession(uid, ak, aiv) {
     _sessions.set(String(uid), { ak, aiv, ts: Date.now() });
-    // Cleanup expired
     const now = Date.now();
     for (const [k, v] of _sessions) {
         if (now - v.ts > SESSION_TTL) _sessions.delete(k);
@@ -55,16 +56,13 @@ function aesEncrypt(data, key, iv) {
     } catch (_) { return null; }
 }
 
-// Export fungsi untuk dipakai proxy.js
-
-
 const PROXY_URL = (process.env.PROXY_URL || '').replace(/\/$/, '');
 
 let RAFIN = null;
 protobuf.load(path.join(__dirname, '..', 'MajorLoginRes.proto'))
     .then(root => {
         RAFIN = root.lookupType('freefire.RAFIN');
-        console.log('[MAJORLOGIN] v19 Proto loaded');
+        console.log('[MAJORLOGIN] v20 Proto loaded');
     })
     .catch(err => console.error('[MAJORLOGIN] Proto load err:', err.message));
 
@@ -88,60 +86,49 @@ function readVarint(buf, pos) {
 }
 
 function exciseField(buf, fieldNum) {
-    // PROPER proto parser — baca dari awal, skip field dengan benar
-    // Tidak scan byte-by-byte (bug lama: false-positive di dalam JWT/string content)
-    const targetTag1b = (fieldNum << 3) | 2;          // wire type 2 = length-delimited
+    // Proper proto parser — baca dari awal, skip field dengan benar
     const out = [];
-    let pos = 0, found = false;
+    let pos = 0;
 
     while (pos < buf.length) {
         const tagStart = pos;
-        // Baca tag varint
         const { val: rawTag, bytes: tagBytes } = readVarint(buf, pos);
-        if (tagBytes === 0) break;  // corrupt
+        if (tagBytes === 0) break;
         pos += tagBytes;
 
         const wireType = rawTag & 0x07;
         const fn       = rawTag >>> 3;
 
         if (wireType === 0) {
-            // Varint field — skip value
             const { val, bytes: vb } = readVarint(buf, pos);
             pos += vb;
             if (fn !== fieldNum) {
                 for (let i = tagStart; i < pos; i++) out.push(buf[i]);
             }
         } else if (wireType === 2) {
-            // Length-delimited (string, bytes, sub-message)
             const { val: len, bytes: lb } = readVarint(buf, pos);
             pos += lb;
             const end = pos + len;
             if (fn === fieldNum) {
-                // Ini field yang mau di-excise — skip
-                found = true;
-                pos = end;
+                pos = end; // excise
             } else {
-                // Keep field ini
                 for (let i = tagStart; i < end; i++) out.push(buf[i]);
                 pos = end;
             }
         } else if (wireType === 5) {
-            // Fixed 32-bit
             const end = pos + 4;
             if (fn !== fieldNum) for (let i = tagStart; i < end; i++) out.push(buf[i]);
             pos = end;
         } else if (wireType === 1) {
-            // Fixed 64-bit
             const end = pos + 8;
             if (fn !== fieldNum) for (let i = tagStart; i < end; i++) out.push(buf[i]);
             pos = end;
         } else {
-            // Unknown wire type — stop, copy sisa
             for (let i = tagStart; i < buf.length; i++) out.push(buf[i]);
             break;
         }
     }
-    return { buf: Buffer.from(out), found };
+    return { buf: Buffer.from(out) };
 }
 
 function injectStringField(buf, fieldNum, value) {
@@ -209,7 +196,7 @@ function init(app) {
                     res.writeHead(proxyRes.statusCode, h); return res.end(rawBuf);
                 }
 
-                // Decode untuk log + deteksi ban
+                // Decode untuk log + deteksi ban + simpan session ak/aiv
                 let uid = '?', region = '?', token = '?', ttl = 0;
                 let banStr = null, isBanned = false, origUrl = '?';
                 try {
@@ -230,7 +217,7 @@ function init(app) {
                             const aivBuf = Buffer.isBuffer(obj.aiv) ? obj.aiv : Buffer.from(obj.aiv);
                             if (akBuf.length === 16 && aivBuf.length === 16) {
                                 storeSession(uid, akBuf, aivBuf);
-                                console.log(`[MAJORLOGIN] v19 session stored uid=${uid}`);
+                                console.log(`[MAJORLOGIN] v20 session stored uid=${uid}`);
                             }
                         }
                         if (obj.blacklist?.ban_reason && obj.blacklist.ban_reason !== 0) {
@@ -240,11 +227,7 @@ function init(app) {
                     }
                 } catch (_) {}
 
-                // PASSTHROUGH — jangan modifikasi body MajorLogin sama sekali
-                // Game verify HMAC signature dari body menggunakan hardcoded key di libil2cpp.so
-                // Setiap byte yang berubah → SignatureCheckFailed
-                // GIN di-disable via gamevar (DisableGinReport, EnableGinConnect=false, dll)
-                // Blacklist di-handle via gamevar + user bisa pakai akun baru
+                // PASSTHROUGH — body tidak dimodifikasi (game verify HMAC signature)
                 const outBuf = rawBuf;
 
                 const lines = [`<b>MajorLogin v20 (passthrough)</b>`, ''];
@@ -269,15 +252,20 @@ function init(app) {
         });
 
         proxyReq.on('error', err => {
-            tglog.send(`❌ MajorLogin v18: ${err.message}`);
+            tglog.send(`❌ MajorLogin v20: ${err.message}`);
             if (!res.headersSent) res.status(502).send('Proxy Error');
+        });
+
+        proxyReq.setTimeout(30000, () => {
+            proxyReq.destroy();
+            if (!res.headersSent) res.status(504).send('Timeout');
         });
 
         if (Buffer.isBuffer(body) && body.length > 0) proxyReq.write(body);
         proxyReq.end();
     });
 
-    console.log('[MAJORLOGIN] v19 active — binary surgery: field nums fixed');
+    console.log('[MAJORLOGIN] v20 active — passthrough mode, session store active');
 }
 
 module.exports = { init, getSession, aesDecrypt, aesEncrypt };
