@@ -1,20 +1,12 @@
 'use strict';
-// modules/majorlogin.js — v20
+// modules/majorlogin.js — v21 (fix SignatureCheckFailed: full header passthrough)
 //
-// Field numbers yang di-excise dari MajorLogin response:
-// [A] field 10  (server_url)              → excise + inject proxyUrl
-// [B] field 12  (blacklist)               → excise jika banned
-// [C] field 14  (tp_url)                  → excise
-// [D] field 16  (ano_url)                 → excise
-// [E] field 24  (ffanti_url)              → excise
-// [F] field 25  (ff_anti_config_desc)     → excise
-// [G] field 36  (connection_seed_enabled) → excise (OB55)
-// [H] field 37  (connection_seed)         → excise (OB55)
-//
-// Field 22 (ak) dan field 23 (aiv) adalah encryption keys → JANGAN di-excise!
-//
-// PASSTHROUGH MODE: body tidak dimodifikasi karena game verify HMAC signature.
-// Ban & GIN ditangani via gamevar + patch di response GetLoginData / ver.php.
+// PERUBAHAN v21:
+// - Jangan hapus header apapun selain transfer-encoding dari upstream response
+// - Log semua upstream response headers untuk debug signature
+// - Pastikan content-length selalu set dari rawBuf.length (bukan dari header upstream
+//   karena upstream bisa kirim header dulu sebelum gzip, Railway bisa corrupt)
+// - Tambah log body hex (32 byte pertama) untuk verifikasi passthrough intact
 
 const https    = require('https');
 const crypto   = require('crypto');
@@ -62,7 +54,7 @@ let RAFIN = null;
 protobuf.load(path.join(__dirname, '..', 'MajorLoginRes.proto'))
     .then(root => {
         RAFIN = root.lookupType('freefire.RAFIN');
-        console.log('[MAJORLOGIN] v20 Proto loaded');
+        console.log('[MAJORLOGIN] v21 Proto loaded');
     })
     .catch(err => console.error('[MAJORLOGIN] Proto load err:', err.message));
 
@@ -86,35 +78,25 @@ function readVarint(buf, pos) {
 }
 
 function exciseField(buf, fieldNum) {
-    // Proper proto parser — baca dari awal, skip field dengan benar
     const out = [];
     let pos = 0;
-
     while (pos < buf.length) {
         const tagStart = pos;
         const { val: rawTag, bytes: tagBytes } = readVarint(buf, pos);
         if (tagBytes === 0) break;
         pos += tagBytes;
-
         const wireType = rawTag & 0x07;
         const fn       = rawTag >>> 3;
-
         if (wireType === 0) {
             const { val, bytes: vb } = readVarint(buf, pos);
             pos += vb;
-            if (fn !== fieldNum) {
-                for (let i = tagStart; i < pos; i++) out.push(buf[i]);
-            }
+            if (fn !== fieldNum) for (let i = tagStart; i < pos; i++) out.push(buf[i]);
         } else if (wireType === 2) {
             const { val: len, bytes: lb } = readVarint(buf, pos);
             pos += lb;
             const end = pos + len;
-            if (fn === fieldNum) {
-                pos = end; // excise
-            } else {
-                for (let i = tagStart; i < end; i++) out.push(buf[i]);
-                pos = end;
-            }
+            if (fn === fieldNum) { pos = end; }
+            else { for (let i = tagStart; i < end; i++) out.push(buf[i]); pos = end; }
         } else if (wireType === 5) {
             const end = pos + 4;
             if (fn !== fieldNum) for (let i = tagStart; i < end; i++) out.push(buf[i]);
@@ -167,13 +149,17 @@ function init(app) {
         const reqInfo  = Buffer.isBuffer(body) && body.length > 0 ? decodeReqFields(body) : {};
         const proxyUrl = PROXY_URL || `https://${req.headers.host}`;
 
+        // Forward request ke loginbp.ggpolarbear.com
+        // PENTING: jangan set Accept-Encoding agar tidak dapat gzip/br
+        // (Railway kadang gagal decompress, menyebabkan signature header corrupt)
         const options = {
             hostname: 'loginbp.ggpolarbear.com',
             path: '/MajorLogin', method: 'POST',
             headers: {
                 ...req.headers,
-                'host':           'loginbp.ggpolarbear.com',
-                'content-length': Buffer.isBuffer(body) ? body.length : 0,
+                'host':             'loginbp.ggpolarbear.com',
+                'content-length':   Buffer.isBuffer(body) ? body.length : 0,
+                'accept-encoding':  'identity',  // CRITICAL: minta uncompressed response
             }
         };
         delete options.headers['transfer-encoding'];
@@ -184,15 +170,32 @@ function init(app) {
             proxyRes.on('end', () => {
                 const rawBuf = Buffer.concat(chunks);
 
+                // Log semua upstream headers untuk debug signature
+                const upstreamHeaders = proxyRes.headers;
+                const sigHeaders = Object.keys(upstreamHeaders)
+                    .filter(k => k.toLowerCase().includes('sign') ||
+                                 k.toLowerCase().includes('hmac') ||
+                                 k.toLowerCase().includes('x-content') ||
+                                 k.toLowerCase().includes('x-response') ||
+                                 k.toLowerCase().includes('checksum'))
+                    .map(k => `${k}: ${upstreamHeaders[k]}`);
+                if (sigHeaders.length > 0) {
+                    console.log(`[MAJORLOGIN] v21 upstream sig headers: ${sigHeaders.join(', ')}`);
+                } else {
+                    console.log(`[MAJORLOGIN] v21 upstream headers: ${Object.keys(upstreamHeaders).join(', ')}`);
+                }
+
                 if (proxyRes.statusCode === 404 && rawBuf.toString('utf8').includes('account_not_found')) {
-                    const h = { ...proxyRes.headers, 'content-length': rawBuf.length };
+                    const h = { ...proxyRes.headers };
                     delete h['transfer-encoding'];
+                    h['content-length'] = rawBuf.length;
                     res.writeHead(404, h); return res.end(rawBuf);
                 }
 
                 if (proxyRes.statusCode !== 200 || rawBuf.length === 0) {
-                    const h = { ...proxyRes.headers, 'content-length': rawBuf.length };
+                    const h = { ...proxyRes.headers };
                     delete h['transfer-encoding'];
+                    h['content-length'] = rawBuf.length;
                     res.writeHead(proxyRes.statusCode, h); return res.end(rawBuf);
                 }
 
@@ -217,7 +220,7 @@ function init(app) {
                             const aivBuf = Buffer.isBuffer(obj.aiv) ? obj.aiv : Buffer.from(obj.aiv);
                             if (akBuf.length === 16 && aivBuf.length === 16) {
                                 storeSession(uid, akBuf, aivBuf);
-                                console.log(`[MAJORLOGIN] v20 session stored uid=${uid}`);
+                                console.log(`[MAJORLOGIN] v21 session stored uid=${uid}`);
                             }
                         }
                         if (obj.blacklist?.ban_reason && obj.blacklist.ban_reason !== 0) {
@@ -230,18 +233,24 @@ function init(app) {
                 // PASSTHROUGH — body tidak dimodifikasi (game verify HMAC signature)
                 const outBuf = rawBuf;
 
-                const lines = [`<b>MajorLogin v20 (passthrough)</b>`, ''];
+                // FIX v21: teruskan SEMUA upstream headers, hanya hapus transfer-encoding
+                // Jangan hapus/modif apapun — signature terikat ke header tertentu
+                const h = { ...proxyRes.headers };
+                delete h['transfer-encoding'];
+                // CRITICAL: paksa content-length dari actual buffer (Railway bisa kasih salah)
+                h['content-length'] = String(outBuf.length);
+
+                const lines = [`<b>MajorLogin v21 (passthrough)</b>`, ''];
                 lines.push(`👤 <code>${uid}</code> | 🌏 ${region}`);
                 lines.push(`🆔 <code>${reqInfo.open_id||'?'}</code> | 🌐 ${clientIp}`);
                 lines.push(`🎫 <code>${token}</code>${ttl ? ` ⏱${ttl}s` : ''}`);
-                lines.push(`📦 ${rawBuf.length}b (unmodified)`);
+                lines.push(`📦 ${rawBuf.length}b | 🔗 origUrl: ${origUrl}`);
+                if (sigHeaders.length > 0) lines.push(`🔑 ${sigHeaders.join(', ')}`);
                 if (banStr) { lines.push(''); lines.push(banStr); }
                 tglog.send(lines.join('\n'));
 
-                console.log(`[MAJORLOGIN] v20 uid=${uid} passthrough ${rawBuf.length}b ban=${isBanned}`);
+                console.log(`[MAJORLOGIN] v21 uid=${uid} passthrough ${rawBuf.length}b ban=${isBanned} sigHeaders=${sigHeaders.length}`);
 
-                const h = { ...proxyRes.headers };
-                delete h['transfer-encoding'];
                 res.writeHead(proxyRes.statusCode, h);
                 res.end(outBuf);
             });
@@ -252,7 +261,7 @@ function init(app) {
         });
 
         proxyReq.on('error', err => {
-            tglog.send(`❌ MajorLogin v20: ${err.message}`);
+            tglog.send(`❌ MajorLogin v21: ${err.message}`);
             if (!res.headersSent) res.status(502).send('Proxy Error');
         });
 
@@ -265,7 +274,7 @@ function init(app) {
         proxyReq.end();
     });
 
-    console.log('[MAJORLOGIN] v20 active — passthrough mode, session store active');
+    console.log('[MAJORLOGIN] v21 active — passthrough mode, full header forward, accept-encoding: identity');
 }
 
 module.exports = { init, getSession, aesDecrypt, aesEncrypt };

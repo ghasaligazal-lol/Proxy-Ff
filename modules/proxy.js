@@ -523,8 +523,18 @@ function init(app) {
                                hostHeader.includes('ppmainecoonghj') ||
                                hostHeader.includes('ggpolarbear') ||
                                hostHeader.includes('ggblueshark');
-        if (isClientBpHost && req.path !== '/MajorLogin') {
-            console.log(`[PROXY] AdAway-redirect req: ${req.method} ${req.path} (Host: ${hostHeader})`);
+        if (isClientBpHost) {
+            if (req.path === '/MajorLogin' || req.path.startsWith('/MajorLogin?')) {
+                // Biarkan lolos ke majorlogin.js handler di bawah
+                console.log(`[PROXY] AdAway-redirect MajorLogin → majorlogin handler`);
+                return next();
+            }
+            if (hostHeader.includes('loginbp.')) {
+                // loginbp non-MajorLogin endpoints → loginProxy
+                console.log(`[PROXY] AdAway-redirect loginbp req: ${req.method} ${req.path} (Host: ${hostHeader})`);
+                return loginProxy(req, res, next);
+            }
+            console.log(`[PROXY] AdAway-redirect clientbp req: ${req.method} ${req.path} (Host: ${hostHeader})`);
             return clientProxy(req, res, next);
         }
 
