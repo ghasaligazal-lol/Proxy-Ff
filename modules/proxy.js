@@ -107,6 +107,18 @@ function patchMatchmakingBL(jsonObj, urlPath) {
     if (!urlPath.includes('GetMatchmakingBlacklist') || !jsonObj || typeof jsonObj !== 'object') return;
     jsonObj.blacklist = []; jsonObj.blacklist_info = null;
     if (jsonObj.blacklist_list !== undefined) jsonObj.blacklist_list = [];
+    // FIX: DJNBFHDKIAN = blacklist dari server response
+    if (jsonObj['DJNBFHDKIAN'] !== undefined) jsonObj['DJNBFHDKIAN'] = null;
+    // FIX: LALBNDOOINP = anti-addiction ban descriptor
+    if (jsonObj['LALBNDOOINP'] && typeof jsonObj['LALBNDOOINP'] === 'object') {
+        const la = jsonObj['LALBNDOOINP'];
+        la.ban_mode = 0; la.unban_time = 0; la.hint_string = '';
+    }
+    // FIX: zero semua remaining ban fields
+    const BAN_ZERO_KEYS = ['DJNBFHDKIAN'];
+    for (const k of BAN_ZERO_KEYS) {
+        zeroFieldRecursive(jsonObj, k, null, 0);
+    }
     if (jsonObj.bl_list !== undefined) jsonObj.bl_list = [];
     if (jsonObj.is_in_blacklist !== undefined) jsonObj.is_in_blacklist = false;
     if (jsonObj.ban_time !== undefined) jsonObj.ban_time = 0;
@@ -142,9 +154,31 @@ const _ginDomainPattern = new RegExp(
         'gamesecurity\\.sea\\.freefiremobile\\.com',
         'ano\\.freefiremobile\\.com',
         'ggp\\.freefiremobile\\.com',
+        'ggblueshark\\.com',
+        'idevent\\.',
+        'idnetwork\\.',
+        'sggigateway\\.',
+        'vodka\\.freefiremobile\\.com',
     ].join('|') + ')(?:[^"\\\\]|\\\\.)*")',
     'gi'
 );
+
+// ── Strip response signature headers (fix SignatureCheckFailed) ──
+const RESPONSE_SIG_HEADERS = [
+    'x-response-signature','x-signature','x-sign','x-res-sign',
+    'x-garena-signature','x-checksum','x-hash','x-mac',
+    'x-response-mac','x-hmac','x-rsa-signature','x-token-sign',
+    'x-content-signature','x-verify','x-body-sign',
+];
+function stripSigHeaders(headers) {
+    for (const h of RESPONSE_SIG_HEADERS) {
+        for (const k of Object.keys(headers)) {
+            if (k.toLowerCase() === h.toLowerCase()) {
+                delete headers[k];
+            }
+        }
+    }
+}
 
 function patchStringLevelGin(jsonStr) {
     return jsonStr.replace(_ginDomainPattern, '""');
@@ -188,14 +222,29 @@ function patchGinUrl(jsonObj) {
     zeroFieldRecursive(jsonObj, 'gin_token',          '',    0);
     zeroFieldRecursive(jsonObj, 'is_get_feature',     false, 0);
     zeroFieldRecursive(jsonObj, 'is_get_flag',        false, 0);
-    if (jsonObj && jsonObj['GKOKINGAIKO'] !== undefined) {
-        const g = jsonObj['GKOKINGAIKO'];
-        if (g && typeof g === 'object') {
-            g.gin_token = ''; g.is_enable_ggp = false; g.is_enable_tcp = false;
-            g.is_report_to_ggp = false; g.is_transfer_report = false;
-            g.ggp_url = ''; g.ut_flag = 0;
+    // FIX: GKOKINGAIKO = CECNLHCONMI di GetLoginData (obfuscated key)
+    // Zero semua GIN fields yang mungkin ada di root level maupun nested
+    const GIN_OBFUSCATED_KEYS = ['GKOKINGAIKO', 'CECNLHCONMI'];
+    for (const ginKey of GIN_OBFUSCATED_KEYS) {
+        if (jsonObj && jsonObj[ginKey] !== undefined) {
+            const g = jsonObj[ginKey];
+            if (g && typeof g === 'object') {
+                g.gin_token = ''; g.is_enable_ggp = false; g.is_enable_tcp = false;
+                g.is_report_to_ggp = false; g.is_transfer_report = false;
+                g.ggp_url = ''; g.ut_flag = 0; g.content = '';
+                g.is_get_feature = false; g.is_get_flag = false;
+            } else {
+                jsonObj[ginKey] = {};
+            }
         }
     }
+    // Zero recursive untuk antisipasi nested
+    zeroFieldRecursive(jsonObj, 'is_enable_ggp',      false, 0);
+    zeroFieldRecursive(jsonObj, 'is_enable_tcp',      false, 0);
+    zeroFieldRecursive(jsonObj, 'is_report_to_ggp',   false, 0);
+    zeroFieldRecursive(jsonObj, 'is_transfer_report', false, 0);
+    zeroFieldRecursive(jsonObj, 'gin_token',          '',    0);
+    zeroFieldRecursive(jsonObj, 'ggp_url',            '',    0);
     const ahcd = jsonObj && jsonObj['anti_hack_center_desc'];
     if (ahcd && typeof ahcd === 'object') {
         const inner = ahcd['anti_hack_center_desc'] || ahcd;
@@ -219,6 +268,12 @@ function patchGinUrl(jsonObj) {
     if (jsonObj && jsonObj['KFBFABBJECF'] !== undefined) jsonObj['KFBFABBJECF'] = '';
     if (jsonObj && jsonObj['CPEGPNDCJLF'] !== undefined) jsonObj['CPEGPNDCJLF'] = '';
     if (jsonObj && Array.isArray(jsonObj['DJEHPJBBLML'])) jsonObj['DJEHPJBBLML'] = [];
+    // FIX testCodePatch: NKHLFHHOFBF = hash yang dipakai server untuk detect patch
+    // Harus dikosongkan agar server tidak bisa verify apakah game sudah di-patch
+    if (jsonObj && jsonObj['NKHLFHHOFBF'] !== undefined) jsonObj['NKHLFHHOFBF'] = '';
+    // FIX: zero semua GIN-related fields yang tersisa di GetLoginData
+    // idevent dan idnetwork ggblueshark sudah di-handle di PANHADGGJCC dan KDMFKIAJEHC
+    // tapi perlu juga di-hit di patchStringLevelGin (lihat _ginDomainPattern)
 }
 
 function patchAbnormalData(jsonObj) {
@@ -295,6 +350,7 @@ function createClientProxy() {
             delete headers['content-encoding'];
             delete headers['content-length'];
             delete headers['transfer-encoding'];
+            stripSigHeaders(headers); // FIX SignatureCheckFailed
 
             try {
                 const rawBody = await collectResponseBody(proxyRes);
@@ -422,6 +478,10 @@ const loginProxy = createProxyMiddleware({
         proxyRes.on('end', () => {
             let raw = Buffer.concat(chunks);
             const statusCode = proxyRes.statusCode;
+            const loginHeaders = { ...proxyRes.headers };
+            delete loginHeaders['content-encoding'];
+            delete loginHeaders['transfer-encoding'];
+            stripSigHeaders(loginHeaders); // FIX SignatureCheckFailed
             console.log(`[LOGIN] ${statusCode} ${req.method} ${req.path} (${raw.length}b)`);
 
             if (req.path === '/GenerateNickname' && statusCode >= 400) {
