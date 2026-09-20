@@ -141,9 +141,8 @@ function getVerConfig(clientIp, myDomain, gameVersion, releaseVersion) {
         "cdn_port":                             6072,
 
         // ── Server URLs (proxy intercept) ─────────────────────────────────────
-        // FIX: server_url ikut referensi → loginbp.ppmainecoonghj.com
         // (game pakai ini untuk MajorLogin, proxy.js intercept lewat Host header)
-        "server_url":                           "https://loginbp.ppmainecoonghj.com/",
+        "server_url":                           myDomain,
         "notice_url":                           myDomain,
         "test_url":                             myDomain,
         "network_log_server":                   myDomain + "api/network_log",
