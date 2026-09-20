@@ -88,19 +88,58 @@ function readVarint(buf, pos) {
 }
 
 function exciseField(buf, fieldNum) {
-    const tagBuf = encodeVarint((fieldNum << 3) | 2);
+    // PROPER proto parser — baca dari awal, skip field dengan benar
+    // Tidak scan byte-by-byte (bug lama: false-positive di dalam JWT/string content)
+    const targetTag1b = (fieldNum << 3) | 2;          // wire type 2 = length-delimited
     const out = [];
     let pos = 0, found = false;
+
     while (pos < buf.length) {
-        let match = pos + tagBuf.length <= buf.length;
-        for (let i = 0; i < tagBuf.length && match; i++) {
-            if (buf[pos + i] !== tagBuf[i]) match = false;
+        const tagStart = pos;
+        // Baca tag varint
+        const { val: rawTag, bytes: tagBytes } = readVarint(buf, pos);
+        if (tagBytes === 0) break;  // corrupt
+        pos += tagBytes;
+
+        const wireType = rawTag & 0x07;
+        const fn       = rawTag >>> 3;
+
+        if (wireType === 0) {
+            // Varint field — skip value
+            const { val, bytes: vb } = readVarint(buf, pos);
+            pos += vb;
+            if (fn !== fieldNum) {
+                for (let i = tagStart; i < pos; i++) out.push(buf[i]);
+            }
+        } else if (wireType === 2) {
+            // Length-delimited (string, bytes, sub-message)
+            const { val: len, bytes: lb } = readVarint(buf, pos);
+            pos += lb;
+            const end = pos + len;
+            if (fn === fieldNum) {
+                // Ini field yang mau di-excise — skip
+                found = true;
+                pos = end;
+            } else {
+                // Keep field ini
+                for (let i = tagStart; i < end; i++) out.push(buf[i]);
+                pos = end;
+            }
+        } else if (wireType === 5) {
+            // Fixed 32-bit
+            const end = pos + 4;
+            if (fn !== fieldNum) for (let i = tagStart; i < end; i++) out.push(buf[i]);
+            pos = end;
+        } else if (wireType === 1) {
+            // Fixed 64-bit
+            const end = pos + 8;
+            if (fn !== fieldNum) for (let i = tagStart; i < end; i++) out.push(buf[i]);
+            pos = end;
+        } else {
+            // Unknown wire type — stop, copy sisa
+            for (let i = tagStart; i < buf.length; i++) out.push(buf[i]);
+            break;
         }
-        if (!match) { out.push(buf[pos]); pos++; continue; }
-        let cur = pos + tagBuf.length;
-        const { val: len, bytes: lb } = readVarint(buf, cur);
-        cur += lb + len;
-        found = true; pos = cur;
     }
     return { buf: Buffer.from(out), found };
 }
