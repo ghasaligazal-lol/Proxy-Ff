@@ -10,7 +10,7 @@ const zlib = require('zlib');
 
 const PROXY_URL            = (process.env.PROXY_URL || 'https://proxy-reza-kontolodon-memek-luu.up.railway.app/').replace(/\/$/, '');
 const GARENA_LOGIN_SERVER  = 'https://loginbp.ggpolarbear.com';
-const GARENA_CLIENT_SERVER = 'https://clientbp.ggpolarbear.com';
+const GARENA_CLIENT_SERVER = 'https://clientbp.ppmainecoonghj.com'; // updated Sep 2026
 
 // ===== TELEMETRY SPOOF =====
 const TELEMETRY_PATHS = [
@@ -460,6 +460,20 @@ function init(app) {
         if (isTelemetryPath(req.path)) {
             const isBin = (req.headers['content-type'] || '').includes('octet-stream');
             return sendSpoofOK(res, isBin);
+        }
+
+        // ── Handle request yang datang via AdAway redirect ──────────────────
+        // AdAway redirect clientbp.ppmainecoonghj.com → IP Railway
+        // Game kirim request dengan Host: clientbp.ppmainecoonghj.com
+        // Proxy perlu detect Host header dan route ke clientProxy
+        const hostHeader = (req.headers['host'] || '').toLowerCase();
+        const isClientBpHost = hostHeader.includes('clientbp.') || 
+                               hostHeader.includes('ppmainecoonghj') ||
+                               hostHeader.includes('ggpolarbear') ||
+                               hostHeader.includes('ggblueshark');
+        if (isClientBpHost && req.path !== '/MajorLogin') {
+            console.log(`[PROXY] AdAway-redirect clientbp req: ${req.method} ${req.path} (Host: ${hostHeader})`);
+            return clientProxy(req, res, next);
         }
 
         if (req.path === '/MajorLogin') {
