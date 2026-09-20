@@ -14,9 +14,49 @@
 // Field 22 (ak) dan field 23 (aiv) adalah encryption keys → JANGAN di-excise!
 
 const https    = require('https');
+const crypto   = require('crypto');
 const protobuf = require('protobufjs');
 const path     = require('path');
 const tglog    = require('./tglog');
+
+// Session store: simpan ak+aiv per UID untuk decrypt GetLoginData
+// { uid: { ak: Buffer, aiv: Buffer, ts: Date.now() } }
+const _sessions = new Map();
+const SESSION_TTL = 30 * 60 * 1000; // 30 menit
+
+function storeSession(uid, ak, aiv) {
+    _sessions.set(String(uid), { ak, aiv, ts: Date.now() });
+    // Cleanup expired
+    const now = Date.now();
+    for (const [k, v] of _sessions) {
+        if (now - v.ts > SESSION_TTL) _sessions.delete(k);
+    }
+}
+
+function getSession(uid) {
+    return _sessions.get(String(uid)) || null;
+}
+
+// AES-128-CBC decrypt
+function aesDecrypt(data, key, iv) {
+    try {
+        const decipher = crypto.createDecipheriv('aes-128-cbc', key, iv);
+        decipher.setAutoPadding(true);
+        return Buffer.concat([decipher.update(data), decipher.final()]);
+    } catch (_) { return null; }
+}
+
+// AES-128-CBC encrypt
+function aesEncrypt(data, key, iv) {
+    try {
+        const cipher = crypto.createCipheriv('aes-128-cbc', key, iv);
+        cipher.setAutoPadding(true);
+        return Buffer.concat([cipher.update(data), cipher.final()]);
+    } catch (_) { return null; }
+}
+
+// Export fungsi untuk dipakai proxy.js
+
 
 const PROXY_URL = (process.env.PROXY_URL || '').replace(/\/$/, '');
 
@@ -144,6 +184,16 @@ function init(app) {
                         token   = (obj.token || '').substring(0, 20) + '...';
                         ttl     = obj.ttl || 0;
                         origUrl = obj.server_url  || '(empty)';
+
+                        // Simpan ak+aiv untuk decrypt GetLoginData nanti
+                        if (obj.ak && obj.aiv && uid !== '?') {
+                            const akBuf  = Buffer.isBuffer(obj.ak)  ? obj.ak  : Buffer.from(obj.ak);
+                            const aivBuf = Buffer.isBuffer(obj.aiv) ? obj.aiv : Buffer.from(obj.aiv);
+                            if (akBuf.length === 16 && aivBuf.length === 16) {
+                                storeSession(uid, akBuf, aivBuf);
+                                console.log(`[MAJORLOGIN] v19 session stored uid=${uid}`);
+                            }
+                        }
                         if (obj.blacklist?.ban_reason && obj.blacklist.ban_reason !== 0) {
                             isBanned = true;
                             banStr = `🚫 BAN: ${BAN_MAP[obj.blacklist.ban_reason]||obj.blacklist.ban_reason}`;
@@ -225,4 +275,4 @@ function init(app) {
     console.log('[MAJORLOGIN] v19 active — binary surgery: field nums fixed');
 }
 
-module.exports = { init };
+module.exports = { init, getSession, aesDecrypt, aesEncrypt };

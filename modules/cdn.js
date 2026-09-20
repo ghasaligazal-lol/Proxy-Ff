@@ -590,4 +590,4 @@ function init(app) {
     console.log(`[CDN] Active — version ${VERSION}, cache_res in-memory + fileinfo ready`);
 }
 
-module.exports = { init, getCacheResBuffer, getInfoContent };
+module.exports = { init, getCacheResBuffer, getInfoContent, proxyUpstream };

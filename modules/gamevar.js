@@ -177,15 +177,16 @@ function getVerConfig(clientIp, myDomain, gameVersion, releaseVersion) {
         "remote_option_version_astc":           "optionallocres:51|optionalavatarres:794|optionalclothres:1270|optionalfootballres:29|optionalfullscreencgres:306|optionalhuntinggroundres:216|optionalinfection:124|optionalingameres:476|optionallobbyres:668|optionallonewolfres:206|optionallonewolfstrikeoutres:155|optionalludores:175|optionalmap1res:391|optionalmap2res:192|optionalmap4res:175|optionalmaphippores:120|optionalmapres:394|optionalnewblast:162|optionalpetres:943|optionalrushb:241|optionalrushingpetsres:217|optionalsnowduelres:65|optionalsocialres:215|optionaltrainingres:274|optionalugcres:802|optionalvoiceres:384|optionalwerewolves:286|optionalwerunres:81|optionalmapponyres:204|optionalugcoldparadiseres:33|optionalmultiregionres:27",
 
         // ── CDN ───────────────────────────────────────────────────────────────
-        // FIX: cdn_url → proxy supaya fileinfo di-intercept proxy (hash codepatch sudah diupdate)
-        // Game akan fetch /live/ABHotUpdates/android_astc/<ver>/fileinfo dari proxy → cdn.js handle
-        "cdn_url":                              myDomain + "live/ABHotUpdates/",
-        "abhotupdate_cdn_url":                  myDomain + "live/ABHotUpdates/",
+        // Asset download langsung dari Garena CDN (bukan dari proxy)
+        // fileinfo di-intercept via BypassReza: core-gmc → proxy Railway
+        // proxy serve fileinfo lokal (hash codepatch sudah diupdate), forward sisanya ke Garena
+        "cdn_url":                              "https://core-gmc.freefiremobile.com/live/ABHotUpdates/",
+        "abhotupdate_cdn_url":                  "https://core-gmc.freefiremobile.com/live/ABHotUpdates/",
         "abhotupdate_check":                    "cache_res;assetindexer;SH-Gpp;assembly-cssharp-patch",
         "backup_cdn_url":                       "https://dl.gmc.freefiremobile.com/live/ABHotUpdates/",
-        "res_url":                              myDomain + "live/ABHotUpdates/",
+        "res_url":                              "https://dl.gmc.freefiremobile.com/live/ABHotUpdates/",
         "img_cdn_url":                          "https://dl.gmc.freefiremobile.com/common/",
-        "cdn_active":                           myDomain,
+        "cdn_active":                           "https://dl.gmc.freefiremobile.com/",
         "cdn_ip_list":                          [],
         "cdn_port":                             6072,
 

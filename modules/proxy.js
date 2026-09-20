@@ -7,6 +7,12 @@
 
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const zlib = require('zlib');
+// AES session (ak+aiv dari MajorLogin) untuk decrypt GetLoginData
+let _mlMod = null;
+function getMlMod() {
+    if (!_mlMod) { try { _mlMod = require('./majorlogin'); } catch (_) {} }
+    return _mlMod;
+}
 
 const PROXY_URL            = (process.env.PROXY_URL || 'https://proxy-reza-kontolodon-memek-luu.up.railway.app/').replace(/\/$/, '');
 const GARENA_LOGIN_SERVER  = 'https://loginbp.ggpolarbear.com';
@@ -311,6 +317,69 @@ function createClientProxy() {
 
             try {
                 const rawBody = await collectResponseBody(proxyRes);
+
+                // GetLoginData: response mungkin AES-128-CBC encrypted pakai ak+aiv dari MajorLogin
+                if (req.path === '/GetLoginData' || req.path.startsWith('/GetLoginData?')) {
+                    const ml = getMlMod();
+                    // Cari uid dari query atau header X-Account-Id
+                    const uid = req.query?.uid || req.query?.account_id ||
+                                req.headers['x-account-id'] || req.headers['x-uid'];
+                    let decrypted = null;
+
+                    // Coba decrypt dengan session ak+aiv yang tersimpan
+                    if (ml && uid) {
+                        const sess = ml.getSession(uid);
+                        if (sess) {
+                            decrypted = ml.aesDecrypt(rawBody, sess.ak, sess.aiv);
+                            if (decrypted) console.log(`[CLIENT] GetLoginData decrypted uid=${uid} ${rawBody.length}b→${decrypted.length}b`);
+                        }
+                    }
+
+                    // Kalau decrypt gagal / tidak ada session → coba langsung sebagai JSON
+                    const bodyToProcess = decrypted || rawBody;
+                    let parsed = null;
+                    try { parsed = JSON.parse(bodyToProcess.toString('utf8')); } catch (_) {}
+
+                    if (parsed && typeof parsed === 'object') {
+                        patchBanInfo(parsed);
+                        patchGinUrl(parsed);
+                        patchAbnormalData(parsed);
+
+                        // Patch LGEBPFEFOHC (is_in_blacklist)
+                        if (parsed[LGEBP_KEY] !== undefined) parsed[LGEBP_KEY] = false;
+                        // Patch server URL fields di GetLoginData
+                        for (const k of Object.keys(parsed)) {
+                            if (typeof parsed[k] === 'string' &&
+                                parsed[k].includes('clientbp.ppmainecoonghj.com')) {
+                                parsed[k] = PROXY_URL;
+                            }
+                        }
+
+                        const jsonStr = patchStringLevelGin(JSON.stringify(parsed));
+                        const outJson = Buffer.from(jsonStr, 'utf8');
+
+                        // Re-encrypt kalau tadi berhasil decrypt
+                        if (decrypted && ml) {
+                            const sess = ml.getSession(uid);
+                            const reenc = sess ? ml.aesEncrypt(outJson, sess.ak, sess.aiv) : null;
+                            if (reenc) {
+                                console.log(`[CLIENT] GetLoginData re-encrypted ${outJson.length}b→${reenc.length}b`);
+                                headers['content-length'] = String(reenc.length);
+                                res.writeHead(statusCode, headers);
+                                return res.end(reenc);
+                            }
+                        }
+
+                        headers['content-length'] = String(outJson.length);
+                        res.writeHead(statusCode, headers);
+                        return res.end(outJson);
+                    }
+
+                    // Fallback: kirim raw
+                    headers['content-length'] = String(rawBody.length);
+                    res.writeHead(statusCode, headers);
+                    return res.end(rawBody);
+                }
 
                 if (contentType.includes('application/json')) {
                     let parsed;
