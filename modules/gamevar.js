@@ -112,7 +112,7 @@ function getVerConfig(clientIp, myDomain, gameVersion, releaseVersion) {
     return {
         // ── Status ────────────────────────────────────────────────────────────
         "code":                                 0,
-        "is_server_open":                       true,
+        "is_server_open":                       false,
         "is_review_server":                     false,
         "is_firewall_open":                     false,
         "force_to_restart_app":                 false,
@@ -155,7 +155,7 @@ function getVerConfig(clientIp, myDomain, gameVersion, releaseVersion) {
 
         // ── Billboard ─────────────────────────────────────────────────────────
         "billboard_cdn_url":                    REDIRECT_URL,
-        "billboard_msg":                        "",
+        "billboard_msg":                        "Perbaikan",
         "billboard_bg_url":                     "https://dl.cdn.freefiremobile.com/common/OB23/version/Patch_Bg.png",
         "patchnote_url":                        REDIRECT_URL,
 
