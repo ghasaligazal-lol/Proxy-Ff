@@ -104,31 +104,73 @@ function patchBanInfo(jsonObj) {
 }
 
 function patchMatchmakingBL(jsonObj, urlPath) {
-    if (!urlPath.includes('GetMatchmakingBlacklist') || !jsonObj || typeof jsonObj !== 'object') return;
-    jsonObj.blacklist = []; jsonObj.blacklist_info = null;
-    if (jsonObj.blacklist_list !== undefined) jsonObj.blacklist_list = [];
-    // FIX: DJNBFHDKIAN = blacklist dari server response
-    if (jsonObj['DJNBFHDKIAN'] !== undefined) jsonObj['DJNBFHDKIAN'] = null;
-    // FIX: LALBNDOOINP = anti-addiction ban descriptor
+    if (!jsonObj || typeof jsonObj !== 'object') return;
+
+    // GetMatchmakingBlacklist: zero blacklist arrays
+    if (urlPath.includes('GetMatchmakingBlacklist')) {
+        jsonObj.blacklist = []; jsonObj.blacklist_info = null;
+        if (jsonObj.blacklist_list !== undefined) jsonObj.blacklist_list = [];
+        if (jsonObj['DJNBFHDKIAN'] !== undefined) jsonObj['DJNBFHDKIAN'] = null;
+        if (jsonObj.bl_list !== undefined) jsonObj.bl_list = [];
+        if (jsonObj.is_in_blacklist !== undefined) jsonObj.is_in_blacklist = false;
+        if (jsonObj.ban_time !== undefined) jsonObj.ban_time = 0;
+        if (jsonObj.ban_reason !== undefined) jsonObj.ban_reason = 0;
+        if (jsonObj.matchmaking_blacklist !== undefined) {
+            if (typeof jsonObj.matchmaking_blacklist === 'number') jsonObj.matchmaking_blacklist = 0;
+            else if (typeof jsonObj.matchmaking_blacklist === 'object') {
+                jsonObj.matchmaking_blacklist = { is_in_blacklist: false, ban_time: 0, ban_reason: 0 };
+            }
+        }
+    }
+
+    // ── Patch matchmaking_blacklist_desc (ada di GetLoginData/GetSocialConfig) ──
+    // is_open: true = sistem blacklist matchmaking aktif → harus false
+    if (jsonObj.matchmaking_blacklist_desc && typeof jsonObj.matchmaking_blacklist_desc === 'object') {
+        jsonObj.matchmaking_blacklist_desc.is_open = false;
+    }
+    zeroFieldRecursive(jsonObj, 'is_open', false, 0);  // zero semua is_open flag
+
+    // ── Patch ban_cs_ranking (999999999 = threshold CS Ranked ban) → 0 ──
+    zeroFieldRecursive(jsonObj, 'ban_cs_ranking', 0, 0);
+
+    // ── Patch signature_ban_expire_time ──
+    zeroFieldRecursive(jsonObj, 'signature_ban_expire_time', 0, 0);
+
+    // ── Patch LALBNDOOINP (anti-addiction ban descriptor) ──
     if (jsonObj['LALBNDOOINP'] && typeof jsonObj['LALBNDOOINP'] === 'object') {
         const la = jsonObj['LALBNDOOINP'];
         la.ban_mode = 0; la.unban_time = 0; la.hint_string = '';
     }
-    // FIX: zero semua remaining ban fields
-    const BAN_ZERO_KEYS = ['DJNBFHDKIAN'];
-    for (const k of BAN_ZERO_KEYS) {
-        zeroFieldRecursive(jsonObj, k, null, 0);
-    }
-    if (jsonObj.bl_list !== undefined) jsonObj.bl_list = [];
-    if (jsonObj.is_in_blacklist !== undefined) jsonObj.is_in_blacklist = false;
-    if (jsonObj.ban_time !== undefined) jsonObj.ban_time = 0;
-    if (jsonObj.ban_reason !== undefined) jsonObj.ban_reason = 0;
-    if (jsonObj.matchmaking_blacklist !== undefined) {
-        if (typeof jsonObj.matchmaking_blacklist === 'number') jsonObj.matchmaking_blacklist = 0;
-        else if (typeof jsonObj.matchmaking_blacklist === 'object') {
-            jsonObj.matchmaking_blacklist = { is_in_blacklist: false, ban_time: 0, ban_reason: 0 };
+    zeroFieldRecursive(jsonObj, 'DJNBFHDKIAN', null, 0);
+
+    // ── Patch championship_is_in_blacklist ──
+    zeroFieldRecursive(jsonObj, 'championship_is_in_blacklist', false, 0);
+
+    // ── Zero matchmaking_blacklist numeric fields ──
+    function patchMatchmakingBLField(obj, depth) {
+        if (!obj || typeof obj !== 'object' || depth > 10) return;
+        if (Array.isArray(obj)) { obj.forEach(i => patchMatchmakingBLField(i, depth + 1)); return; }
+        if ('matchmaking_blacklist' in obj) {
+            const mbl = obj.matchmaking_blacklist;
+            if (typeof mbl === 'number' && mbl !== 0 && !(obj.level !== undefined)) {
+                // Hanya zero jika bukan di dalam prime_desc level reward
+                obj.matchmaking_blacklist = 0;
+            } else if (mbl && typeof mbl === 'object') {
+                mbl.is_in_blacklist = false;
+                if (mbl.ban_time !== undefined) mbl.ban_time = 0;
+                if (mbl.ban_reason !== undefined) mbl.ban_reason = 0;
+                if (mbl.ban_reason_detail !== undefined) mbl.ban_reason_detail = '';
+                if (mbl.ban_expire_duration !== undefined) mbl.ban_expire_duration = 0;
+                if (mbl.ban_type !== undefined) mbl.ban_type = '';
+            }
+        }
+        for (const k of Object.keys(obj)) {
+            if (k !== 'prime_desc' && k !== 'prime_level') {
+                patchMatchmakingBLField(obj[k], depth + 1);
+            }
         }
     }
+    patchMatchmakingBLField(jsonObj, 0);
 }
 
 // ===== GIN/GGP PATCH =====
@@ -376,6 +418,7 @@ function createClientProxy() {
 
                     if (parsed && typeof parsed === 'object') {
                         patchBanInfo(parsed);
+                        patchMatchmakingBL(parsed, req.url || '');  // patch ban_cs_ranking, matchmaking_blacklist_desc
                         patchGinUrl(parsed);
                         patchAbnormalData(parsed);
 
@@ -418,7 +461,7 @@ function createClientProxy() {
                     try { parsed = JSON.parse(rawBody.toString('utf8')); } catch (_) { parsed = null; }
                     if (parsed && typeof parsed === 'object') {
                         patchBanInfo(parsed);
-                        patchMatchmakingBL(parsed, req.url || '');
+                        patchMatchmakingBL(parsed, req.url || '');  // patch BL + ban_cs_ranking + matchmaking_blacklist_desc
                         patchGinUrl(parsed);
                         patchAbnormalData(parsed);
                         const jsonStr = patchStringLevelGin(patchImageUrls(JSON.stringify(parsed)));
@@ -521,6 +564,7 @@ const loginProxy = createProxyMiddleware({
                     const parsed = JSON.parse(raw.toString('utf8'));
                     patchGinUrl(parsed);
                     patchBanInfo(parsed);
+                    patchMatchmakingBL(parsed, req.url || '');
                     if (parsed.gin_token !== undefined)   parsed.gin_token   = '';
                     if (parsed.CECNLHCONMI !== undefined) parsed.CECNLHCONMI = '';
                     const jsonStr = patchStringLevelGin(JSON.stringify(parsed));
