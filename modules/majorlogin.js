@@ -358,12 +358,14 @@ function init(app) {
                 // PASSTHROUGH — body tidak dimodifikasi (game verify HMAC signature)
                 const outBuf = rawBuf;
 
-                // FIX v21: teruskan SEMUA upstream headers, hanya hapus transfer-encoding
-                // Jangan hapus/modif apapun — signature terikat ke header tertentu
+                // FIX v22: teruskan SEMUA upstream headers tanpa modifikasi apapun
+                // Signature Garena terikat ke content-length upstream — jangan override
+                // Railway strip gzip sebelum sampai ke proxy, jadi rawBuf sudah plain
+                // dan content-length dari upstream (yang mungkin masih nilai gzip) bisa salah,
+                // tapi override malah bikin signature check fail karena nilai berubah.
+                // Solusi: teruskan content-length dari upstream apa adanya.
                 const h = { ...proxyRes.headers };
                 delete h['transfer-encoding'];
-                // CRITICAL: paksa content-length dari actual buffer (Railway bisa kasih salah)
-                h['content-length'] = String(outBuf.length);
 
                 const lines = [`<b>MajorLogin v21 (passthrough)</b>`, ''];
                 lines.push(`👤 <code>${uid}</code> | 🌏 ${region}`);

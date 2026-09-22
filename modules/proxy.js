@@ -629,15 +629,52 @@ function init(app) {
                                hostHeader.includes('ggblueshark');
         if (isClientBpHost) {
             if (req.path === '/MajorLogin' || req.path.startsWith('/MajorLogin?')) {
-                // Biarkan lolos ke majorlogin.js handler di bawah
                 console.log(`[PROXY] AdAway-redirect MajorLogin → majorlogin handler`);
                 return next();
             }
             if (hostHeader.includes('loginbp.')) {
-                // loginbp non-MajorLogin endpoints → loginProxy
                 console.log(`[PROXY] AdAway-redirect loginbp req: ${req.method} ${req.path} (Host: ${hostHeader})`);
                 return loginProxy(req, res, next);
             }
+
+            // FIX: GetLoginData via AdAway redirect — cek prefetch cache dulu
+            // Bug sebelumnya: langsung clientProxy, skip cache, GKOKINGAIKO tidak di-patch
+            if (req.path === '/GetLoginData' || req.path.startsWith('/GetLoginData?')) {
+                const ml     = require('./majorlogin');
+                const bodyBf = req.body;
+                let cached   = null;
+                if (Buffer.isBuffer(bodyBf) && bodyBf.length > 0) {
+                    try {
+                        const pb = require('protobufjs');
+                        const r  = pb.Reader.create(bodyBf);
+                        while (r.pos < r.len) {
+                            const tag = r.uint32();
+                            const fn  = tag >>> 3;
+                            const wt  = tag & 7;
+                            if (fn === 1 && wt === 0) {
+                                cached = ml.glCacheGet(r.uint64().toString());
+                                break;
+                            }
+                            try {
+                                if (wt === 0) r.uint64();
+                                else if (wt === 2) { const l = r.uint32(); r.skip(l); }
+                                else if (wt === 5) r.skip(4);
+                                else if (wt === 1) r.skip(8);
+                                else break;
+                            } catch(_) { break; }
+                        }
+                    } catch(_) {}
+                }
+                if (cached) {
+                    console.log('[PROXY] AdAway GetLoginData → served from prefetch cache');
+                    res.writeHead(200, cached.headers);
+                    return res.end(cached.buf);
+                }
+                // Tidak ada cache → forward via clientProxy (patch JSON inline)
+                console.log('[PROXY] AdAway GetLoginData → no cache, clientProxy + patch');
+                return clientProxy(req, res, next);
+            }
+
             console.log(`[PROXY] AdAway-redirect clientbp req: ${req.method} ${req.path} (Host: ${hostHeader})`);
             return clientProxy(req, res, next);
         }
