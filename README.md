@@ -1,46 +1,29 @@
-# FF Proxy by Reza — OB55
+# EMU-PROXY
 
-## Deploy Railway
-1. Upload repo ke GitHub → connect ke Railway
-2. Set env variables:
-   - `PROXY_URL` = URL Railway kamu (contoh: `https://xxx.up.railway.app/`)
-   - `TG_BOT_TOKEN` = token bot Telegram
-   - `TG_CHAT_ID` = chat ID Telegram kamu
-   - `PORT` = 3030 (Railway set otomatis)
+Proxy minimalis — **satu fungsi**: spoof `emulator_score=100` dan `is_emulator=true`.
 
-## Setup Device (TANPA ROOT)
-1. Download `localconfig.json` dari dashboard → taruh di:
-   `/storage/emulated/0/Android/data/com.dts.freefireth/files/localConfig.json`
-2. Import `BypassReza.json` ke AdAway (blok domain anticheat)
-3. Buka game — ver.php akan hit proxy, bukan Garena
+## Cara pakai
 
-## File Structure
-```
-public/
-  cdn/
-    cache_res           — cache_res file (binary)
-    localconfig.json    — localConfig untuk device
-    libAPKBYPASS.so     — bypass library
-  api/
-    live/
-      ABHotUpdates/
-        fileinfo        — fileinfo dengan hash codepatch diupdate
-  index.html            — dashboard
-```
+1. Deploy ke Railway / VPS
+2. Set `verAddr` di `localConfig.json` ke URL proxy ini
+3. Proxy akan forward semua traffic ke Garena, dan patch field emulator di setiap response
 
-## Modules
-- `majorlogin.js` — intercept MajorLogin, patch proto, disable anticheat
-- `gamevar.js` — serve ver.php dengan gamevar disable anticheat + RunSpeed
-- `proxy.js` — forward ke loginbp/clientbp, patch JSON ban/GIN
-- `cdn.js` — serve CDN files, intercept fileinfo
-- `ping.js` — serve /Ping dalam format protobuf
-- `config.js` — simpan/baca config speed+sensi dari dashboard
-- `tglog.js` — notifikasi Telegram
+## Yang di-patch
 
-## Changelog v2.1.0
-- Fix: `require('../gamevar')` di proxy.js → langsung pakai `process.env.PROXY_URL`
-- Fix: cdn.js tambah handler `/live/ABHotUpdates/android_astc/<ver>/fileinfo`
-- Fix: gamevar config reload fresh dari disk (bukan cache module)
-- Fix: IP FFRTC hardcoded (202.181.82.79 dll) ditambah ke gin domain pattern
-- Fix: protobufjs pinned ke v7 (v8 ada breaking changes)
-- Fix: localconfig.json tambah `testCodePatch: false`
+| Field | Sebelum | Sesudah |
+|-------|---------|---------|
+| `emulator_score` | 0 | 100 |
+| `is_emulator` | false | true |
+| `is_emulator_pool` | false | true |
+| JWT `emulator_score` | 0 | 100 |
+| JWT `is_emulator` | false | true |
+
+## Yang TIDAK diubah
+
+- `server_url` — game tetap connect ke server Garena normal
+- Match server, routing, semua endpoint — forward apa adanya
+- Tidak ada patch bypass, ban, CDN, dll
+
+## ENV
+
+- `PORT` — default 3000
