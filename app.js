@@ -7,18 +7,15 @@ const zlib    = require('zlib');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-// ── Isi ini sesuai server_url game lu ────────────────────────────────────────
-const TARGET_HOST = process.env.TARGET_HOST || 'clientbp.ggpolarbear.com';
-// ─────────────────────────────────────────────────────────────────────────────
+const LOGIN_HOST  = 'loginbp.ggpolarbear.com';
+const CLIENT_HOST = 'clientbp.ggpolarbear.com';
 
-// Raw body
 app.use((req, res, next) => {
     const chunks = [];
     req.on('data', c => chunks.push(c));
     req.on('end', () => { req.rawBody = Buffer.concat(chunks); next(); });
 });
 
-// Patch JWT emulator fields
 function patchJWT(token) {
     try {
         const parts = token.split('.');
@@ -34,7 +31,6 @@ function patchJWT(token) {
     } catch (_) { return token; }
 }
 
-// Patch JSON — hanya emulator fields
 function patchJSON(obj, depth) {
     if (!obj || typeof obj !== 'object' || depth > 10) return;
     if (Array.isArray(obj)) { obj.forEach(i => patchJSON(i, depth+1)); return; }
@@ -46,7 +42,6 @@ function patchJSON(obj, depth) {
     for (const k of Object.keys(obj)) patchJSON(obj[k], depth+1);
 }
 
-// Decode body
 function decode(buf, enc) {
     return new Promise(resolve => {
         const d = enc === 'gzip'    ? zlib.createGunzip()
@@ -62,16 +57,24 @@ function decode(buf, enc) {
     });
 }
 
-// Main handler
+const LOGIN_PATHS = [
+    '/MajorLogin','/MajorRegister','/Register','/GenerateNickname',
+    '/GetRecommendNickname','/GetAccountBriefInfoBeforeLogin',
+    '/ChooseNewbieChoice','/ChooseRegion','/CreateAccount','/Ping',
+];
+
 app.all('*', (req, res) => {
-    const upHeaders = { ...req.headers, host: TARGET_HOST, 'accept-encoding': 'identity' };
+    const targetHost = LOGIN_PATHS.some(p => req.path.startsWith(p))
+        ? LOGIN_HOST : CLIENT_HOST;
+
+    const upHeaders = { ...req.headers, host: targetHost, 'accept-encoding': 'identity' };
     delete upHeaders['content-length'];
     if (req.rawBody?.length) upHeaders['content-length'] = String(req.rawBody.length);
 
-    console.log(`→ ${req.method} ${req.path}`);
+    console.log(`→ ${req.method} ${req.path} [${targetHost}]`);
 
     const upReq = https.request({
-        hostname: TARGET_HOST, port: 443,
+        hostname: targetHost, port: 443,
         path: req.url, method: req.method, headers: upHeaders,
     }, async upRes => {
         const ct  = (upRes.headers['content-type'] || '').toLowerCase();
@@ -108,6 +111,5 @@ app.all('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`[EMU-PROXY] port=${PORT} target=${TARGET_HOST}`);
-    console.log(`[EMU-PROXY] patches: emulator_score=100, is_emulator=true`);
+    console.log(`[EMU-PROXY] port=${PORT} — forward + patch emulator_score=100`);
 });
