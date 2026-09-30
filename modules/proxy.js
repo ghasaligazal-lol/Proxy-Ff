@@ -3,7 +3,7 @@
 
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
-const GARENA_LOGIN_SERVER  = 'https://loginbp.ggpolarbear.com';
+const GARENA_LOGIN_SERVER  = 'https://loginbp.ppmainecoonghj.com';
 const GARENA_CLIENT_SERVER = 'https://clientbp.ppmainecoonghj.com';
 
 function getMlMod() {

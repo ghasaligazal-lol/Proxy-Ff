@@ -9,13 +9,13 @@ const https = require('https');
 
 const BASE_DIR = path.resolve(__dirname, '..', 'public', 'cdn');
 
-const VERSION             = '1.132.8';
-const LOCAL_VERSIONS_MAX  = ['2.131.22', '2.130.22', '1.132.8', '1.132.6', '1.126.3'];
-const LOCAL_VERSIONS_ASTC = ['1.132.8', '1.132.6', '1.126.3', '1.125.1'];
+const VERSION             = '1.132.9';
+const LOCAL_VERSIONS_MAX  = ['2.131.22', '2.130.22', '1.132.9', '1.132.8', '1.132.6', '1.126.3'];
+const LOCAL_VERSIONS_ASTC = ['1.132.9', '1.132.8', '1.132.6', '1.126.3', '1.125.1'];
 
 // Hotpatch hashes yang kita punya di filesystem (untuk fallback)
 const KNOWN_HOTPATCH_HASHES = ['444f6f88e15564f0'];
-const HOTPATCH_VER_FALLBACKS = ['1.132.8', '1.132.6', '1.126.3'];
+const HOTPATCH_VER_FALLBACKS = ['1.132.9', '1.132.8', '1.132.6', '1.126.3'];
 
 // ─── Cache_res in-memory cache ─────────────────────────────────────────────
 let _cacheResCache = null;

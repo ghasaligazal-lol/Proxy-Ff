@@ -1,10 +1,10 @@
 'use strict';
 
 // Normal gamevar/config endpoint. No disable, bypass, or feature modification.
-const PROXY_URL = (process.env.PROXY_URL || '').replace(/\/$/, '');
-const LOGIN_SERVER = 'https://loginbp.ggpolarbear.com/';
-const CLIENT_SERVER = 'https://loginbp.ppmainecoonghj.com/';
-const CDN_SERVER = 'https://dl.aw.freefiremobile.com/live/ABHotUpdates/';
+const PROXY_URL = 'https://proxy-reza-kontolodon-memek-luu.up.railway.app';
+const LOGIN_SERVER = 'https://loginbp.ppmainecoonghj.com/';
+const CLIENT_SERVER = 'https://clientbp.ppmainecoonghj.com/';
+const CDN_SERVER = 'https://dl.bs.freefiremobile.com/live/ABHotUpdates/';
 
 // This is the normal gamevar block observed in the supplied reference log.
 const NORMAL_GAMEVAR = [
@@ -16,14 +16,15 @@ const NORMAL_GAMEVAR = [
   'DelGameObjectTypeSet,DelGameObjectTypeSet,int,0,,ios',
   'UseCompactForBaseObjectMgr,UseCompactForBaseObjectMgr,int,0,,ios',
   'Enable2018ABstreamed,Enable2018ABstreamed,bool,false,,ios',
+  'DisableMishaForHorse,DisableMishaForHorse,bool,true,,',
   ''
 ].join('\n');
 
 function makeVerConfig(req) {
-  const version = req.query.version || '1.132.8';
+  const version = req.query.version || '1.132.9';
   const release = req.query.release_version || 'OB55';
   const region = req.query.region || 'ID';
-  const proxyBase = PROXY_URL ? PROXY_URL + '/' : '';
+  const proxyBase = PROXY_URL + '/';
 
   return {
     code: 0,
@@ -37,7 +38,7 @@ function makeVerConfig(req) {
     cdn_url: CDN_SERVER,
     backup_cdn_url: CDN_SERVER,
     res_url: CDN_SERVER,
-    img_cdn_url: 'https://dl.aw.freefiremobile.com/common/',
+    img_cdn_url: 'https://dl.bs.freefiremobile.com/common/',
     server_url: LOGIN_SERVER,
     network_log_server: 'https://idnetwork.ggblueshark.com/',
     web_log_server: 'https://networkselftest.ff.garena.com/api/',
@@ -61,8 +62,7 @@ function makeVerConfig(req) {
     billboard_msg: '',
     billboard_bg_url: 'https://dl.cdn.freefiremobile.com/common/OB23/version/Patch_Bg.png',
     patchnote_url: '',
-    // Only use the proxy hotpatch path when PROXY_URL is explicitly configured.
-    ...(proxyBase ? { abhotupdate_cdn_url: proxyBase + 'hotpatchs/' } : { abhotupdate_cdn_url: CDN_SERVER }),
+    abhotupdate_cdn_url: 'https://proxy-reza-kontolodon-memek-luu.up.railway.app/hotpatchs/',
   };
 }
 

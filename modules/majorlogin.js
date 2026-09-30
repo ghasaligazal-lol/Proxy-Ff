@@ -68,12 +68,12 @@ function init(app) {
         const body = req.body;
 
         const opts = {
-            hostname: 'loginbp.ggpolarbear.com',
+            hostname: 'loginbp.ppmainecoonghj.com',
             path: '/MajorLogin',
             method: 'POST',
             headers: {
                 ...req.headers,
-                'host':            'loginbp.ggpolarbear.com',
+                'host':            'loginbp.ppmainecoonghj.com',
                 'content-length':  Buffer.isBuffer(body) ? body.length : 0,
                 'accept-encoding': 'identity',
             },
