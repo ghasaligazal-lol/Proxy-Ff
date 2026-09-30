@@ -75,7 +75,7 @@ function init(app) {
     return res.status(200).json(cfg);
   };
 
-  app.get('/lamdo/ver.php', handler);
+  // app.get('/lamdo/ver.php', handler); // removed
   app.get('/ver.php', handler);
   console.log('[GAMEVAR] Normal config active — no disable/bypass/modification flags');
 }
