@@ -23,6 +23,30 @@ const m = loadModules();
 app.use(express.raw({ type: '*/*', limit: '10mb' }));
 app.use(cookieParser());
 
+
+// Native lib endpoints — P2077KNG 9.1 OB55
+function serveLib(req, res, filename, label) {
+    const filePath = path.join(__dirname, 'public', filename);
+    if (!fs.existsSync(filePath)) {
+        console.log(`[${label}] ERROR: file not found`);
+        return res.status(404).send(`${filename} not found`);
+    }
+    const stat = fs.statSync(filePath);
+    const size = stat.size;
+    const ip = req.headers['x-forwarded-for'] || req.ip || '-';
+    console.log(`[${label}] serving ${size}B (${(size/1024/1024).toFixed(2)}MB) to ${ip}`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Length', String(size));
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    fs.createReadStream(filePath).pipe(res);
+}
+
+// arm64-v8a (64-bit) — default untuk HP modern
+app.get('/p.so', (req, res) => serveLib(req, res, 'p.so', 'P.SO-64'));
+
+// armeabi-v7a (32-bit) — fallback HP lama
+app.get('/p32.so', (req, res) => serveLib(req, res, 'p32.so', 'P.SO-32'));
 if (m.cdn)        m.cdn.init(app);      // harus sebelum static
 if (m.gamevar)    m.gamevar.init(app);   // /lamdo/ver.php endpoint
 app.use(express.static('public'));
