@@ -297,6 +297,54 @@ function init(app) {
     // ─── Hotpatchs routes ────────────────────────────────────────────────────
     // Format: /hotpatchs/<hash>/android_astc/<ver>/fileinfo
     //         /hotpatchs/<hash>/android_astc/<ver>/gameassetbundles/<file>
+    // JUGA: /hotpatchs/android_astc/<ver>/... (tanpa hash — format yang dikirim client)
+
+    app.get(/^\/hotpatchs\/(android_astc\/.+)$/, (req, res) => {
+        const hotpatchBase = path.resolve(__dirname, '..', 'public', 'hotpatchs');
+        const relative     = req.params[0]; // "android_astc/<ver>/..."
+        const isFileinfo   = req.path.endsWith('fileinfo');
+
+        function tryCandidate(rel) {
+            const fsLit = path.join(hotpatchBase, rel);
+            if (fs.existsSync(fsLit) && fs.statSync(fsLit).isFile()) return fsLit;
+            const fsDec = fsLit.replace(/~2F/g, '/').replace(/~2B/g, '+').replace(/~3D/g, '=');
+            try {
+                const resolved = path.resolve(fsDec);
+                if (resolved.startsWith(hotpatchBase + path.sep) &&
+                    fs.existsSync(resolved) && fs.statSync(resolved).isFile()) return resolved;
+            } catch (_) {}
+            return null;
+        }
+
+        // Coba path langsung (android_astc/ver/...)
+        let filePath = tryCandidate(relative);
+
+        // Fallback: coba semua kombinasi hash/ver yang ada
+        if (!filePath) {
+            const m2 = /^(android_astc)\/([^/]+)\/(.+)$/.exec(relative);
+            if (m2) {
+                const [, platform, , rest] = m2;
+                outer2:
+                for (const hash of KNOWN_HOTPATCH_HASHES) {
+                    for (const ver of HOTPATCH_VER_FALLBACKS) {
+                        const found = tryCandidate(`${hash}/${platform}/${ver}/${rest}`);
+                        if (found) { filePath = found; break outer2; }
+                    }
+                }
+            }
+        }
+
+        if (!filePath) {
+            console.log('[HOTPATCHS-NOHASH] MISS:', req.path);
+            return res.status(404).send('Not found');
+        }
+
+        console.log('[HOTPATCHS-NOHASH] HIT:', filePath);
+        res.setHeader('Content-Type', isFileinfo ? 'text/plain; charset=utf-8' : 'application/octet-stream');
+        res.setHeader('Cache-Control', 'public, max-age=60');
+        res.setHeader('Accept-Ranges', 'bytes');
+        return sendLocal(req, res, filePath);
+    });
     //
     // BUGFIX v1.132.8: hash dan versi directory bisa berubah antar update.
     // Jika path exact tidak ada, fallback ke semua kombinasi hash+versi yang kita punya.
